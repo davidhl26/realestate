@@ -1,0 +1,33 @@
+# Render deployment config
+# Connect this repo in Render dashboard, point it at this file, and deploy.
+services:
+  - type: web
+    name: flip-board
+    runtime: docker
+    plan: standard            # $7/mo — needed for Playwright (free tier doesn't fit)
+    region: oregon            # closest to you / cheapest
+    branch: main
+    autoDeploy: true
+    healthCheckPath: /api/healthz
+
+    envVars:
+      # Anthropic API key — set this MANUALLY in Render dashboard
+      # (don't commit it). Type "secret".
+      - key: ANTHROPIC_API_KEY
+        sync: false           # → marks as "must set in dashboard"
+
+      # Persistent data directory
+      - key: FLIPBOARD_DATA_DIR
+        value: /var/data
+
+      # CORS — if you put the frontend on Netlify, add its URL here.
+      # Multiple origins comma-separated.
+      - key: ALLOWED_ORIGINS
+        sync: false
+
+    # Persistent disk: deals.json, leads.json, auctions.json, ai-config.json,
+    # cookies, browser profile, etc.
+    disk:
+      name: flipboard-data
+      mountPath: /var/data
+      sizeGB: 2               # $0.25/mo

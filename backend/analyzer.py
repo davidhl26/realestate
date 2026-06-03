@@ -1,0 +1,326 @@
+"""Computational engine for deal metrics + scoring.
+
+Mirrors the logic from ~/.claude/skills/flip-board/scripts/generate_flip_board_pdf.py
+so the local app and the skill produce identical numbers.
+"""
+
+
+def compute_metrics(deal: dict) -> dict:
+    """Compute all derived metrics from raw deal data."""
+    m = {}
+    pp = deal.get("purchase_price", 0) or 0
+    arv = deal.get("arv_base", 0) or 0
+    arv_low = deal.get("arv_low") or int(arv * 0.92)
+    arv_high = deal.get("arv_high") or int(arv * 1.08)
+    rehab = deal.get("rehab_base", 0) or 0
+    rehab_low = deal.get("rehab_low") or int(rehab * 0.8)
+    rehab_high = deal.get("rehab_high") or int(rehab * 1.25)
+    hold_mo = deal.get("holding_months", 5) or 5
+    hold_mo_cost = deal.get("holding_cost_monthly", 500) or 500
+    sell_pct = deal.get("selling_cost_pct", 8) or 8
+
+    closing = round(pp * 0.02)
+    acq = pp + closing
+    holding = hold_mo * hold_mo_cost
+    selling = round(arv * sell_pct / 100)
+    all_in = acq + rehab + holding + selling
+    net = arv - all_in
+    invested = acq + rehab + holding
+    roi = (net / invested * 100) if invested > 0 else 0
+    annualized = roi * (12 / hold_mo) if hold_mo > 0 else 0
+    margin = (net / arv * 100) if arv > 0 else 0
+
+    m.update({
+        "closing": closing,
+        "acquisition": acq,
+        "holding": holding,
+        "selling": selling,
+        "all_in": all_in,
+        "net_profit": net,
+        "roi": roi,
+        "annualized_roi": annualized,
+        "margin": margin,
+    })
+
+    # Scenarios
+    def _scenario(arv_v, rehab_v, hold_v):
+        sell_v = round(arv_v * sell_pct / 100)
+        all_v = acq + rehab_v + (hold_v * hold_mo_cost) + sell_v
+        net_v = arv_v - all_v
+        inv_v = acq + rehab_v + hold_v * hold_mo_cost
+        roi_v = (net_v / inv_v * 100) if inv_v > 0 else 0
+        return {"arv": arv_v, "rehab": rehab_v, "hold": hold_v,
+                "net": net_v, "roi": roi_v}
+
+    best = _scenario(arv_high, rehab_low, max(3, hold_mo - 1))
+    base = _scenario(arv, rehab, hold_mo)
+    worst = _scenario(arv_low, rehab_high, hold_mo + 2)
+    m["scenarios"] = [
+        {"name": "Best Case", **best},
+        {"name": "Base Case", **base},
+        {"name": "Worst Case", **worst},
+    ]
+
+    # 70% rule
+    max_p_70 = (arv * 0.70) - rehab
+    m["max_purchase_70"] = max_p_70
+    m["rule_70_pct_of_arv"] = ((pp + rehab) / arv * 100) if arv > 0 else 0
+    m["rule_70_pass"] = pp <= max_p_70
+    m["rule_70_overage"] = pp - max_p_70
+
+    # Back-solver
+    backsolve = []
+    for tgt in [10, 15, 20, 25]:
+        target_profit = arv * (tgt / 100)
+        max_acq = arv - target_profit - rehab - holding - selling
+        max_pur = max_acq / 1.02 if max_acq > 0 else 0
+        backsolve.append({"target_margin": tgt, "max_purchase": int(max_pur)})
+    m["backsolve"] = backsolve
+
+    # Rental
+    rent = deal.get("estimated_rent", 0) or 0
+    taxes_m = deal.get("monthly_taxes", 0) or 0
+    ins_m = deal.get("monthly_insurance", 0) or 0
+    hoa_m = deal.get("monthly_hoa", 0) or 0
+    maint_m = deal.get("monthly_maintenance", 0) or 0
+    mgmt_m = deal.get("monthly_mgmt", 0) or round(rent * 0.10)
+    vac_pct = deal.get("vacancy_pct", 8) or 8
+
+    gross_yr = rent * 12
+    vac_loss = gross_yr * vac_pct / 100
+    opex_yr = 12 * (taxes_m + ins_m + hoa_m + maint_m + mgmt_m)
+    noi = gross_yr - vac_loss - opex_yr
+    total_cap = acq + rehab
+    cap_rate = (noi / total_cap * 100) if total_cap > 0 else 0
+    grm = (total_cap / gross_yr) if gross_yr > 0 else 0
+    monthly_net = (rent - (rent * vac_pct / 100) - taxes_m - ins_m -
+                   hoa_m - maint_m - mgmt_m)
+
+    m["rent"] = {
+        "monthly_gross": rent,
+        "monthly_net": monthly_net,
+        "annual_noi": noi,
+        "cap_rate": cap_rate,
+        "coc": cap_rate,
+        "grm": grm,
+        "opex_breakdown": {
+            "taxes": taxes_m, "insurance": ins_m, "hoa": hoa_m,
+            "maintenance": maint_m, "management": mgmt_m,
+            "vacancy_monthly": rent * vac_pct / 100,
+        },
+    }
+
+    # BRRRR
+    refi = arv * 0.70
+    capital_left = total_cap - refi
+    monthly_pi = refi * 0.00699  # 7.5% 30yr
+    monthly_piti = monthly_pi + taxes_m + ins_m + hoa_m
+    brrrr_cf = rent - (monthly_piti + maint_m + mgmt_m + rent * vac_pct / 100)
+    m["brrrr"] = {
+        "refi_value": refi,
+        "capital_left_in": capital_left,
+        "capital_recovered": refi,
+        "monthly_PI": monthly_pi,
+        "monthly_PITI": monthly_piti,
+        "monthly_cash_flow": brrrr_cf,
+        "annual_cash_flow": brrrr_cf * 12,
+    }
+
+    # ===== USER-SELECTED FINANCING SCENARIO =====
+    # The deal can carry its own financing config (set via UI inline edits).
+    # When set, we compute the real financing cost and ROI on cash invested.
+    fin = deal.get("financing") or {}
+    method = (fin.get("method") or "cash").lower()
+    ltv_pct = float(fin.get("ltv_pct") or 0)
+    rate_pct = float(fin.get("interest_rate_pct") or 0)
+    orig_pct = float(fin.get("origination_pct") or 0)
+    term_mo = int(fin.get("term_months") or hold_mo or 6)
+    rehab_fin = bool(fin.get("rehab_financed", True))
+
+    if method == "cash":
+        loan_amount = 0
+        interest_cost = 0
+        points_paid = 0
+        cash_for_purchase = pp
+        cash_for_rehab = rehab
+    else:
+        loan_principal_pp = pp * (ltv_pct / 100) if ltv_pct else 0
+        loan_principal_rehab = rehab if rehab_fin else 0
+        loan_amount = loan_principal_pp + loan_principal_rehab
+        interest_cost = loan_amount * (rate_pct / 100) * (term_mo / 12)
+        points_paid = loan_amount * (orig_pct / 100)
+        cash_for_purchase = pp - loan_principal_pp
+        cash_for_rehab = rehab - loan_principal_rehab
+
+    fin_total_cost = interest_cost + points_paid
+    cash_needed_up_front = max(0, cash_for_purchase) + max(0, cash_for_rehab) + closing + points_paid
+    # All-in WITH financing cost (already in holding via separate; but here keep separate)
+    all_in_with_financing = all_in + fin_total_cost
+    net_with_financing = arv - all_in_with_financing
+    roi_on_cash = (net_with_financing / cash_needed_up_front * 100) if cash_needed_up_front > 0 else 0
+    roi_on_cash_annualized = roi_on_cash * (12 / hold_mo) if hold_mo > 0 else 0
+
+    m["selected_financing"] = {
+        "method": method,
+        "ltv_pct": ltv_pct,
+        "interest_rate_pct": rate_pct,
+        "origination_pct": orig_pct,
+        "term_months": term_mo,
+        "rehab_financed": rehab_fin,
+        "loan_amount": round(loan_amount),
+        "interest_cost": round(interest_cost),
+        "points_paid": round(points_paid),
+        "total_financing_cost": round(fin_total_cost),
+        "cash_needed_up_front": round(cash_needed_up_front),
+        "net_profit_after_financing": round(net_with_financing),
+        "roi_on_cash": roi_on_cash,
+        "roi_on_cash_annualized": roi_on_cash_annualized,
+        "all_in_with_financing": round(all_in_with_financing),
+    }
+
+    # Financing options
+    m["financing"] = [
+        {"option": "Cash", "down": "100%", "rate": "N/A",
+         "cost_6mo": 0,
+         "total_capital_needed": acq + rehab + holding,
+         "feasibility": "Best for sub-$50K purchases"},
+        {"option": "Hard Money", "down": "10-20%",
+         "rate": "11-13% + 2-3 pts",
+         "cost_6mo": int(acq * 0.07 + acq * 0.025),
+         "total_capital_needed": int(acq * 0.15 + rehab),
+         "feasibility": "Standard for flips $100K+"},
+        {"option": "Private Lender", "down": "15-25%",
+         "rate": "8-10%",
+         "cost_6mo": int(acq * 0.045),
+         "total_capital_needed": int(acq * 0.20 + rehab),
+         "feasibility": "Best if relationship exists"},
+        {"option": "HELOC", "down": "N/A", "rate": "9-10%",
+         "cost_6mo": int(acq * 0.05),
+         "total_capital_needed": 0,
+         "feasibility": "Good fit for smaller deals"},
+    ]
+
+    # Strategy recommendation
+    yoy = deal.get("market_trend_yoy_pct", 0) or 0
+    recs = []
+    if roi >= 20 and yoy >= -3:
+        recs.append("FLIP")
+    if cap_rate >= 8 and brrrr_cf >= 200:
+        recs.append("BRRRR")
+    if cap_rate >= 9 and roi < 15:
+        recs.append("RENT (hold)")
+    if not m["rule_70_pass"] and (pp - max_p_70) > 30000 and roi < 8:
+        recs.append("WHOLESALE / PASS")
+    if not recs:
+        if roi >= 8:
+            recs.append("FLIP (modest)")
+        elif cap_rate >= 6:
+            recs.append("BRRRR (modest)")
+        else:
+            recs.append("PASS / RENEGOTIATE")
+    m["recommended_strategy"] = recs
+
+    # Alert
+    m["flip_to_rent_alert"] = cap_rate >= 9 and roi <= 12
+
+    return m
+
+
+def compute_score(deal: dict, m: dict) -> tuple:
+    """Returns (score 0-100, grade A+ to F, signal)."""
+    score = 0
+
+    # Margin & ROI (30 pts)
+    roi = m["roi"]
+    if roi >= 25:
+        score += 30
+    elif roi >= 15:
+        score += 22
+    elif roi >= 5:
+        score += 14
+    elif roi >= 0:
+        score += 6
+    # ARV confidence (15 pts)
+    conf = (deal.get("arv_confidence") or "Medium").lower()
+    score += {"high": 15, "medium": 10, "low": 5}.get(conf, 10)
+    # 70% rule (15 pts)
+    if m["rule_70_pass"]:
+        score += 15
+    elif m["rule_70_overage"] < 10000:
+        score += 11
+    elif m["rule_70_overage"] < 25000:
+        score += 7
+    else:
+        score += 2
+    # Market conditions (15 pts)
+    yoy = deal.get("market_trend_yoy_pct", 0) or 0
+    if yoy >= 5:
+        score += 15
+    elif yoy >= 0:
+        score += 11
+    elif yoy >= -5:
+        score += 7
+    else:
+        score += 3
+    # Rehab complexity (10 pts)
+    scope = (deal.get("rehab_scope") or "Mid-level").lower()
+    if "cosmetic" in scope or "light" in scope:
+        score += 10
+    elif "mid" in scope:
+        score += 7
+    else:
+        score += 4
+    # Neighborhood quality (10 pts) - crude proxy via rating
+    crime = (deal.get("crime_rating") or "C").upper()
+    crime_score = {"A": 10, "B": 8, "C": 5, "D": 2, "F": 0}
+    score += crime_score.get(crime[0] if crime else "C", 5)
+    # Exit optionality (5 pts)
+    score += min(5, len(m["recommended_strategy"]) * 2)
+
+    score = max(0, min(100, int(round(score))))
+
+    if score >= 85:
+        grade = "A+"
+        signal = "SLAM DUNK"
+    elif score >= 70:
+        grade = "A"
+        signal = "GOOD FLIP"
+    elif score >= 55:
+        grade = "B"
+        signal = "POSSIBLE"
+    elif score >= 40:
+        grade = "C"
+        signal = "RISKY"
+    elif score >= 25:
+        grade = "D"
+        signal = "MARGINAL"
+    else:
+        grade = "F"
+        signal = "NO DEAL"
+
+    return score, grade, signal
+
+
+def board_aggregates(deals_with_metrics: list) -> dict:
+    """Compute board-level aggregate statistics."""
+    if not deals_with_metrics:
+        return {"count": 0}
+    total_cap = sum(m["acquisition"] + d["rehab_base"]
+                    for d, m in deals_with_metrics)
+    total_profit = sum(m["net_profit"] for _, m in deals_with_metrics)
+    avg_roi = sum(m["roi"] for _, m in deals_with_metrics) / len(deals_with_metrics)
+    avg_cap = sum(m["rent"]["cap_rate"] for _, m in deals_with_metrics) / len(deals_with_metrics)
+    passing = sum(1 for _, m in deals_with_metrics if m["rule_70_pass"])
+    by_signal = {}
+    for d, _ in deals_with_metrics:
+        s = d.get("signal", "UNKNOWN")
+        by_signal[s] = by_signal.get(s, 0) + 1
+    return {
+        "count": len(deals_with_metrics),
+        "total_capital": total_cap,
+        "total_profit": total_profit,
+        "avg_roi": avg_roi,
+        "avg_cap_rate": avg_cap,
+        "passing_70_rule": passing,
+        "by_signal": by_signal,
+    }

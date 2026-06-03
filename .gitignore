@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+
+# OS / IDE
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*~
+
+# === SENSITIVE DATA (DO NOT COMMIT) ===
+# Anthropic API key
+data/ai-config.json
+
+# RealForeclose / county auction login credentials
+data/realauction-credentials.json
+
+# Browser cookies (could contain auth tokens)
+data/auth-cookies.json
+data/.browser-profile/
+
+# === USER DATA (kept local — production uses Render's persistent disk) ===
+# Comment these out if you want to commit your local deals as seed data
+data/deals.json
+data/flip-board.json
+data/leads.json
+data/auctions.json
+data/crm.json
+data/pdfs/
+
+# Logs
+*.log
+/tmp/flipboard*.log
+
+# Compiled
+*.pyc
+*.pyo
+
+# Playwright
+playwright-report/
+test-results/

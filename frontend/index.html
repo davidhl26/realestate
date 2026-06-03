@@ -1,0 +1,1641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Flip Board</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="/js/chart.umd.min.js"></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 12l9-9 9 9-9 9-9-9z" stroke-linejoin="round"/><path d="M3 12h18M12 3v18" stroke-linecap="round" opacity="0.5"/></svg>
+      </div>
+      <div class="brand-text">
+        <h1>Flip Board</h1>
+        <span>Fix &amp; flip evaluator</span>
+      </div>
+    </div>
+    <nav>
+      <a data-view="dashboard" class="nav-link active">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg></span>
+        Dashboard
+      </a>
+      <a data-view="deals" class="nav-link">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" stroke-linejoin="round"/><path d="M9 22V12h6v10" stroke-linejoin="round"/></svg></span>
+        Deals
+        <span class="nav-badge" id="nav-deal-count"></span>
+      </a>
+      <a data-view="leads" class="nav-link">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke-linejoin="round"/></svg></span>
+        Leads
+        <span class="nav-badge" id="nav-lead-count"></span>
+      </a>
+      <a data-view="skiptrace" class="nav-link">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" stroke-linejoin="round"/><path d="M14 12h-4v8h4v-8z M9 6.5L12 4l3 2.5" stroke-linecap="round"/></svg></span>
+        Skip Trace
+        <span class="nav-badge" id="nav-skiptrace-count"></span>
+      </a>
+      <a data-view="add" class="nav-link">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8" stroke-linecap="round"/></svg></span>
+        Add Deal
+      </a>
+      <a data-view="batch" class="nav-link">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><path d="M10 7h4M10 17h4M7 10v4M17 10v4" stroke-linecap="round"/></svg></span>
+        Batch Import
+      </a>
+      <a data-view="compare" class="nav-link">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M7 4l-4 4 4 4M3 8h12M17 14l4 4-4 4M21 18H9" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        Compare
+      </a>
+      <a data-view="crm" class="nav-link">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke-linecap="round"/></svg></span>
+        CRM
+        <span class="nav-badge" id="nav-crm-count"></span>
+      </a>
+
+      <div class="nav-divider"></div>
+      <div class="nav-section-label">Workspace</div>
+
+      <a id="nav-open-chat" class="nav-link" style="cursor:pointer;">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z" stroke-linejoin="round"/></svg></span>
+        Chat with AI
+      </a>
+
+      <a data-view="settings" class="nav-link">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06a1.65 1.65 0 00.33-1.82 1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06a1.65 1.65 0 001.82.33H9a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06a1.65 1.65 0 00-.33 1.82V9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg></span>
+        Settings
+      </a>
+    </nav>
+    <footer class="sidebar-footer">
+      <button class="cmdk-button" id="open-cmdk">
+        <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg> Search</span>
+        <kbd>⌘K</kbd>
+      </button>
+      <button class="theme-toggle" id="theme-toggle">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" stroke-linejoin="round"/></svg>
+        <span id="theme-label">Dark mode</span>
+      </button>
+      <small>Educational use only · not financial advice</small>
+    </footer>
+  </aside>
+
+  <main class="main">
+    <!-- ============ DASHBOARD ============ -->
+    <section id="view-dashboard" class="view active">
+      <header class="page-header">
+        <div class="page-header-text">
+          <div class="page-eyebrow">Overview</div>
+          <h2>Dashboard</h2>
+        </div>
+        <div class="toolbar">
+          <button class="btn primary" onclick="document.querySelector('[data-view=add]').click()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
+            New deal
+          </button>
+        </div>
+      </header>
+
+      <div class="stats-grid" id="stats-grid"></div>
+
+      <!-- Deal selector + focused panel -->
+      <div class="card" id="deal-selector-card">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/><circle cx="11" cy="11" r="3"/></svg>
+          Inspect a deal
+          <span class="muted" style="font-weight:500; text-transform:none; letter-spacing:0; font-size:11.5px; margin-left:8px;">
+            Pick from the dropdown OR click any chart bar / point below
+          </span>
+        </h3>
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <select id="dash-deal-picker" style="flex:1; min-width:280px; padding:9px 12px; border:1px solid var(--border-2); background:var(--card); color:var(--text); border-radius:9px; font-size:13px; font-family:inherit;">
+            <option value="">— Select a deal —</option>
+          </select>
+          <button class="btn" id="dash-clear-selection" style="display:none">Clear</button>
+        </div>
+        <div id="focused-deal-panel" style="display:none; margin-top:14px;"></div>
+      </div>
+
+      <div class="charts-row">
+        <div class="card">
+          <h3>Net profit by deal <span class="muted" style="font-weight:500; text-transform:none; letter-spacing:0; font-size:11px;">click bar to inspect →</span></h3>
+          <canvas id="chart-profit"></canvas>
+        </div>
+        <div class="card">
+          <h3>ROI vs Cap rate <span class="muted" style="font-weight:500; text-transform:none; letter-spacing:0; font-size:11px;">click point to inspect →</span></h3>
+          <canvas id="chart-roi-cap"></canvas>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Score distribution <span class="muted" style="font-weight:500; text-transform:none; letter-spacing:0; font-size:11px;">click bar to inspect →</span></h3>
+        <canvas id="chart-scores" height="80"></canvas>
+      </div>
+
+      <div class="card">
+        <h3>Top deals</h3>
+        <div id="top-deals"></div>
+      </div>
+    </section>
+
+    <!-- ============ DEALS LIST ============ -->
+    <section id="view-deals" class="view">
+      <header class="page-header">
+        <div class="page-header-text">
+          <div class="page-eyebrow">Portfolio</div>
+          <h2>All deals</h2>
+        </div>
+        <div class="toolbar">
+          <div class="search-bar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg>
+            <input type="search" id="deals-search" placeholder="Search address, city, signal…">
+            <span class="kbd-hint">⌘K</span>
+          </div>
+          <div class="view-toggle" id="view-toggle">
+            <button data-mode="cards" class="active">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+              Cards
+            </button>
+            <button data-mode="table">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18" stroke-linecap="round"/></svg>
+              Table
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <div id="deals-cards-container"></div>
+
+      <div class="card" id="deals-table-container" style="display:none">
+        <div class="table-wrap">
+          <table id="deals-table" class="data-table">
+            <thead>
+              <tr>
+                <th data-sort="address">Address</th>
+                <th data-sort="score">Score</th>
+                <th data-sort="signal">Signal</th>
+                <th data-sort="purchase_price">Purchase</th>
+                <th data-sort="arv_base">ARV</th>
+                <th data-sort="net_profit">Net Profit</th>
+                <th data-sort="roi">ROI</th>
+                <th data-sort="cap_rate">Cap</th>
+                <th data-sort="status">Status</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="deals-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ ADD DEAL ============ -->
+    <section id="view-add" class="view">
+      <header class="page-header">
+        <div class="page-header-text">
+          <div class="page-eyebrow">New</div>
+          <h2>Add a deal</h2>
+          <p>Paste a Zillow, Redfin, or ispeedtolead URL — or fill in manually.</p>
+        </div>
+      </header>
+
+      <div class="card hero-card">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg>
+          Find by address
+          <span style="font-weight:500; text-transform:none; letter-spacing:0; font-size:11.5px; margin-left:8px; color:var(--muted);">
+            Searches Zillow, Redfin, then AI fallback
+          </span>
+        </h3>
+        <div class="url-fetch">
+          <input type="text" id="address-search"
+            placeholder="e.g. 623 E 117th St, Cleveland OH 44108">
+          <button id="address-search-btn" class="btn primary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg>
+            Search
+          </button>
+        </div>
+        <div id="address-search-status" class="status-line"></div>
+      </div>
+
+      <div class="card hero-card">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Or paste a URL
+        </h3>
+        <div class="url-fetch">
+          <input type="url" id="scrape-url"
+            placeholder="Zillow / Redfin / ispeedtolead URL  •  drag &amp; drop anywhere">
+          <button id="scrape-btn" class="btn primary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Fetch
+          </button>
+        </div>
+        <div id="scrape-status" class="status-line"></div>
+      </div>
+
+      <!-- ============ PDF IMPORT (auction lists, MLS hot sheets, broker inventories) ============ -->
+      <div class="card hero-card" style="background:linear-gradient(135deg, rgba(139,92,246,0.06), rgba(99,102,241,0.03));">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          📄 Import from a PDF
+          <span style="font-weight:500; text-transform:none; letter-spacing:0; font-size:11.5px; margin-left:8px; color:var(--muted);">
+            Foreclosure list / MLS hot sheet / broker inventory
+          </span>
+        </h3>
+        <p class="muted" style="font-size:12px; margin-bottom:12px;">
+          Drop a PDF — Claude will read every page and extract every property listing (address, price, beds/baths, case #, etc.). Review the list, then bulk-create deals.
+        </p>
+
+        <div id="pdf-drop-zone" style="border:1px solid var(--border); border-radius:12px; padding:16px; background:var(--card);">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <div>
+              <strong style="font-size:13px;">📑 Choisis un PDF récent</strong>
+              <div class="muted" style="font-size:11.5px; margin-top:2px;">Scan auto de Downloads, Desktop, Documents</div>
+            </div>
+            <button type="button" id="pdf-refresh-btn" class="btn ghost" style="font-size:11px;">🔄 Rafraîchir</button>
+          </div>
+          <div id="pdf-recent-list" style="max-height:380px; overflow-y:auto;">
+            <div class="muted" style="text-align:center; padding:20px; font-size:12px;">Chargement…</div>
+          </div>
+        </div>
+        <input type="file" id="pdf-file-input" accept=".pdf,application/pdf"
+                style="position:absolute; left:-9999px; width:1px; height:1px; opacity:0;">
+
+
+        <!-- STAGE 1: Fichier reçu, en attente de validation -->
+        <div id="pdf-received" style="display:none; margin-top:14px; border:2px solid var(--green); border-radius:12px; padding:18px 20px; background:rgba(34,197,94,0.07);">
+          <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+            <div style="font-size:28px;">✅</div>
+            <div style="flex:1; min-width:200px;">
+              <div style="font-size:14px; font-weight:700; color:var(--green);">Fichier reçu</div>
+              <div id="pdf-received-name" style="font-size:13px; margin-top:2px;"></div>
+              <div id="pdf-received-meta" class="muted" style="font-size:11.5px; margin-top:2px;"></div>
+            </div>
+            <div style="display:flex; gap:6px;">
+              <label style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:var(--muted); align-self:center; margin-right:4px;">Créer comme</label>
+              <select id="pdf-received-target" class="input" style="font-size:12.5px; padding:6px 10px;">
+                <option value="deal">Deals</option>
+                <option value="lead">Leads</option>
+                <option value="auction">Auctions</option>
+              </select>
+              <button id="pdf-received-cancel" class="btn ghost">Annuler</button>
+              <button id="pdf-analyze-btn" class="btn primary">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="14" height="14"><path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                Analyser
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div id="pdf-analyzing" style="display:none; margin-top:14px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <div class="loading-spinner" style="width:14px; height:14px; flex-shrink:0;"></div>
+              <strong id="pdf-stage-label" style="font-size:13px;">Uploading file…</strong>
+            </div>
+            <span class="muted" style="font-size:12px;">
+              <span id="pdf-progress-pct">0%</span>
+              <span style="margin-left:6px;">·</span>
+              <span id="pdf-elapsed">0s</span>
+            </span>
+          </div>
+          <div style="background:var(--surface-2); border-radius:8px; overflow:hidden; height:10px;">
+            <div id="pdf-progress-bar" style="background:linear-gradient(90deg, #8b5cf6, #6366f1); height:100%; width:0%; transition:width 0.4s ease;"></div>
+          </div>
+          <div id="pdf-stage-detail" class="muted" style="font-size:11.5px; margin-top:8px; line-height:1.5;"></div>
+          <ol id="pdf-step-list" style="margin:12px 0 0; padding-left:0; list-style:none; font-size:12px;">
+            <li data-step="upload"   style="padding:5px 0; opacity:0.4;">⬜ Upload du fichier au backend</li>
+            <li data-step="extract"  style="padding:5px 0; opacity:0.4;">⬜ Extraction du texte (pdfplumber / pypdf)</li>
+            <li data-step="claude"   style="padding:5px 0; opacity:0.4;">⬜ Analyse par Claude (peut prendre 20-60s)</li>
+            <li data-step="render"   style="padding:5px 0; opacity:0.4;">⬜ Affichage des propriétés extraites</li>
+          </ol>
+          <button id="pdf-cancel-btn" class="btn ghost" style="margin-top:8px; font-size:11px;">Annuler</button>
+        </div>
+
+        <div id="pdf-result" style="display:none; margin-top:14px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+            <div>
+              <div class="page-eyebrow" id="pdf-result-doctype">DOCUMENT</div>
+              <h4 id="pdf-result-summary" style="margin:4px 0 0; font-size:14px;"></h4>
+              <div class="muted" id="pdf-result-meta" style="font-size:11.5px; margin-top:2px;"></div>
+            </div>
+            <div style="display:flex; gap:6px; align-items:center;">
+              <label style="font-size:11.5px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:var(--muted);">Create as</label>
+              <select id="pdf-target" class="input" style="font-size:12.5px; padding:6px 10px;">
+                <option value="deal">Deals (full analysis)</option>
+                <option value="lead">Leads (triage first)</option>
+                <option value="auction">Auctions (skip-trace queue)</option>
+              </select>
+              <button id="pdf-select-all" class="btn ghost" style="font-size:11px;">All</button>
+              <button id="pdf-select-none" class="btn ghost" style="font-size:11px;">None</button>
+              <button id="pdf-commit-btn" class="btn primary" style="font-size:13px;">
+                Create <span id="pdf-commit-count">0</span>
+              </button>
+            </div>
+          </div>
+
+          <div id="pdf-warnings" style="margin-top:10px;"></div>
+
+          <div id="pdf-properties-list" style="margin-top:14px; max-height:520px; overflow-y:auto;"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Deal details</h3>
+        <form id="deal-form" class="form-grid">
+          <label>Address <input name="address" required></label>
+          <label>City <input name="city"></label>
+          <label>State <input name="state" maxlength="2"></label>
+          <label>ZIP <input name="zip"></label>
+          <label>Neighborhood <input name="neighborhood"></label>
+          <label>Property type
+            <select name="property_type">
+              <option>Single Family Residence</option>
+              <option>Condominium</option>
+              <option>Multi-family (2-4)</option>
+              <option>Townhouse</option>
+              <option>Other</option>
+            </select>
+          </label>
+          <label>Beds <input name="beds" type="number" min="0"></label>
+          <label>Baths <input name="baths" type="number" step="0.5" min="0"></label>
+          <label>Sq Ft <input name="sqft" type="number" min="0"></label>
+          <label>Year built <input name="year_built" type="number" min="1800" max="2030"></label>
+          <label>Lot size <input name="lot_size"></label>
+
+          <fieldset class="span-2">
+            <legend>Financials</legend>
+            <label>Purchase price ($) <input name="purchase_price" type="number" required></label>
+            <label>ARV — Base ($)
+              <div style="display:flex; gap:6px;">
+                <input name="arv_base" type="number" required style="flex:1;">
+                <button type="button" id="arv-research-btn" class="btn ai-pill-btn" title="Research ARV with Claude">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" stroke-linejoin="round"/></svg>
+                  AI
+                </button>
+              </div>
+            </label>
+            <label>ARV — Low ($) <input name="arv_low" type="number"></label>
+            <label>ARV — High ($) <input name="arv_high" type="number"></label>
+            <label>ARV confidence
+              <select name="arv_confidence">
+                <option>Low</option><option selected>Medium</option><option>High</option>
+              </select>
+            </label>
+            <label>Rehab budget ($) <input name="rehab_base" type="number" required></label>
+            <label>Rehab — Low ($) <input name="rehab_low" type="number"></label>
+            <label>Rehab — High ($) <input name="rehab_high" type="number"></label>
+            <label>Rehab scope
+              <select name="rehab_scope">
+                <option>Cosmetic</option><option selected>Mid-level</option><option>Full gut</option>
+              </select>
+            </label>
+            <label>Holding months <input name="holding_months" type="number" value="5"></label>
+            <label>Holding cost/mo ($) <input name="holding_cost_monthly" type="number" value="500"></label>
+            <label>Selling cost % <input name="selling_cost_pct" type="number" step="0.1" value="8"></label>
+          </fieldset>
+
+          <fieldset class="span-2">
+            <legend>Rental potential</legend>
+            <label>Estimated rent/mo ($) <input name="estimated_rent" type="number"></label>
+            <label>Monthly taxes ($) <input name="monthly_taxes" type="number"></label>
+            <label>Monthly insurance ($) <input name="monthly_insurance" type="number"></label>
+            <label>Monthly HOA ($) <input name="monthly_hoa" type="number"></label>
+            <label>Monthly maintenance ($) <input name="monthly_maintenance" type="number"></label>
+            <label>Monthly management ($) <input name="monthly_mgmt" type="number"></label>
+            <label>Vacancy % <input name="vacancy_pct" type="number" step="0.5" value="8"></label>
+          </fieldset>
+
+          <fieldset class="span-2">
+            <legend>Market / neighborhood</legend>
+            <label>YoY trend %
+              <input name="market_trend_yoy_pct" type="number" step="0.1"></label>
+            <label>Median DOM (days) <input name="median_dom" type="number"></label>
+            <label>Crime rating
+              <select name="crime_rating">
+                <option>A</option><option>B+</option><option>B</option>
+                <option selected>C</option><option>D</option><option>F</option>
+              </select>
+            </label>
+            <label>School rating <input name="school_rating"></label>
+          </fieldset>
+
+          <label class="span-2">Notes
+            <textarea name="notes" rows="3"></textarea>
+          </label>
+
+          <div class="form-actions span-2">
+            <button type="submit" class="btn primary">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><path d="M17 21v-8H7v8M7 3v5h8" stroke-linecap="round"/></svg>
+              Save deal
+            </button>
+            <button type="reset" class="btn">Reset</button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- ============ DEAL DETAIL ============ -->
+    <section id="view-detail" class="view">
+      <header class="page-header sticky-header">
+        <div class="page-header-text">
+          <button id="back-btn" class="btn ghost back-pill">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Back
+          </button>
+          <span id="detail-breadcrumb-name" class="breadcrumb-name"></span>
+        </div>
+        <div class="toolbar">
+          <span id="detail-status-container"></span>
+          <button id="refresh-btn" class="btn" title="Re-fetch from source URL">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Refresh
+          </button>
+          <button id="edit-btn" class="btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Edit
+          </button>
+          <button id="pdf-btn" class="btn primary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6" stroke-linecap="round"/></svg>
+            Generate PDF
+          </button>
+          <button id="delete-btn" class="btn danger icon-only" title="Delete">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+      </header>
+
+      <!-- Photo carousel up top -->
+      <div class="hero-carousel" id="hero-carousel" style="display:none">
+        <div class="carousel-track" id="carousel-track"></div>
+        <button class="carousel-nav carousel-prev" id="carousel-prev" title="Previous (←)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <button class="carousel-nav carousel-next" id="carousel-next" title="Next (→)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 18l6-6-6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <div class="carousel-counter" id="carousel-counter"></div>
+        <div class="carousel-dots" id="carousel-dots"></div>
+      </div>
+
+      <div class="detail-hero" id="detail-hero"></div>
+
+      <!-- Inline-editable Financing card -->
+      <div class="card financing-card" id="financing-card">
+        <div class="financing-header">
+          <h3>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h2" stroke-linecap="round"/></svg>
+            Loan scenario <span class="muted" style="font-weight:500; text-transform:none; letter-spacing:0; font-size:11.5px; margin-left:8px;">click any number to edit</span>
+          </h3>
+          <div class="method-chips" id="method-chips"></div>
+        </div>
+        <div class="financing-inputs" id="financing-inputs"></div>
+        <div class="financing-outputs" id="financing-outputs"></div>
+      </div>
+
+      <div class="card flip-alert" id="flip-alert" style="display:none">
+        <strong>Consider converting to rental.</strong>
+        <span id="flip-alert-text"></span>
+      </div>
+
+      <div id="verdict-hero" style="display:none"></div>
+
+      <!-- AI Assistant Panel — featured -->
+      <div class="card ai-panel" id="ai-panel">
+        <div class="ai-panel-header">
+          <div>
+            <h3>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" stroke-linejoin="round"/></svg>
+              AI Assistant <span id="ai-model-pill" class="pill blue">Opus 4.7</span>
+            </h3>
+            <p class="muted" style="margin:0">Run AI-powered analysis tasks. Results saved.</p>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <button class="btn primary" id="ai-run-research" title="Run 5 key tasks">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke-linejoin="round"/></svg>
+              Full analysis
+            </button>
+            <button class="btn ghost icon-only" id="ai-clear-all" title="Clear all AI results">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <div class="ai-task-groups" id="ai-task-groups"></div>
+      </div>
+
+      <!-- Section: financials & analysis -->
+      <div class="section-label">Financials &amp; analysis</div>
+      <div class="detail-grid">
+        <div class="card">
+          <h3>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2" stroke-linecap="round"/></svg>
+            Strategy comparison
+          </h3>
+          <table class="data-table" id="strategy-table"></table>
+        </div>
+
+        <div class="card">
+          <h3>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18M7 14l4-4 4 4 5-5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Scenario analysis
+          </h3>
+          <table class="data-table" id="scenario-table"></table>
+        </div>
+
+        <div class="card">
+          <h3>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Max purchase back-solver
+          </h3>
+          <p class="muted" style="margin-bottom:8px">For similar deals at this ARV/rehab profile.</p>
+          <table class="data-table" id="backsolve-table"></table>
+        </div>
+
+        <div class="card">
+          <h3>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            70% rule
+          </h3>
+          <table class="kv-table" id="rule70-table"></table>
+        </div>
+
+        <div class="card">
+          <h3>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h2" stroke-linecap="round"/></svg>
+            Financing options
+          </h3>
+          <table class="data-table" id="financing-table"></table>
+        </div>
+
+        <div class="card">
+          <h3>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0zM12 9v4M12 17h.01" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Risks
+          </h3>
+          <ul id="risks-list"></ul>
+        </div>
+      </div>
+
+      <div class="card" id="arv-anchors-card" style="display:none">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18M8 12l4-4 4 4-4 4z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          ARV value anchors
+        </h3>
+        <p class="muted" style="margin-bottom:12px">Comparing ARV estimates across sources. Big spread = verify before committing.</p>
+        <div class="arv-anchors" id="arv-anchors-bars"></div>
+      </div>
+
+      <!-- Section: media -->
+      <div class="comps-section" id="visuals-section" style="display:none">
+        <div class="card" id="gallery-card">
+          <h3>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Photos <span id="gallery-count" class="muted" style="margin-left:8px"></span>
+          </h3>
+          <div class="gallery" id="gallery"></div>
+        </div>
+        <div class="card map-card" id="map-card">
+          <h3>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+            Location
+          </h3>
+          <iframe id="map-iframe" referrerpolicy="no-referrer-when-downgrade"></iframe>
+        </div>
+      </div>
+
+      <div class="comps-section" id="comps-section" style="display:none">
+        <div class="card">
+          <h3>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" stroke-linejoin="round"/></svg>
+            Sale comparables <span class="pill blue" id="sale-comps-count"></span>
+          </h3>
+          <div class="table-wrap">
+            <table class="data-table" id="sale-comps-table"></table>
+          </div>
+        </div>
+        <div class="card">
+          <h3>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6" stroke-linecap="round"/></svg>
+            Rental comparables <span class="pill blue" id="rent-comps-count"></span>
+          </h3>
+          <div class="table-wrap">
+            <table class="data-table" id="rent-comps-table"></table>
+          </div>
+        </div>
+      </div>
+
+      <!-- CRM card per deal -->
+      <div class="section-label">Contacts &amp; activity</div>
+      <div class="card deal-crm-card" id="deal-crm-card">
+        <div class="deal-crm-header">
+          <h3>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+            Contacts &amp; activity
+          </h3>
+          <div style="display:flex; gap:8px;">
+            <button class="btn" id="add-contact-deal">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><path d="M20 8v6M23 11h-6" stroke-linecap="round"/></svg>
+              Add contact
+            </button>
+            <button class="btn primary" id="add-interaction-deal">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z" stroke-linejoin="round"/></svg>
+              Log activity
+            </button>
+          </div>
+        </div>
+        <div class="deal-crm-body">
+          <div class="deal-crm-col">
+            <h4>Contacts</h4>
+            <div id="deal-contacts-list"></div>
+          </div>
+          <div class="deal-crm-col">
+            <h4>Activity timeline</h4>
+            <div id="deal-activity-list"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" id="description-card" style="display:none">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Description
+        </h3>
+        <div id="description-text" style="white-space:pre-wrap; font-size:13px; line-height:1.7; color:var(--text-2)"></div>
+      </div>
+
+      <div id="pdf-preview" class="pdf-preview" style="display:none">
+        <div class="pdf-actions">
+          <strong>PDF preview</strong>
+          <div style="display:flex;gap:8px">
+            <a id="pdf-download" class="btn" download>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Download
+            </a>
+            <button class="btn ghost icon-only" id="pdf-close">×</button>
+          </div>
+        </div>
+        <iframe id="pdf-iframe" src="about:blank"></iframe>
+      </div>
+    </section>
+
+    <!-- ============ COMPARE ============ -->
+    <section id="view-compare" class="view">
+      <header class="page-header">
+        <div class="page-header-text">
+          <div class="page-eyebrow">Multi-deal analysis</div>
+          <h2>Compare &amp; pick the winner</h2>
+          <p>Pick 2+ deals, run every analysis (Flip Score, P&amp;L, ROI, BRRRR, rental cap), and let Claude tell you which one to do.</p>
+        </div>
+        <div class="toolbar">
+          <button id="compare-pdf-btn" class="btn ghost" title="Export classic side-by-side PDF">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
+            PDF
+          </button>
+        </div>
+      </header>
+
+      <!-- Step 1: Deal picker -->
+      <div class="card hero-card">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:12px;">
+          <h3 style="margin:0;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke-linecap="round"/></svg>
+            Pick deals to compare
+          </h3>
+          <div style="display:flex; gap:6px;">
+            <button id="cmp-select-all" class="btn ghost" style="font-size:11px;">Select all</button>
+            <button id="cmp-select-none" class="btn ghost" style="font-size:11px;">Select none</button>
+            <button id="cmp-select-top5" class="btn ghost" style="font-size:11px;">Top 5</button>
+          </div>
+        </div>
+        <div id="cmp-deal-grid" class="cmp-deal-grid"></div>
+
+        <div style="display:flex; gap:10px; margin-top:14px; align-items:center; flex-wrap:wrap;">
+          <label style="font-size:11.5px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:var(--muted);">
+            Priority (optional)
+          </label>
+          <select id="cmp-focus" class="input" style="font-size:12.5px; padding:6px 10px; max-width:240px;">
+            <option value="">Best overall</option>
+            <option value="fastest flip with the highest ROI">Fastest flip / highest ROI</option>
+            <option value="biggest absolute net profit">Biggest profit $</option>
+            <option value="lowest cash needed (capital efficient)">Lowest cash needed</option>
+            <option value="best cash-flowing rental conversion">Best rental / BRRRR</option>
+            <option value="lowest risk and safest">Lowest risk</option>
+          </select>
+          <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;">
+            <input type="checkbox" id="cmp-verdict" checked>
+            <span>Ask Claude for a winner verdict</span>
+          </label>
+          <span style="flex:1;"></span>
+          <button id="cmp-run-btn" class="btn primary" style="font-size:13px; padding:8px 18px;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="14" height="14"><path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Run comparison
+          </button>
+        </div>
+      </div>
+
+      <!-- Loading state -->
+      <div id="cmp-loading" class="card" style="display:none; text-align:center; padding:40px 20px;">
+        <div class="loading-spinner" style="margin:0 auto 14px;"></div>
+        <div id="cmp-loading-msg" style="font-size:14px;">Running comparison…</div>
+      </div>
+
+      <!-- Result: AI verdict (top) -->
+      <div id="cmp-verdict-card" class="card hero-card" style="display:none; background:linear-gradient(135deg, rgba(99,102,241,0.08), rgba(139,92,246,0.04));">
+        <div style="display:flex; gap:14px; align-items:start;">
+          <div style="font-size:36px; line-height:1;">🏆</div>
+          <div style="flex:1;">
+            <div class="page-eyebrow" style="color:var(--accent);">CLAUDE'S VERDICT</div>
+            <h3 id="cmp-winner-title" style="margin:6px 0 8px;"></h3>
+            <p id="cmp-verdict-text" style="font-size:14px; line-height:1.5;"></p>
+            <div id="cmp-why-winner" style="margin-top:10px;"></div>
+          </div>
+        </div>
+        <div id="cmp-portfolio-play" style="margin-top:14px; padding:12px; background:var(--surface-2); border-radius:8px; font-size:13px;"></div>
+        <div id="cmp-next-actions" style="margin-top:10px;"></div>
+        <div id="cmp-honorable-avoid" style="margin-top:14px; display:grid; grid-template-columns:1fr 1fr; gap:10px;"></div>
+      </div>
+
+      <!-- Result: per-category winners -->
+      <div id="cmp-winners-grid" class="stats-grid" style="display:none;"></div>
+
+      <!-- Result: aggregate stats -->
+      <div id="cmp-aggregates" class="card" style="display:none;"></div>
+
+      <!-- Result: ranked side-by-side table -->
+      <div id="cmp-table-card" class="card" style="display:none;">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18" stroke-linecap="round"/></svg>
+          Side-by-side ranking
+        </h3>
+        <div class="table-wrap" style="overflow-x:auto;">
+          <table class="data-table" id="cmp-table">
+            <thead><tr id="cmp-thead"></tr></thead>
+            <tbody id="cmp-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Result: score breakdowns -->
+      <div id="cmp-breakdown-card" class="card" style="display:none;">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18" stroke-linecap="round"/><path d="M7 14l4-4 4 4 4-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Flip Score breakdown
+        </h3>
+        <div id="cmp-breakdown-grid"></div>
+      </div>
+
+      <div id="compare-status" class="status-line"></div>
+      <div id="compare-pdf-preview" class="pdf-preview" style="display:none">
+        <iframe id="compare-iframe" src="about:blank"></iframe>
+      </div>
+    </section>
+
+    <!-- ============ BATCH IMPORT ============ -->
+    <section id="view-batch" class="view">
+      <header class="page-header">
+        <div class="page-header-text">
+          <div class="page-eyebrow">Autonomous scraping</div>
+          <h2>Batch Import</h2>
+          <p>Paste a list of URLs or addresses (one per line). Each line is scraped and saved as a deal automatically.</p>
+        </div>
+      </header>
+
+      <div class="card hero-card">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke-linejoin="round"/></svg>
+          New batch
+        </h3>
+        <div style="margin-bottom:14px;">
+          <label class="muted" style="display:block; margin-bottom:6px; font-size:11.5px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">
+            URLs or addresses (one per line)
+          </label>
+          <textarea id="batch-inputs" rows="10"
+            placeholder="https://www.zillow.com/homedetails/...
+https://app.ispeedtolead.com/deal-speed/property/...
+623 E 117th St, Cleveland OH 44108
+2007 Emerson Ave, Cincinnati OH 45239
+# Lines starting with # are ignored"
+            style="width:100%; padding:12px 14px; border:1px solid var(--border-2); border-radius:10px; background:var(--card); color:var(--text); font-family:'JetBrains Mono', monospace; font-size:13px; line-height:1.6; resize:vertical;"></textarea>
+        </div>
+        <div class="form-grid" style="grid-template-columns: 1fr 1fr auto auto;">
+          <label>Delay between items (sec)
+            <input type="number" id="batch-delay" value="2.5" step="0.5" min="0">
+          </label>
+          <label>Skip duplicates
+            <select id="batch-skip-dups"><option value="yes" selected>Yes</option><option value="no">No</option></select>
+          </label>
+          <label>&nbsp;
+            <button type="button" id="batch-load-leads" class="btn" title="Load all lead source URLs from /api/leads">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke-linejoin="round"/></svg>
+              Load my leads
+            </button>
+          </label>
+          <label>&nbsp;
+            <button type="button" id="batch-start" class="btn primary">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M5 3l14 9-14 9V3z"/></svg>
+              Start batch
+            </button>
+          </label>
+        </div>
+        <div id="batch-info" class="status-line"></div>
+      </div>
+
+      <!-- Live progress -->
+      <div class="card" id="batch-progress-card" style="display:none">
+        <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:14px;">
+          <h3 style="margin-bottom:0 !important;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2" stroke-linecap="round"/></svg>
+            Batch progress
+          </h3>
+          <span id="batch-job-id" class="muted" style="font-family:monospace; font-size:11px;"></span>
+          <span id="batch-status-pill" class="pill gray"></span>
+          <span style="flex:1;"></span>
+          <div class="batch-controls" id="batch-controls"></div>
+        </div>
+
+        <div class="batch-bar-shell">
+          <div class="batch-bar-wrap">
+            <div class="batch-bar" id="batch-bar">
+              <div class="batch-bar-stripes"></div>
+            </div>
+          </div>
+          <div class="batch-bar-pct" id="batch-bar-pct">0%</div>
+        </div>
+        <div class="batch-current-message" id="batch-current-message"></div>
+
+        <div class="stats-grid" id="batch-stats" style="margin-top:14px;"></div>
+
+        <div class="table-wrap" style="margin-top:14px;">
+          <table class="data-table" id="batch-table">
+            <thead><tr>
+              <th style="width:40px">#</th>
+              <th>Input</th>
+              <th style="width:90px">Type</th>
+              <th style="width:120px">Status</th>
+              <th>Result / Error</th>
+              <th style="width:80px"></th>
+            </tr></thead>
+            <tbody id="batch-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- History -->
+      <div class="card">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2" stroke-linecap="round"/></svg>
+          Job history
+        </h3>
+        <div id="batch-history"></div>
+      </div>
+    </section>
+
+    <!-- ============ SKIP TRACE QUEUE ============ -->
+    <section id="view-skiptrace" class="view">
+      <header class="page-header">
+        <div class="page-header-text">
+          <div class="page-eyebrow">Pipeline</div>
+          <h2>Skip Trace Queue</h2>
+          <p>Import foreclosure / tax-deed auction lists. Skip-trace promising properties, then promote to leads.</p>
+        </div>
+      </header>
+
+      <div class="stats-grid" id="skiptrace-stats"></div>
+
+      <div class="card hero-card">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Import auctions
+        </h3>
+        <p class="muted" style="margin-bottom:10px; font-size:12.5px;">
+          Three ways to add auctions — bulk list, single detail URL, or fully manual.
+        </p>
+
+        <div style="display:flex; gap:6px; margin-bottom:14px; border-bottom:1px solid var(--border);">
+          <button class="tab-btn active" data-tab="bulk">📋 Bulk (day list)</button>
+          <button class="tab-btn" data-tab="single">🎯 Single URL</button>
+          <button class="tab-btn" data-tab="manual">✍️ Manual entry</button>
+        </div>
+
+        <div id="tab-bulk" class="auction-tab" data-tab="bulk">
+          <p class="muted" style="font-size:12px; margin-bottom:8px;">
+            Paste a DAYLIST URL — we'll auto-drill into each property's detail page.
+            <strong>Slow (1-3 min for 50+ items).</strong>
+          </p>
+          <div class="url-fetch">
+            <input type="url" id="auction-import-url"
+              placeholder="https://www.miamidade.realforeclose.com/index.cfm?zaction=AUCTION&Zmethod=DAYLIST&AUCTIONDATE=06/01/2026">
+            <button id="auction-import-btn" class="btn primary">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Bulk import
+            </button>
+          </div>
+          <div id="auction-import-status" class="status-line"></div>
+        </div>
+
+        <div id="tab-single" class="auction-tab" data-tab="single" style="display:none;">
+          <p class="muted" style="font-size:12px; margin-bottom:8px;">
+            Paste a SINGLE auction detail URL (with <code>AID=</code>) — scrapes just that one.
+            <strong>Fast (~5-10 sec).</strong>
+          </p>
+          <div class="url-fetch">
+            <input type="url" id="auction-single-url"
+              placeholder="https://www.miamidade.realforeclose.com/index.cfm?zaction=AUCTION&Zmethod=PREVIEW&AID=12345">
+            <button id="auction-single-btn" class="btn primary">Fetch one</button>
+          </div>
+          <div id="auction-single-status" class="status-line"></div>
+        </div>
+
+        <div id="tab-manual" class="auction-tab" data-tab="manual" style="display:none;">
+          <p class="muted" style="font-size:12px; margin-bottom:8px;">
+            Type everything manually. Use this when scraping fails or you have the data already.
+          </p>
+          <button class="btn primary" id="auction-add-manual-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
+            Add auction manually
+          </button>
+        </div>
+
+        <details style="margin-top:12px; font-size:12px; color:var(--muted);">
+          <summary style="cursor:pointer;">Supported sites</summary>
+          <ul style="padding-left:18px; line-height:1.8; margin-top:8px;">
+            <li><strong>Miami-Dade:</strong> miamidade.realforeclose.com</li>
+            <li><strong>Broward:</strong> broward.realforeclose.com</li>
+            <li><strong>Orange:</strong> myorangeclerk.realforeclose.com</li>
+            <li><strong>Tax-deed:</strong> *.realtaxdeed.com / *.realtdm.com</li>
+            <li>~75+ Florida counties (full RealAuction list)</li>
+          </ul>
+        </details>
+
+        <details style="margin-top:12px; font-size:12px;" id="creds-panel">
+          <summary style="cursor:pointer; font-weight:600;">🔐 Login credentials (optional but recommended)</summary>
+          <p class="muted" style="margin:8px 0; font-size:11px;">
+            Saving your county auction-site login unlocks the full DAYLIST (vs the limited public preview):
+            <strong>more items per page, real AID links, plaintiff/defendant names</strong> for skip-tracing.
+            Credentials are stored locally in <code>data/realauction-credentials.json</code>.
+          </p>
+          <div id="creds-list" style="margin-bottom:10px;"></div>
+          <div style="display:grid; grid-template-columns:1fr 1fr 1fr auto; gap:6px;">
+            <input type="text" id="cred-domain" class="input" placeholder="miamidade.realforeclose.com" style="font-size:12px;">
+            <input type="text" id="cred-username" class="input" placeholder="username" style="font-size:12px;" autocomplete="off">
+            <input type="password" id="cred-password" class="input" placeholder="password" style="font-size:12px;" autocomplete="off">
+            <button id="cred-save-btn" class="btn primary" style="font-size:12px;">Save</button>
+          </div>
+        </details>
+      </div>
+
+      <!-- Auto Skip-Trace bulk action -->
+      <div class="card" id="bulk-trace-card">
+        <div style="display:flex; gap:12px; align-items:center; justify-content:space-between; flex-wrap:wrap;">
+          <div>
+            <h3 style="margin:0; font-size:14px;">🔎 Auto Skip-Trace</h3>
+            <p class="muted" style="margin:4px 0 0; font-size:12px;">
+              Claude + web search will hunt owner phone / email for every queued item using public records (property appraiser, Sunbiz, white pages).
+            </p>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <select id="bulk-trace-status" class="input" style="font-size:12px; padding:6px 10px;">
+              <option value="queued">queued items</option>
+              <option value="tracing">tracing items</option>
+            </select>
+            <button id="bulk-trace-btn" class="btn primary">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="14" height="14"><path d="M11 17a6 6 0 100-12 6 6 0 000 12zM21 21l-4.35-4.35" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Trace all
+            </button>
+          </div>
+        </div>
+        <div id="bulk-trace-progress" style="display:none; margin-top:12px;">
+          <div style="display:flex; justify-content:space-between; font-size:12px; margin-bottom:6px;">
+            <span id="bulk-trace-current">Starting…</span>
+            <span><strong id="bulk-trace-done">0</strong> / <span id="bulk-trace-total">0</span> &middot;
+              <span style="color:var(--green);"><strong id="bulk-trace-found">0</strong> contacts found</span> &middot;
+              <span style="color:var(--red);"><strong id="bulk-trace-failed">0</strong> failed</span>
+            </span>
+          </div>
+          <div style="background:var(--surface-2); border-radius:8px; overflow:hidden; height:10px;">
+            <div id="bulk-trace-bar" style="background:linear-gradient(90deg, var(--accent), #6366f1); height:100%; width:0%; transition:width 0.3s;"></div>
+          </div>
+          <div style="margin-top:8px; display:flex; gap:8px;">
+            <button id="bulk-trace-cancel" class="btn ghost" style="font-size:11px;">⏹ Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filter by pipeline stage -->
+      <div class="card">
+        <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+          <strong style="font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; margin-right:6px;">Pipeline stage:</strong>
+          <div class="stage-filter" id="stage-filter"></div>
+        </div>
+      </div>
+
+      <div id="skiptrace-list"></div>
+
+      <!-- Skip-trace detail modal (shown after a successful trace) -->
+      <div id="trace-result-modal" class="modal" style="display:none;">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content" style="max-width:700px;">
+          <header style="display:flex; align-items:center; justify-content:space-between;">
+            <h3 id="trace-result-title">Skip-trace results</h3>
+            <button id="trace-result-close" class="btn ghost">✕</button>
+          </header>
+          <div id="trace-result-body"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ LEADS ============ -->
+    <section id="view-leads" class="view">
+      <header class="page-header">
+        <div class="page-header-text">
+          <div class="page-eyebrow">Pipeline</div>
+          <h2>Leads</h2>
+          <p>Evaluate motivated-seller leads BEFORE paying the lead-acquisition fee.</p>
+        </div>
+        <div class="toolbar">
+          <button class="btn primary" id="leads-add-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
+            New lead
+          </button>
+        </div>
+      </header>
+
+      <div class="stats-grid" id="leads-stats"></div>
+
+      <div class="card">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l5 5L20 5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Quick paste lead URL
+        </h3>
+        <p class="muted" style="margin-bottom:10px;">
+          Paste any ispeedtolead lead URL —
+          <strong>/ld/...?shared=...</strong> (shared link) or
+          <strong>/my-leads?...&open_order=...</strong> (your private leads).
+          We'll try to fetch with your Chrome session.
+        </p>
+        <div class="url-fetch">
+          <input type="url" id="lead-scrape-url"
+            placeholder="https://app.ispeedtolead.com/ld/...  or  /my-leads?...&open_order=...">
+          <button id="lead-scrape-btn" class="btn primary">Fetch &amp; create</button>
+        </div>
+        <div id="lead-scrape-status" class="status-line"></div>
+      </div>
+
+      <div id="leads-list-container"></div>
+    </section>
+
+    <!-- ============ CRM ============ -->
+    <section id="view-crm" class="view">
+      <header class="page-header">
+        <div class="page-header-text">
+          <div class="page-eyebrow">Relationships</div>
+          <h2>CRM</h2>
+          <p>Track contacts (sellers, agents, contractors, lenders) and your interactions across all deals.</p>
+        </div>
+        <div class="toolbar">
+          <button class="btn primary" id="crm-add-contact-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><path d="M20 8v6M23 11h-6" stroke-linecap="round"/></svg>
+            New contact
+          </button>
+        </div>
+      </header>
+
+      <div class="stats-grid" id="crm-stats"></div>
+
+      <div class="crm-layout">
+        <div class="card">
+          <h3>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+            Contacts
+          </h3>
+          <div class="search-bar" style="max-width:none; margin-bottom:12px;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg>
+            <input type="search" id="crm-contact-search" placeholder="Search contacts…">
+          </div>
+          <div id="crm-contacts-list"></div>
+        </div>
+
+        <div class="card">
+          <h3>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20" stroke-linecap="round"/></svg>
+            Recent activity
+          </h3>
+          <div id="crm-activity-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ SETTINGS ============ -->
+    <section id="view-settings" class="view">
+      <header class="page-header">
+        <div class="page-header-text">
+          <div class="page-eyebrow">Configuration</div>
+          <h2>Settings</h2>
+          <p>Auth cookies, AI configuration, keyboard shortcuts.</p>
+        </div>
+      </header>
+
+      <div class="card">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v6M12 17v6M4.22 4.22l4.24 4.24M15.54 15.54l4.24 4.24M1 12h6M17 12h6M4.22 19.78l4.24-4.24M15.54 8.46l4.24-4.24"/></svg>
+          AI research (Claude + web search)
+        </h3>
+        <p class="muted" style="margin-bottom:12px;">
+          Get an API key at
+          <a href="https://console.anthropic.com/settings/keys" target="_blank" style="color:var(--accent); font-weight:600;">console.anthropic.com</a>.
+        </p>
+        <form id="ai-config-form" class="form-grid" style="grid-template-columns: 2fr 1fr auto;">
+          <label>Anthropic API key
+            <input type="password" name="anthropic_api_key" id="ai-key-input" placeholder="sk-ant-…">
+          </label>
+          <label>Model
+            <select name="model" id="ai-model-input">
+              <option value="claude-opus-4-7" selected>Opus 4.7 (best)</option>
+              <option value="claude-opus-4-5">Opus 4.5</option>
+              <option value="claude-sonnet-4-5">Sonnet 4.5 (cheap)</option>
+              <option value="claude-haiku-4-5">Haiku 4.5 (cheapest)</option>
+            </select>
+          </label>
+          <label>&nbsp;<button type="submit" class="btn primary">Save</button></label>
+        </form>
+        <div id="ai-status" class="status-line"></div>
+      </div>
+
+      <div class="card">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4" stroke-linecap="round"/></svg>
+          Browser session
+        </h3>
+        <p class="muted" style="margin-bottom:10px;">
+          For private pages like <code>app.ispeedtolead.com/my-leads</code>, sign in
+          once here and we'll reuse the session for all future scrapes (silent &amp; instant).
+        </p>
+        <div id="browser-session-status" style="margin-bottom:10px; font-size:12.5px;"></div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn primary" id="auth-ispeed-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4M10 17l5-5-5-5M15 12H3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Sign in to ispeedtolead
+          </button>
+          <button class="btn" id="auth-reset-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2" stroke-linecap="round"/></svg>
+            Clear session
+          </button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Auth cookies (advanced)</h3>
+        <p class="muted" style="margin-bottom:10px;">Optional — most sites work without auth.</p>
+        <form id="cookie-form" class="form-grid" style="grid-template-columns: 1fr 2fr auto;">
+          <label>Domain <input name="domain" placeholder="example.com" required></label>
+          <label>Cookie value <input name="cookie" required></label>
+          <label>&nbsp;<button type="submit" class="btn primary">Save</button></label>
+        </form>
+        <table class="data-table" id="cookies-table" style="margin-top:12px">
+          <thead><tr><th>Domain</th><th>Cookie</th><th></th></tr></thead>
+          <tbody id="cookies-tbody"></tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h3>Keyboard shortcuts</h3>
+        <div class="kbd-grid">
+          <div class="kbd-row"><span>Command palette</span><kbd>⌘K</kbd></div>
+          <div class="kbd-row"><span>New deal</span><kbd>⌘N</kbd></div>
+          <div class="kbd-row"><span>Go to Dashboard</span><kbd>G</kbd> <kbd>D</kbd></div>
+          <div class="kbd-row"><span>Go to Deals</span><kbd>G</kbd> <kbd>L</kbd></div>
+          <div class="kbd-row"><span>Toggle dark mode</span><kbd>⌘⇧L</kbd></div>
+          <div class="kbd-row"><span>Close modal</span><kbd>Esc</kbd></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Tips</h3>
+        <ul class="tip-list">
+          <li><strong>Drag &amp; drop</strong> any URL into the window to start an Add Deal flow.</li>
+          <li>Click any <strong>status pill</strong> to advance the deal through your workflow.</li>
+          <li>Use the <strong>view toggle</strong> (Cards/Table) to switch how deals are displayed.</li>
+          <li>Click any <strong>photo</strong> to open the lightbox; <kbd>Esc</kbd> to close.</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+
+  <!-- Floating Action Button -->
+  <button class="fab" id="fab" title="New deal (⌘N)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
+  </button>
+
+  <!-- Floating Chat Button — always visible -->
+  <button class="fab chat-fab" id="chat-fab" title="Chat with AI (Claude Opus 4.7)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z" stroke-linejoin="round"/></svg>
+    <span class="chat-fab-pulse"></span>
+  </button>
+
+  <!-- ============ CHAT PANEL ============ -->
+  <div id="chat-panel" class="chat-panel" style="display:none">
+    <header class="chat-panel-header">
+      <div>
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" stroke-linejoin="round"/></svg>
+          Ask about this deal
+        </h3>
+        <p class="muted" id="chat-deal-address" style="margin:0; font-size:11.5px;"></p>
+      </div>
+      <div style="display:flex; gap:6px;">
+        <button class="btn ghost icon-only" id="chat-clear" title="Clear conversation">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" stroke-linecap="round"/></svg>
+        </button>
+        <button class="btn ghost icon-only" id="chat-close">×</button>
+      </div>
+    </header>
+    <div class="chat-messages" id="chat-messages"></div>
+    <div class="chat-suggestions" id="chat-suggestions">
+      <button class="chip-btn" data-q="Is this a good deal? Give me a clear verdict.">Is this a good deal?</button>
+      <button class="chip-btn" data-q="What's the maximum I should offer?">Max offer?</button>
+      <button class="chip-btn" data-q="What are the biggest risks here?">Top risks?</button>
+      <button class="chip-btn" data-q="Is this better as a flip or a rental?">Flip or rent?</button>
+      <button class="chip-btn" data-q="What should I verify before making an offer?">Pre-offer checklist</button>
+    </div>
+    <form class="chat-input-form" id="chat-input-form">
+      <textarea id="chat-input" placeholder="Ask anything about this deal… (Shift+Enter for newline)" rows="1"></textarea>
+      <button type="submit" class="btn primary chat-send" id="chat-send" title="Send (Enter)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+    </form>
+  </div>
+
+  <!-- Contact modal -->
+  <div id="contact-modal" class="modal" style="display:none">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content" style="max-width:520px">
+      <header class="modal-header">
+        <h2 id="contact-modal-title">New contact</h2>
+        <button class="modal-close" id="contact-modal-close">×</button>
+      </header>
+      <form id="contact-form">
+        <div class="modal-body">
+          <div class="form-grid" style="grid-template-columns: 1fr 1fr;">
+            <label class="span-2">Full name <input name="name" required></label>
+            <label>Role
+              <select name="role">
+                <option value="seller">Seller</option>
+                <option value="agent">Agent / Realtor</option>
+                <option value="contractor">Contractor</option>
+                <option value="lender">Lender / Hard money</option>
+                <option value="title">Title / Escrow</option>
+                <option value="inspector">Inspector</option>
+                <option value="appraiser">Appraiser</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+            <label>Company <input name="company"></label>
+            <label>Phone <input name="phone"></label>
+            <label>Email <input name="email" type="email"></label>
+            <label class="span-2">Notes <textarea name="notes" rows="3"></textarea></label>
+          </div>
+        </div>
+        <footer class="modal-footer">
+          <button type="button" class="btn" id="contact-modal-cancel">Cancel</button>
+          <button type="submit" class="btn primary">Save contact</button>
+        </footer>
+      </form>
+    </div>
+  </div>
+
+  <!-- Skip-trace item edit modal -->
+  <div id="skiptrace-modal" class="modal" style="display:none">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content" style="max-width:620px">
+      <header class="modal-header">
+        <h2 id="skiptrace-modal-title">Edit auction item</h2>
+        <button class="modal-close" id="skiptrace-modal-close">×</button>
+      </header>
+      <form id="skiptrace-form">
+        <div class="modal-body">
+          <h3 class="modal-section">Auction info</h3>
+          <div class="form-grid" style="grid-template-columns: 1fr 1fr;">
+            <label>Address <input name="address" required></label>
+            <label>Case number <input name="case_number"></label>
+            <label>Parcel ID <input name="parcel_id"></label>
+            <label>Opening bid ($)
+              <input name="opening_bid" type="number">
+            </label>
+            <label>Auction date <input name="auction_date" placeholder="MM/DD/YYYY"></label>
+            <label>Auction time <input name="auction_time"></label>
+            <label>Auction type
+              <select name="auction_type">
+                <option value="">—</option>
+                <option value="mortgage_foreclosure">Mortgage foreclosure</option>
+                <option value="tax_deed">Tax deed</option>
+                <option value="hoa_foreclosure">HOA foreclosure</option>
+              </select>
+            </label>
+            <label>Auction status
+              <select name="auction_status">
+                <option value="Active">Active</option>
+                <option value="Sold">Sold</option>
+                <option value="Cancelled">Cancelled</option>
+                <option value="Postponed">Postponed</option>
+              </select>
+            </label>
+          </div>
+
+          <h3 class="modal-section">Pipeline stage</h3>
+          <div class="form-grid" style="grid-template-columns: 1fr;">
+            <label>Status
+              <select name="status">
+                <option value="queued">📥 Queued</option>
+                <option value="tracing">🔍 Tracing</option>
+                <option value="traced">✓ Traced</option>
+                <option value="contacted">📞 Contacted</option>
+                <option value="won">🏆 Won (under contract)</option>
+                <option value="lost">❌ Lost</option>
+                <option value="passed">⏭ Passed</option>
+              </select>
+            </label>
+          </div>
+
+          <h3 class="modal-section">Skip-trace results (owner info)</h3>
+          <div class="form-grid" style="grid-template-columns: 1fr 1fr;">
+            <label class="span-2">Owner name <input name="owner_name"></label>
+            <label>Owner phone <input name="owner_phone"></label>
+            <label>Owner email <input name="owner_email" type="email"></label>
+            <label class="span-2">Mailing address (if different) <input name="owner_mailing_address"></label>
+            <label class="span-2">Notes <textarea name="notes" rows="3"></textarea></label>
+          </div>
+        </div>
+        <footer class="modal-footer">
+          <button type="button" class="btn" id="skiptrace-modal-cancel">Cancel</button>
+          <button type="button" class="btn danger" id="skiptrace-modal-delete">Delete</button>
+          <button type="submit" class="btn primary">Save</button>
+        </footer>
+      </form>
+    </div>
+  </div>
+
+  <!-- Lead form modal -->
+  <div id="lead-modal" class="modal" style="display:none">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content" style="max-width:680px">
+      <header class="modal-header">
+        <h2 id="lead-modal-title">New lead</h2>
+        <button class="modal-close" id="lead-modal-close">×</button>
+      </header>
+      <form id="lead-form">
+        <div class="modal-body">
+          <h3 class="modal-section">Lead acquisition</h3>
+          <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr;">
+            <label>Lead price to buy ($)
+              <input name="lead_price" type="number" required step="1" placeholder="e.g. 49">
+            </label>
+            <label>Source
+              <select name="source">
+                <option value="ispeedtolead">ispeedtolead</option>
+                <option value="batchleads">BatchLeads</option>
+                <option value="propstream">PropStream</option>
+                <option value="direct-mail">Direct mail / PPC</option>
+                <option value="referral">Referral</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+            <label>Source URL <input name="source_url"></label>
+          </div>
+
+          <h3 class="modal-section">Property</h3>
+          <div class="form-grid" style="grid-template-columns: 2fr 1fr 1fr 1fr;">
+            <label>Address <input name="address"></label>
+            <label>City <input name="city"></label>
+            <label>State <input name="state" maxlength="2"></label>
+            <label>ZIP <input name="zip"></label>
+          </div>
+          <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr 1fr 1fr;">
+            <label>Type
+              <select name="property_type">
+                <option>Single Family</option><option>Multi-family</option>
+                <option>Condo</option><option>Townhouse</option><option>Land</option>
+              </select>
+            </label>
+            <label>Beds <input name="beds" type="number"></label>
+            <label>Baths <input name="baths" type="number" step="0.5"></label>
+            <label>Sqft <input name="sqft" type="number"></label>
+            <label>Year built <input name="year_built" type="number"></label>
+          </div>
+
+          <h3 class="modal-section">Financials &amp; motivation</h3>
+          <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr;">
+            <label>Seller's asking price ($) <input name="asking_price" type="number"></label>
+            <label>Estimated ARV ($) <input name="estimated_arv" type="number"></label>
+            <label>Estimated rehab ($) <input name="estimated_rehab" type="number"></label>
+          </div>
+          <div class="form-grid" style="grid-template-columns: 1fr;">
+            <label>Motivation hint (probate / divorce / vacant / tired landlord / foreclosure / etc.)
+              <input name="motivation" placeholder="e.g. Tired landlord, vacant 2 years">
+            </label>
+            <label>Description / what the lead says
+              <textarea name="description" rows="4" placeholder="Paste the seller's description from the lead page…"></textarea>
+            </label>
+            <label>Notes (private)
+              <textarea name="notes" rows="2"></textarea>
+            </label>
+          </div>
+        </div>
+        <footer class="modal-footer">
+          <button type="button" class="btn" id="lead-modal-cancel">Cancel</button>
+          <button type="submit" class="btn primary">Save lead</button>
+        </footer>
+      </form>
+    </div>
+  </div>
+
+  <!-- Lead analysis result modal -->
+  <div id="lead-analysis-modal" class="modal" style="display:none">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content" style="max-width:740px">
+      <header class="modal-header">
+        <h2>Lead worth analysis</h2>
+        <button class="modal-close" id="lead-analysis-close">×</button>
+      </header>
+      <div class="modal-body" id="lead-analysis-body">
+        <div class="empty"><div class="empty-ico">🔍</div>
+          <h3>Analyzing…</h3>
+          <p>Claude is evaluating the lead's expected value.</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Interaction modal -->
+  <div id="interaction-modal" class="modal" style="display:none">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content" style="max-width:520px">
+      <header class="modal-header">
+        <h2>Log activity</h2>
+        <button class="modal-close" id="interaction-modal-close">×</button>
+      </header>
+      <form id="interaction-form">
+        <div class="modal-body">
+          <div class="form-grid" style="grid-template-columns: 1fr 1fr;">
+            <label>Type
+              <select name="type">
+                <option value="call">📞 Call</option>
+                <option value="email">✉️ Email</option>
+                <option value="meeting">🤝 Meeting</option>
+                <option value="sms">💬 SMS</option>
+                <option value="offer">💰 Offer made</option>
+                <option value="note">📝 Note</option>
+                <option value="other">Other</option>
+              </select>
+            </label>
+            <label>Contact
+              <select name="contact_id" id="interaction-contact-select">
+                <option value="">— (none) —</option>
+              </select>
+            </label>
+            <label class="span-2">Subject <input name="subject"></label>
+            <label class="span-2">Details <textarea name="body" rows="4"></textarea></label>
+            <label>Follow-up date
+              <input type="date" name="follow_up">
+            </label>
+          </div>
+        </div>
+        <footer class="modal-footer">
+          <button type="button" class="btn" id="interaction-modal-cancel">Cancel</button>
+          <button type="submit" class="btn primary">Save</button>
+        </footer>
+      </form>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" style="display:none"></div>
+
+  <!-- ============ PDF OPTIONS MODAL ============ -->
+  <div id="pdf-modal" class="modal" style="display:none">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <header class="modal-header">
+        <h2>Configure report</h2>
+        <button class="modal-close" id="modal-close">×</button>
+      </header>
+      <div class="modal-body">
+        <p>Set the strategy, financing, and fees for this PDF report.</p>
+        <h3 class="modal-section">Strategy</h3>
+        <div class="radio-grid">
+          <label class="radio-card"><input type="radio" name="strategy" value="flip" checked>
+            <span class="radio-label">Fix &amp; Flip</span><span class="radio-desc">Buy, rehab, sell.</span></label>
+          <label class="radio-card"><input type="radio" name="strategy" value="brrrr">
+            <span class="radio-label">BRRRR</span><span class="radio-desc">Rehab, refi, hold.</span></label>
+          <label class="radio-card"><input type="radio" name="strategy" value="hold">
+            <span class="radio-label">Buy &amp; Hold</span><span class="radio-desc">Rent long-term.</span></label>
+          <label class="radio-card"><input type="radio" name="strategy" value="wholesale">
+            <span class="radio-label">Wholesale</span><span class="radio-desc">Assign contract.</span></label>
+        </div>
+        <h3 class="modal-section">Financing</h3>
+        <div class="form-grid" style="grid-template-columns: 1fr 1fr;">
+          <label>Financing method
+            <select name="financing_method">
+              <option value="hard_money" selected>Hard Money</option>
+              <option value="cash">Cash</option>
+              <option value="private">Private Lender</option>
+              <option value="conventional">Conventional</option>
+              <option value="heloc">HELOC</option>
+            </select>
+          </label>
+          <label>Loan-to-value % <input type="number" name="loan_ltv_pct" value="85"></label>
+          <label>Interest rate (%) <input type="number" name="interest_rate_pct" value="11.5" step="0.1"></label>
+          <label>Origination (points %) <input type="number" name="origination_pct" value="2.5" step="0.1"></label>
+          <label>Rehab financed?
+            <select name="rehab_financed"><option value="yes" selected>Yes</option><option value="no">No</option></select>
+          </label>
+          <label>Loan term (months) <input type="number" name="loan_term_months" value="6"></label>
+        </div>
+        <h3 class="modal-section">Project costs</h3>
+        <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr;">
+          <label>Holding (mo) <input type="number" name="holding_months"></label>
+          <label>Holding cost/mo ($) <input type="number" name="holding_cost_monthly"></label>
+          <label>Purchase closing % <input type="number" name="purchase_closing_pct" value="2" step="0.1"></label>
+          <label>Selling cost % <input type="number" name="selling_cost_pct" step="0.1"></label>
+          <label>Due diligence ($) <input type="number" name="due_diligence_fees" value="500"></label>
+          <label>Other fees ($) <input type="number" name="other_fees" value="0"></label>
+        </div>
+        <div class="card live-preview" id="live-preview">
+          <h3 style="margin-bottom:8px;">Live preview</h3>
+          <table class="kv-table" id="live-preview-table"></table>
+        </div>
+      </div>
+      <footer class="modal-footer">
+        <button class="btn" id="modal-cancel">Cancel</button>
+        <button class="btn primary" id="modal-generate">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6" stroke-linecap="round"/></svg>
+          Generate PDF
+        </button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- ARV missing modal -->
+  <div id="arv-modal" class="modal" style="display:none">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content" style="max-width:520px">
+      <header class="modal-header"><h2>ARV not found</h2><button class="modal-close" id="arv-modal-close">×</button></header>
+      <div class="modal-body">
+        <p>This property has no After Repair Value yet. What would you like to do?</p>
+        <div class="radio-grid" style="grid-template-columns: 1fr;">
+          <label class="radio-card" id="arv-opt-ai">
+            <span class="radio-label">🔍 Research ARV with AI</span>
+            <span class="radio-desc">Claude searches the web for comps and estimates ARV low / base / high.</span></label>
+          <label class="radio-card" id="arv-opt-manual">
+            <span class="radio-label">✍️ Enter manually</span>
+            <span class="radio-desc">Skip AI and type ARV yourself.</span></label>
+        </div>
+        <div id="arv-no-key-hint" class="status-line" style="display:none; padding:10px 14px; background:var(--yellow-bg); color:#B45309; border-radius:10px; margin-top:8px;">
+          ⚠ No Anthropic API key configured.
+          <a href="#" id="goto-settings-from-arv" style="color:var(--accent); text-decoration:underline; font-weight:600;">Add one in Settings →</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ARV results modal -->
+  <div id="arv-results-modal" class="modal" style="display:none">
+    <div class="modal-backdrop"></div>
+    <div class="modal-content" style="max-width:720px">
+      <header class="modal-header"><h2>AI ARV research results</h2><button class="modal-close" id="arv-results-close">×</button></header>
+      <div class="modal-body" id="arv-results-body">
+        <div class="empty"><div class="empty-ico">🔍</div><h3>Researching…</h3><p>Claude is searching the web for comparable sales.</p></div>
+      </div>
+      <footer class="modal-footer">
+        <button class="btn" id="arv-results-cancel">Cancel</button>
+        <button class="btn primary" id="arv-results-apply" disabled>Apply to form</button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- Command palette -->
+  <div id="cmdk" class="cmdk" style="display:none">
+    <div class="cmdk-backdrop"></div>
+    <div class="cmdk-box">
+      <input id="cmdk-input" class="cmdk-input" placeholder="Type a command, deal, or paste a URL…">
+      <div id="cmdk-list" class="cmdk-list"></div>
+    </div>
+  </div>
+
+  <div id="dropzone" class="dropzone-overlay" style="display:none">
+    <div class="dropzone-card">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="40" height="40"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <h2>Drop URL to add deal</h2>
+    </div>
+  </div>
+
+  <div id="lightbox" class="lightbox" style="display:none">
+    <button class="lightbox-close" id="lightbox-close">×</button>
+    <img id="lightbox-img" alt="">
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>

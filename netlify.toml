@@ -1,0 +1,34 @@
+# Netlify config (frontend-only).
+# Backend (FastAPI + Playwright + JSON storage) runs on Render — see render.yaml.
+# Netlify just serves the static HTML/CSS/JS from /frontend.
+
+[build]
+  publish = "frontend"
+  # No build step — files are already static
+  command = "echo 'static frontend, nothing to build'"
+
+# Proxy /api/* calls to the Render backend so the frontend can keep using
+# relative URLs (`fetch('/api/deals')`). Replace the URL below with your
+# actual Render deployment URL after first deploy.
+[[redirects]]
+  from = "/api/*"
+  to = "https://flip-board.onrender.com/api/:splat"
+  status = 200
+  force = true
+
+# SPA fallback — all unknown paths serve index.html
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Force no-cache on the JS/CSS so users always get the latest version
+[[headers]]
+  for = "/js/*"
+  [headers.values]
+    Cache-Control = "no-store, no-cache, must-revalidate"
+
+[[headers]]
+  for = "/css/*"
+  [headers.values]
+    Cache-Control = "no-store, no-cache, must-revalidate"
