@@ -24,10 +24,9 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Install Playwright's Chromium browser
 RUN playwright install chromium
 
-# App code
+# App code (uvicorn entry point is backend.server:app — no top-level server.py needed)
 COPY backend ./backend
 COPY frontend ./frontend
-COPY server.py ./server.py
 
 # Render mounts persistent disk at /var/data — link our data dir there.
 # (Render free tier doesn't include disks; on paid you'll set disk at deploy.)
