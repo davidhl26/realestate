@@ -77,6 +77,10 @@ def detect_site(url: str) -> str:
         return "redfin"
     if "ispeedtolead" in host or "dealspeed" in host:
         return "ispeedtolead"
+    if "rapmls.com" in host:
+        return "rapmls"
+    if "auction.com" in host:
+        return "auction_com"
     return "unknown"
 
 
@@ -230,50 +234,74 @@ def parse_zillow(html: str) -> dict:
             except ValueError:
                 pass
 
-    # 4) Year built / lot from inline
-    if not result.get("year_built"):
-        m = re.search(r'"yearBuilt":\s*(\d{4})', html)
-        if m:
-            result["year_built"] = int(m.group(1))
+    # 4) Field extraction — Zillow embeds JSON both as plain `"key":val` AND
+    # double-escaped `\"key\":val` (inside <script> string-literals). Match both.
+    # The optional `\\?` consumes the leading backslash when present.
+    def _zillow_grab(field, pattern_inner, cast):
+        if result.get(field) is not None:
+            return
+        # Try escaped form first (Apollo cache uses it), then plain
+        for pat in (rf'\\"{pattern_inner[0]}\\":\s*{pattern_inner[1]}',
+                    rf'"{pattern_inner[0]}":\s*{pattern_inner[1]}'):
+            m = re.search(pat, html)
+            if m:
+                try:
+                    result[field] = cast(m.group(1))
+                    return
+                except (ValueError, TypeError):
+                    continue
 
-    if not result.get("bedrooms"):
-        m = re.search(r'"bedrooms":\s*(\d+)', html)
-        if m:
-            result["bedrooms"] = int(m.group(1))
+    _zillow_grab("year_built",    ("yearBuilt",          r"(\d{4})"),     int)
+    _zillow_grab("bedrooms",      ("bedrooms",           r"(\d+)"),       int)
+    _zillow_grab("bathrooms",     ("bathrooms",          r"([\d.]+)"),    float)
+    _zillow_grab("sqft",          ("livingArea(?:Value)?", r"(\d+)"),     int)
+    _zillow_grab("lot_size_sqft", ("lotSize(?:Value)?",  r"(\d+)"),       int)
+    _zillow_grab("zestimate",     ("zestimate",          r"(\d+)"),       int)
+    _zillow_grab("rent_zestimate",("rentZestimate",      r"(\d+)"),       int)
+    _zillow_grab("home_type",     ("homeType",           r"\\?\"([A-Z_]+)\\?\""), str)
+    _zillow_grab("home_status",   ("homeStatus",         r"\\?\"([A-Z_]+)\\?\""), str)
+    _zillow_grab("days_on_market",("daysOnZillow",       r"(\d+)"),       int)
+    _zillow_grab("price_per_sqft",("pricePerSquareFoot", r"(\d+)"),       int)
+    _zillow_grab("mls_number",    ("mlsId",              r"\\?\"([\w-]+)\\?\""), str)
+    _zillow_grab("monthly_hoa",   ("monthlyHoaFee",      r"(\d+)"),       int)
+    _zillow_grab("favorite_count",("favoriteCount",      r"(\d+)"),       int)
+    _zillow_grab("page_view_count",("pageViewCount",     r"(\d+)"),       int)
 
-    if not result.get("bathrooms"):
-        m = re.search(r'"bathrooms":\s*([\d.]+)', html)
-        if m:
-            try:
-                result["bathrooms"] = float(m.group(1))
-            except ValueError:
-                pass
-
-    if not result.get("sqft"):
-        m = re.search(r'"livingArea(?:Value)?":\s*(\d+)', html)
-        if m:
-            result["sqft"] = int(m.group(1))
-
-    if not result.get("lot_size"):
-        m = re.search(r'"lotSize(?:Value)?":\s*(\d+)', html)
-        if m:
-            result["lot_size_sqft"] = int(m.group(1))
-
-    # Rent / Zestimate
-    m = re.search(r'"zestimate":\s*(\d+)', html)
-    if m:
-        result["zestimate"] = int(m.group(1))
-    m = re.search(r'"rentZestimate":\s*(\d+)', html)
-    if m:
-        result["rent_zestimate"] = int(m.group(1))
-
-    # Property tax (annual)
-    m = re.search(r'"propertyTaxRate":\s*([\d.]+)', html)
+    # Property tax rate
+    m = re.search(r'\\?"propertyTaxRate\\?":\s*([\d.]+)', html)
     if m:
         try:
             result["property_tax_rate_pct"] = float(m.group(1))
         except ValueError:
             pass
+
+    # Annual tax amount (from tax history)
+    m = re.search(r'\\?"taxPaid\\?":\s*([\d.]+)', html)
+    if m:
+        try:
+            result["annual_taxes"] = int(float(m.group(1)))
+            result["monthly_taxes"] = result["annual_taxes"] // 12
+        except ValueError:
+            pass
+
+    # Garage parking
+    m = re.search(r'\\?"hasGarage\\?":\s*(true|false)', html)
+    if m:
+        result["has_garage"] = (m.group(1) == "true")
+    m = re.search(r'\\?"parkingCapacity\\?":\s*(\d+)', html)
+    if m:
+        try: result["parking_spaces"] = int(m.group(1))
+        except: pass
+
+    # Heating / cooling / construction (often as strings in escaped form)
+    for field, key in [("heating", "heating"), ("cooling", "cooling"),
+                         ("construction_materials", "constructionMaterials")]:
+        m = re.search(rf'\\?"{key}\\?":\s*\[?\\?"([^"\\]+)\\?"', html)
+        if m: result[field] = m.group(1)
+
+    # Time on Zillow (string like "12 hours" / "3 days")
+    m = re.search(r'\\?"timeOnZillow\\?":\s*\\?"([^"\\]+)\\?"', html)
+    if m: result["time_on_zillow"] = m.group(1)
 
     return result
 
@@ -845,12 +873,344 @@ def _ai_find_listing_url(address: str) -> Optional[str]:
         return None
 
 
+def _scrape_rapmls(url: str) -> dict:
+    """Scrape a RAPMLS (Cincinnati/N. Kentucky MLS) client portal listing.
+
+    These URLs come from agents sharing a listing via the client portal:
+      https://cincy.rapmls.com/scripts/mgrqispi.dll?APPNAME=Cincynky&PRGNAME=MLSLogin&ARGUMENT=...
+
+    The encrypted ARGUMENT auto-logs into a session that shows ONE property
+    detail page. We use Playwright (sync) to render and extract structured
+    fields from the HTML.
+    """
+    import queue
+    import threading
+
+    def _impl():
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            b = p.chromium.launch(headless=True,
+                args=["--no-first-run", "--no-default-browser-check"])
+            try:
+                ctx = b.new_context(
+                    user_agent=("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                                 "AppleWebKit/537.36 (KHTML, like Gecko) "
+                                 "Chrome/131.0.0.0 Safari/537.36"),
+                    viewport={"width": 1366, "height": 900},
+                )
+                page = ctx.new_page()
+                page.goto(url, wait_until="domcontentloaded", timeout=45000)
+                try: page.wait_for_load_state("networkidle", timeout=15000)
+                except Exception: pass
+                page.wait_for_timeout(3500)
+
+                text = page.evaluate("() => document.body.innerText.slice(0, 25000)")
+                title = page.title() or ""
+
+                # Pull all <img> URLs that look like listing photos
+                imgs = page.evaluate("""() => {
+                    // Only the real listing photo URLs — RAPMLS uses
+                    // /cincy/listingpics/tmbphoto/... for thumbnails
+                    // (we upscale by stripping 'tmb' below)
+                    const out = [];
+                    document.querySelectorAll('img').forEach(im => {
+                        const src = im.src || im.getAttribute('data-src') || '';
+                        if (src && /\\/listingpics\\//i.test(src)
+                            && !/logo|status|map|attach/i.test(src)) {
+                            out.push(src);
+                        }
+                    });
+                    return Array.from(new Set(out)).slice(0, 30);
+                }""") or []
+                # Upscale: rapmls /tmbphoto/ → /photo/ for full-res
+                imgs = [im.replace("/tmbphoto/", "/photo/") for im in imgs]
+                return {"text": text, "title": title, "images": imgs, "html_len": len(page.content())}
+            finally:
+                b.close()
+
+    # Run Playwright on a clean thread (FastAPI's loop conflicts with sync API)
+    rq = queue.Queue()
+    def runner():
+        try: rq.put(("ok", _impl()))
+        except Exception as e: rq.put(("err", e))
+    t = threading.Thread(target=runner, daemon=True)
+    t.start(); t.join()
+    kind, payload = rq.get()
+    if kind == "err":
+        return {"error": f"RAPMLS scrape failed: {payload}", "url": url}
+
+    text = payload["text"]
+    images = payload["images"]
+
+    # ---- Parse structured fields from the rendered text ----
+    out: dict = {"source": "rapmls", "url": url, "site": "rapmls"}
+
+    # MLS Number: "Listing Detail #1879854" or "Listing #1879854"
+    m = re.search(r"(?:Listing\s*(?:Detail)?\s*#|MLS\s*#?\s*)(\d{6,8})", text)
+    if m: out["mls_number"] = m.group(1)
+
+    # Price: "$100,000 (LP)" or "$100,000"
+    m = re.search(r"\$\s*([\d,]+)(?:\s*\(LP\))?", text)
+    if m:
+        try: out["price"] = int(m.group(1).replace(",", ""))
+        except: pass
+
+    # Address: pattern like "8791 Grenada Dr,Springfield Twp., OH  45231"
+    m = re.search(
+        r"(\d{1,6}\s+[A-Z][\w\s.'-]+?(?:Dr|Drive|St|Street|Ave|Avenue|Rd|Road|"
+        r"Ln|Lane|Ct|Court|Pl|Place|Way|Blvd|Boulevard|Cir|Circle|Ter|Terrace|"
+        r"Hwy|Pkwy|Trl|Trail|Pt|Point|Sq|Square)\.?)\s*,\s*"
+        r"([\w\s.'-]+?)\s*,\s*([A-Z]{2})\s+(\d{5})",
+        text, re.I)
+    if m:
+        # Normalize non-breaking spaces and runs of whitespace
+        def _norm(s):
+            return re.sub(r"\s+", " ", s.replace(" ", " ")).strip()
+        out["street"] = _norm(m.group(1))
+        out["city"] = _norm(m.group(2))
+        out["state"] = m.group(3)
+        out["zip"] = m.group(4)
+        out["address"] = f"{out['street']}, {out['city']}, {out['state']} {out['zip']}"
+
+    # Beds / Baths / Sqft / Lot / Year
+    m = re.search(r"Bed\s*:?\s*(\d+)", text, re.I)
+    if m: out["bedrooms"] = int(m.group(1))
+    m = re.search(r"Baths?\s*:?\s*([\d.]+)(?:\s*\((\d+)\s+(\d+)\))?", text, re.I)
+    if m:
+        # "Baths: 2 (1 1)" → 1 full + 1 half = 1.5
+        if m.group(2) and m.group(3):
+            full, half = int(m.group(2)), int(m.group(3))
+            out["bathrooms"] = full + (half * 0.5)
+        else:
+            try: out["bathrooms"] = float(m.group(1))
+            except: pass
+    m = re.search(r"Sq\s*Ft\s*:?\s*([\d,]+)", text, re.I)
+    if m:
+        try: out["sqft"] = int(m.group(1).replace(",", ""))
+        except: pass
+    m = re.search(r"Lot\s*Sz\s*:?\s*([\d.]+)", text, re.I)
+    if m: out["lot_size_acres"] = float(m.group(1))
+    m = re.search(r"Yr\s*:?\s*(\d{4})", text)
+    if m: out["year_built"] = int(m.group(1))
+
+    # Status (Active / Pending / Closed) + status date
+    m = re.search(r"\b(Active|Pending|Sold|Closed|Contingent|Withdrawn)\b\s*\(([\d/]+)\)", text, re.I)
+    if m:
+        out["mls_status"] = m.group(1)
+        out["mls_status_date"] = m.group(2)
+
+    # Construction / Architecture / Levels / Basement
+    for label, key in [("Architecture", "architecture"),
+                        ("Construction", "construction"),
+                        ("Levels", "levels"),
+                        ("Basement", "basement"),
+                        ("Foundation", "foundation"),
+                        ("Roof", "roof"),
+                        ("Heating", "heating"),
+                        ("Cooling", "cooling"),
+                        ("Primary Water Source", "water"),
+                        ("Sewer", "sewer")]:
+        m = re.search(rf"{label}\s+([A-Z][^\t\n]{{2,60}})", text)
+        if m: out[key] = m.group(1).strip()
+
+    # Single Family Description
+    if "Single Family" in text:
+        out["property_type"] = "Single Family Residence"
+        out["home_type"] = "SFR"
+
+    # Remarks (description) — between "Remarks" and "Pictures"
+    m = re.search(r"Remarks\s*\n+(.+?)(?=\n\n|Pictures|Listing|Map)", text, re.DOTALL)
+    if m:
+        desc = re.sub(r"\s+", " ", m.group(1)).strip()
+        out["description"] = desc[:1500]
+
+    # Agent info
+    m = re.search(r"Agent\s+([A-Z][\w\s.'-]+?)\s+Primary:\s*([\d-]+)", text)
+    if m:
+        out["listing_agent"] = m.group(1).strip()
+        out["listing_agent_phone"] = m.group(2)
+    m = re.search(r"Office\s+([A-Z][\w\s.&'-]+?)\s+Phone:\s*([\d-]+)", text)
+    if m:
+        out["listing_office"] = m.group(1).strip()
+        out["listing_office_phone"] = m.group(2)
+
+    # Images (with size upscale if RAPMLS uses thumb URLs)
+    out["images"] = images
+    if images:
+        out["image"] = images[0]
+
+    # MLS area code
+    m = re.search(r"Area\s*:?\s*([A-Z]\d{2,3})", text)
+    if m: out["mls_area_code"] = m.group(1)
+
+    # Coerce a price (asking_price field on the deal seed schema)
+    if out.get("price"):
+        out["asking_price"] = out["price"]
+
+    return out
+
+
+def _scrape_auction_com(url: str) -> dict:
+    """Scrape an auction.com property detail page.
+
+    Pages are React-rendered with lazy image loading + extensive metadata
+    in the body text. We use Playwright + regex extraction.
+    """
+    import queue
+    import threading
+
+    def _impl():
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            b = p.chromium.launch(headless=True,
+                args=["--no-first-run", "--no-default-browser-check"])
+            try:
+                ctx = b.new_context(
+                    user_agent=("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                                 "AppleWebKit/537.36 (KHTML, like Gecko) "
+                                 "Chrome/131.0.0.0 Safari/537.36"),
+                    viewport={"width": 1366, "height": 900},
+                )
+                page = ctx.new_page()
+                page.goto(url, wait_until="networkidle", timeout=60000)
+                page.wait_for_timeout(4000)
+                # Scroll to trigger lazy loads (photos, market analysis)
+                for _ in range(5):
+                    page.evaluate("() => window.scrollBy(0, 700)")
+                    page.wait_for_timeout(500)
+                page.evaluate("() => window.scrollTo(0, 0)")
+                page.wait_for_timeout(1000)
+
+                body = page.evaluate("() => document.body.innerText")
+                title = page.title() or ""
+                # Photos: filter to auction.com property images
+                imgs = page.evaluate("""() => {
+                    const out = new Set();
+                    document.querySelectorAll('img').forEach(im => {
+                        const s = im.src || im.getAttribute('data-src') || '';
+                        if (s && /propertyImages|propertyphotos|listing/i.test(s)
+                            && !/logo|icon|page-assets/i.test(s)) {
+                            out.add(s.split('?')[0]);  // strip query (sizing)
+                        }
+                    });
+                    return Array.from(out).slice(0, 50);
+                }""") or []
+                return {"text": body, "title": title, "images": imgs}
+            finally:
+                b.close()
+
+    rq = queue.Queue()
+    def runner():
+        try: rq.put(("ok", _impl()))
+        except Exception as e: rq.put(("err", e))
+    t = threading.Thread(target=runner, daemon=True)
+    t.start(); t.join()
+    kind, payload = rq.get()
+    if kind == "err":
+        return {"error": f"auction.com scrape failed: {payload}", "url": url}
+
+    text = payload["text"]
+    imgs = payload["images"]
+    out = {"source": "auction_com", "url": url, "site": "auction_com"}
+
+    # Address — "1403 Plainfield Rd" + "South Euclid, OH 44121, Cuyahoga County"
+    m = re.search(
+        r"([\d]+\s+[\w\.\- ]+?(?:Rd|Road|St|Street|Ave|Avenue|Dr|Drive|Ln|Lane|"
+        r"Ct|Court|Pl|Place|Way|Blvd|Boulevard|Cir|Circle|Ter|Terrace|Hwy|"
+        r"Pkwy|Trl|Trail|Pt|Point|Sq|Square)\.?)\s*\n\s*([\w\s\.\-']+?),\s*"
+        r"([A-Z]{2})\s+(\d{5})(?:,\s*([\w\s]+?\s+County))?",
+        text)
+    if m:
+        out["street"] = m.group(1).strip()
+        out["city"] = m.group(2).strip()
+        out["state"] = m.group(3)
+        out["zip"] = m.group(4)
+        if m.group(5): out["county"] = m.group(5).strip()
+        out["address"] = f"{out['street']}, {out['city']}, {out['state']} {out['zip']}"
+
+    # Beds / Baths / Sqft (compact format: "4 Beds 1 Baths 1,594 Sq. Ft.")
+    m = re.search(r"(\d+)\s*Beds?", text, re.I)
+    if m: out["bedrooms"] = int(m.group(1))
+    m = re.search(r"([\d.]+)\s*Baths?", text, re.I)
+    if m: out["bathrooms"] = float(m.group(1))
+    m = re.search(r"([\d,]+)\s*Sq\.?\s*F(?:eet|t)\.?", text, re.I)
+    if m:
+        try: out["sqft"] = int(m.group(1).replace(",", ""))
+        except: pass
+
+    # Opening bid
+    m = re.search(r"Opening\s*Bid[\s\$]*([\d,]+)", text, re.I)
+    if m:
+        try:
+            out["price"] = int(m.group(1).replace(",", ""))
+            out["opening_bid"] = out["price"]
+            out["asking_price"] = out["price"]
+        except: pass
+
+    # Estimated market value
+    m = re.search(r"Est\.?\s*Market\s*Value[\s\$]*([\d,]+|Not Available)",
+                   text, re.I)
+    if m and m.group(1) != "Not Available":
+        try: out["estimated_market_value"] = int(m.group(1).replace(",", ""))
+        except: pass
+
+    # Year built
+    m = re.search(r"Year\s*Built[\s:]*(\d{4})", text, re.I)
+    if m: out["year_built"] = int(m.group(1))
+
+    # Property type
+    m = re.search(r"Property\s*Type[\s:]*([A-Z][\w\s]{2,40}?)(?:\n|Lot)", text, re.I)
+    if m: out["home_type"] = m.group(1).strip()
+
+    # Parcel
+    m = re.search(r"(?:APN|Parcel)[\s:#]*([\w\-]+)", text)
+    if m: out["parcel_id"] = m.group(1)
+
+    # Lot size
+    m = re.search(r"Lot\s*Size[\s:]*([\d,]+\s*(?:sq\.?\s*ft|sqft|acres?))",
+                   text, re.I)
+    if m: out["lot_size"] = m.group(1)
+
+    # Auction type (Foreclosure / Bank Owned / Private)
+    if "Bank Owned" in text:    out["auction_type"] = "Bank Owned"
+    elif "Foreclosure" in text: out["auction_type"] = "Foreclosure"
+    elif "Private Seller" in text: out["auction_type"] = "Private Seller"
+
+    # Auction date (format: "Jun 8, 2026 8:00 AM" or similar)
+    m = re.search(r"([A-Z][a-z]{2}\s+\d{1,2},\s*\d{4}\s+\d{1,2}:\d{2}\s*[AP]M(?:\s*ET)?)",
+                   text)
+    if m: out["auction_date_text"] = m.group(1)
+
+    # Special notes / warnings (very useful — flags mold, condition, etc.)
+    m = re.search(r"NOTE:?\s*([^.]+(?:\.[^.]+){0,3}\.)\s*(?:More)?", text)
+    if m:
+        out["special_notes"] = m.group(1).strip()[:500]
+
+    # Property type → schema
+    out["property_type"] = out.get("home_type", "Single Family Residence")
+    if "Single Family" in (out.get("home_type") or ""):
+        out["property_type"] = "Single Family Residence"
+
+    # Photos
+    out["images"] = imgs
+    if imgs:
+        out["image"] = imgs[0]
+
+    return out
+
+
 def scrape(url: str) -> dict:
     """Main entrypoint: fetch + parse based on detected site."""
     site = detect_site(url)
     if site == "unknown":
-        return {"error": "Unsupported URL — Zillow, Redfin, and ispeedtolead "
-                          "are supported", "url": url}
+        return {"error": "Unsupported URL — Zillow, Redfin, ispeedtolead, "
+                          "RAPMLS, and auction.com are supported",
+                "url": url}
+
+    if site == "rapmls":
+        return _scrape_rapmls(url)
+    if site == "auction_com":
+        return _scrape_auction_com(url)
 
     if site == "ispeedtolead":
         # Detect LEAD URLs vs PROPERTY URLs and route accordingly.
@@ -985,7 +1345,13 @@ def scrape(url: str) -> dict:
               "realtor_estimate", "redfin_estimate", "foundation",
               "basement", "roof_notes", "hvac_notes", "water_heater_notes",
               "school_rating", "flood_risk", "showing_date",
-              "strategy_hint", "lot_size_acres"):
+              "strategy_hint", "lot_size_acres",
+              # Zillow-specific extra fields (now extracted)
+              "mls_number", "home_status", "price_per_sqft",
+              "property_tax_rate_pct", "monthly_hoa", "has_garage",
+              "parking_spaces", "heating", "cooling",
+              "construction_materials", "time_on_zillow",
+              "favorite_count", "page_view_count"):
         if data.get(k) is not None:
             deal_seed[k] = data[k]
     if data.get("requires_manual_entry"):

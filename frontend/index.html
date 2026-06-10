@@ -28,10 +28,9 @@
         Deals
         <span class="nav-badge" id="nav-deal-count"></span>
       </a>
-      <a data-view="leads" class="nav-link">
-        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke-linejoin="round"/></svg></span>
-        Leads
-        <span class="nav-badge" id="nav-lead-count"></span>
+      <a data-view="usamap" class="nav-link">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z M9 3v15 M15 6v15" stroke-linejoin="round"/></svg></span>
+        USA Map
       </a>
       <a data-view="skiptrace" class="nav-link">
         <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z" stroke-linejoin="round"/><path d="M14 12h-4v8h4v-8z M9 6.5L12 4l3 2.5" stroke-linecap="round"/></svg></span>
@@ -83,6 +82,38 @@
   </aside>
 
   <main class="main">
+    <!-- ============ GLOBAL DEAL SELECTOR (always visible top bar) ============ -->
+    <div class="global-deal-bar" id="global-deal-bar">
+      <div class="gdb-label">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M3 9h18M3 15h18M9 3v18M15 3v18" stroke-linecap="round"/></svg>
+        Deal sélectionné:
+      </div>
+      <button class="gdb-picker" id="gdb-picker" type="button">
+        <span id="gdb-current">Sélectionner un deal…</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <div class="gdb-actions">
+        <button class="btn ghost" id="gdb-open" title="Open this deal's detail view" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M9 5l7 7-7 7" stroke-linecap="round"/></svg>
+          Ouvrir
+        </button>
+        <button class="btn ghost" id="gdb-chat" title="Chat with AI about this deal" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z" stroke-linejoin="round"/></svg>
+          Chat
+        </button>
+        <button class="btn ghost" id="gdb-clear" title="Clear selection" disabled>×</button>
+      </div>
+      <!-- Dropdown panel (initially hidden) -->
+      <div class="gdb-dropdown" id="gdb-dropdown" style="display:none">
+        <div class="gdb-search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg>
+          <input type="search" id="gdb-search" placeholder="Filtrer par adresse, ville, ZIP, score…" autocomplete="off">
+          <span class="gdb-count" id="gdb-count"></span>
+        </div>
+        <div class="gdb-list" id="gdb-list"></div>
+      </div>
+    </div>
+
     <!-- ============ DASHBOARD ============ -->
     <section id="view-dashboard" class="view active">
       <header class="page-header">
@@ -165,6 +196,30 @@
           </div>
         </div>
       </header>
+
+      <!-- Bulk-action bar (shown only when deals are selected) -->
+      <div id="deals-bulk-bar" class="deals-bulk-bar" style="display:none;">
+        <div class="dbb-left">
+          <span id="deals-bulk-count">0</span> deals sélectionnés
+        </div>
+        <div class="dbb-actions">
+          <button class="btn ghost" id="deals-bulk-select-all">Tout sélectionner</button>
+          <button class="btn ghost" id="deals-bulk-clear">Désélectionner</button>
+          <button class="btn" id="deals-bulk-compare">📊 Comparer</button>
+          <button class="btn danger" id="deals-bulk-delete">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" stroke-linecap="round"/></svg>
+            Supprimer
+          </button>
+        </div>
+      </div>
+
+      <!-- Selection toggle (when nothing is selected, show "Select" button) -->
+      <div id="deals-select-toggle" style="margin-bottom:12px;">
+        <button class="btn ghost" id="deals-toggle-select-mode">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Mode sélection
+        </button>
+      </div>
 
       <div id="deals-cards-container"></div>
 
@@ -671,10 +726,10 @@
         <div class="pdf-actions">
           <strong>PDF preview</strong>
           <div style="display:flex;gap:8px">
-            <a id="pdf-download" class="btn" download>
+            <button id="pdf-download" class="btn primary" type="button">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              Download
-            </a>
+              Télécharger
+            </button>
             <button class="btn ghost icon-only" id="pdf-close">×</button>
           </div>
         </div>
@@ -790,6 +845,16 @@
 
       <div id="compare-status" class="status-line"></div>
       <div id="compare-pdf-preview" class="pdf-preview" style="display:none">
+        <div class="pdf-actions">
+          <strong>Comparison PDF</strong>
+          <div style="display:flex;gap:8px">
+            <button id="compare-pdf-download" class="btn primary" type="button">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Télécharger
+            </button>
+            <button id="compare-pdf-close" class="btn ghost icon-only">×</button>
+          </div>
+        </div>
         <iframe id="compare-iframe" src="about:blank"></iframe>
       </div>
     </section>
@@ -891,6 +956,81 @@ https://app.ispeedtolead.com/deal-speed/property/...
           Job history
         </h3>
         <div id="batch-history"></div>
+      </div>
+    </section>
+
+    <!-- ============ USA MAP ============ -->
+    <section id="view-usamap" class="view">
+      <header class="page-header">
+        <div class="page-header-text">
+          <div class="page-eyebrow">Géographie</div>
+          <h2>USA Map — potentiel par état</h2>
+          <p>Carte interactive des 50 états + DC. Couleur = potentiel de marché. Click un état pour voir tes deals + données détaillées.</p>
+        </div>
+        <div class="toolbar">
+          <select id="usamap-metric" class="input" style="font-size:12px; padding:6px 10px;">
+            <option value="market_score">🏆 Potentiel marché (par défaut)</option>
+            <option value="yoy_pct">📈 Croissance YoY</option>
+            <option value="median_price">💰 Prix médian</option>
+            <option value="my_deals_count">📍 Tes deals</option>
+            <option value="my_total_profit">💵 Ton potentiel profit</option>
+          </select>
+        </div>
+      </header>
+
+      <!-- Aggregate stats -->
+      <div class="stats-grid" id="usamap-stats"></div>
+
+      <div class="usamap-layout">
+        <!-- Left: Map -->
+        <div class="card">
+          <h3>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z" stroke-linejoin="round"/></svg>
+            Carte USA
+          </h3>
+          <div id="usamap-svg-container">
+            <div class="muted" style="text-align:center; padding:40px;">Chargement…</div>
+          </div>
+          <div id="usamap-legend" class="usamap-legend"></div>
+        </div>
+
+        <!-- Right: Selected state details -->
+        <div class="card" id="usamap-state-detail">
+          <h3>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" stroke-linejoin="round"/><circle cx="12" cy="10" r="3"/></svg>
+            Détails de l'état
+          </h3>
+          <div id="usamap-state-info">
+            <div class="muted" style="text-align:center; padding:30px;">
+              Click un état sur la carte pour voir les détails.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Ranking table -->
+      <div class="card" style="margin-top:14px;">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6-6 6 6M6 15l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Ranking — top 20 états par potentiel
+        </h3>
+        <div class="table-wrap">
+          <table class="data-table" id="usamap-ranking-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>État</th>
+                <th>Région</th>
+                <th>Grade marché</th>
+                <th>Prix médian</th>
+                <th>YoY</th>
+                <th>Tes deals</th>
+                <th>Net profit cumulé</th>
+              </tr>
+            </thead>
+            <tbody id="usamap-ranking-tbody"></tbody>
+          </table>
+        </div>
       </div>
     </section>
 
@@ -1048,45 +1188,7 @@ https://app.ispeedtolead.com/deal-speed/property/...
       </div>
     </section>
 
-    <!-- ============ LEADS ============ -->
-    <section id="view-leads" class="view">
-      <header class="page-header">
-        <div class="page-header-text">
-          <div class="page-eyebrow">Pipeline</div>
-          <h2>Leads</h2>
-          <p>Evaluate motivated-seller leads BEFORE paying the lead-acquisition fee.</p>
-        </div>
-        <div class="toolbar">
-          <button class="btn primary" id="leads-add-btn">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
-            New lead
-          </button>
-        </div>
-      </header>
-
-      <div class="stats-grid" id="leads-stats"></div>
-
-      <div class="card">
-        <h3>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l5 5L20 5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          Quick paste lead URL
-        </h3>
-        <p class="muted" style="margin-bottom:10px;">
-          Paste any ispeedtolead lead URL —
-          <strong>/ld/...?shared=...</strong> (shared link) or
-          <strong>/my-leads?...&open_order=...</strong> (your private leads).
-          We'll try to fetch with your Chrome session.
-        </p>
-        <div class="url-fetch">
-          <input type="url" id="lead-scrape-url"
-            placeholder="https://app.ispeedtolead.com/ld/...  or  /my-leads?...&open_order=...">
-          <button id="lead-scrape-btn" class="btn primary">Fetch &amp; create</button>
-        </div>
-        <div id="lead-scrape-status" class="status-line"></div>
-      </div>
-
-      <div id="leads-list-container"></div>
-    </section>
+    <!-- Leads view removed — pipeline lives in the CRM kanban now -->
 
     <!-- ============ CRM ============ -->
     <section id="view-crm" class="view">
@@ -1125,6 +1227,52 @@ https://app.ispeedtolead.com/deal-speed/property/...
             Recent activity
           </h3>
           <div id="crm-activity-list"></div>
+        </div>
+      </div>
+
+      <!-- ============ LEADS KANBAN ============ -->
+      <div class="card" style="margin-top:18px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:10px;">
+          <div>
+            <h3 style="margin:0;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M15 3v18" stroke-linecap="round"/></svg>
+              Leads pipeline (kanban)
+            </h3>
+            <p class="muted" style="margin:4px 0 0; font-size:12px;">Drag-and-drop pour changer le statut. Click un lead pour ouvrir le détail.</p>
+          </div>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <input type="search" id="kanban-search" placeholder="Filter leads…" class="input" style="font-size:12px; padding:6px 10px; max-width:200px;">
+            <button class="btn" id="kanban-add-from-deal">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M3 9h18M3 15h18M9 3v18M15 3v18" stroke-linecap="round"/></svg>
+              + Depuis un deal
+            </button>
+            <button class="btn primary" id="kanban-add-lead">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="14" height="14"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
+              New lead
+            </button>
+          </div>
+        </div>
+        <div id="leads-kanban" class="kanban-board"></div>
+      </div>
+
+      <!-- ============ DEAL → LEAD PICKER MODAL ============ -->
+      <div id="kanban-deal-picker-modal" class="modal" style="display:none;">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content" style="max-width:680px;">
+          <header style="display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--divider);">
+            <div>
+              <h3 style="margin:0; font-size:15px;">Ajouter un deal au kanban</h3>
+              <p class="muted" style="margin:4px 0 0; font-size:12px;">Sélectionne un deal existant — il sera ajouté à la colonne "🆕 New" du pipeline leads.</p>
+            </div>
+            <button class="btn ghost" id="kanban-picker-close" style="font-size:18px;">×</button>
+          </header>
+          <div style="padding:14px 20px; border-bottom:1px solid var(--divider); background:var(--surface-2);">
+            <div class="search-bar" style="max-width:none; margin:0;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg>
+              <input type="search" id="kanban-picker-search" placeholder="Filter par adresse, ville, ZIP…" autocomplete="off">
+            </div>
+          </div>
+          <div id="kanban-picker-list" style="max-height:500px; overflow-y:auto;"></div>
         </div>
       </div>
     </section>
@@ -1378,95 +1526,7 @@ https://app.ispeedtolead.com/deal-speed/property/...
     </div>
   </div>
 
-  <!-- Lead form modal -->
-  <div id="lead-modal" class="modal" style="display:none">
-    <div class="modal-backdrop"></div>
-    <div class="modal-content" style="max-width:680px">
-      <header class="modal-header">
-        <h2 id="lead-modal-title">New lead</h2>
-        <button class="modal-close" id="lead-modal-close">×</button>
-      </header>
-      <form id="lead-form">
-        <div class="modal-body">
-          <h3 class="modal-section">Lead acquisition</h3>
-          <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr;">
-            <label>Lead price to buy ($)
-              <input name="lead_price" type="number" required step="1" placeholder="e.g. 49">
-            </label>
-            <label>Source
-              <select name="source">
-                <option value="ispeedtolead">ispeedtolead</option>
-                <option value="batchleads">BatchLeads</option>
-                <option value="propstream">PropStream</option>
-                <option value="direct-mail">Direct mail / PPC</option>
-                <option value="referral">Referral</option>
-                <option value="other">Other</option>
-              </select>
-            </label>
-            <label>Source URL <input name="source_url"></label>
-          </div>
-
-          <h3 class="modal-section">Property</h3>
-          <div class="form-grid" style="grid-template-columns: 2fr 1fr 1fr 1fr;">
-            <label>Address <input name="address"></label>
-            <label>City <input name="city"></label>
-            <label>State <input name="state" maxlength="2"></label>
-            <label>ZIP <input name="zip"></label>
-          </div>
-          <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr 1fr 1fr;">
-            <label>Type
-              <select name="property_type">
-                <option>Single Family</option><option>Multi-family</option>
-                <option>Condo</option><option>Townhouse</option><option>Land</option>
-              </select>
-            </label>
-            <label>Beds <input name="beds" type="number"></label>
-            <label>Baths <input name="baths" type="number" step="0.5"></label>
-            <label>Sqft <input name="sqft" type="number"></label>
-            <label>Year built <input name="year_built" type="number"></label>
-          </div>
-
-          <h3 class="modal-section">Financials &amp; motivation</h3>
-          <div class="form-grid" style="grid-template-columns: 1fr 1fr 1fr;">
-            <label>Seller's asking price ($) <input name="asking_price" type="number"></label>
-            <label>Estimated ARV ($) <input name="estimated_arv" type="number"></label>
-            <label>Estimated rehab ($) <input name="estimated_rehab" type="number"></label>
-          </div>
-          <div class="form-grid" style="grid-template-columns: 1fr;">
-            <label>Motivation hint (probate / divorce / vacant / tired landlord / foreclosure / etc.)
-              <input name="motivation" placeholder="e.g. Tired landlord, vacant 2 years">
-            </label>
-            <label>Description / what the lead says
-              <textarea name="description" rows="4" placeholder="Paste the seller's description from the lead page…"></textarea>
-            </label>
-            <label>Notes (private)
-              <textarea name="notes" rows="2"></textarea>
-            </label>
-          </div>
-        </div>
-        <footer class="modal-footer">
-          <button type="button" class="btn" id="lead-modal-cancel">Cancel</button>
-          <button type="submit" class="btn primary">Save lead</button>
-        </footer>
-      </form>
-    </div>
-  </div>
-
-  <!-- Lead analysis result modal -->
-  <div id="lead-analysis-modal" class="modal" style="display:none">
-    <div class="modal-backdrop"></div>
-    <div class="modal-content" style="max-width:740px">
-      <header class="modal-header">
-        <h2>Lead worth analysis</h2>
-        <button class="modal-close" id="lead-analysis-close">×</button>
-      </header>
-      <div class="modal-body" id="lead-analysis-body">
-        <div class="empty"><div class="empty-ico">🔍</div>
-          <h3>Analyzing…</h3>
-          <p>Claude is evaluating the lead's expected value.</p></div>
-      </div>
-    </div>
-  </div>
+  <!-- Lead modals removed (was used by Leads view) -->
 
   <!-- Interaction modal -->
   <div id="interaction-modal" class="modal" style="display:none">
@@ -1636,6 +1696,7 @@ https://app.ispeedtolead.com/deal-speed/property/...
   </div>
 
   <script src="/js/api.js"></script>
+  <script src="/js/usamap.js"></script>
   <script src="/js/app.js"></script>
 </body>
 </html>

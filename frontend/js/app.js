@@ -92,9 +92,14 @@
     if (name === "compare") { $("#compare-status").textContent = ""; refreshCompareView(); }
     if (name === "settings") { refreshCookies(); refreshAiConfig(); refreshBrowserSessionStatus(); }
     if (name === "crm") refreshCrmView();
-    if (name === "leads") refreshLeadsView();
+    if (name === "leads") {
+      // Leads view removed — redirect to CRM (where the leads kanban lives)
+      showView("crm");
+      return;
+    }
     if (name === "batch") refreshBatchView();
     if (name === "skiptrace") refreshSkipTraceView();
+    if (name === "usamap") refreshUsaMapView();
     if (name === "add" && typeof loadRecentPdfs === "function") loadRecentPdfs();
     window.scrollTo({ top: 0, behavior: "smooth" });
     // FAB visibility — hide on add/detail views
@@ -411,6 +416,81 @@
     });
   }
 
+  // ============== BULK SELECTION STATE ==============
+  let _dealsSelectMode = false;
+  const _dealsSelected = new Set();
+
+  function _toggleSelectMode(on) {
+    _dealsSelectMode = (on !== undefined) ? on : !_dealsSelectMode;
+    document.body.classList.toggle("deals-select-mode", _dealsSelectMode);
+    const btn = $("#deals-toggle-select-mode");
+    if (btn) {
+      btn.classList.toggle("active", _dealsSelectMode);
+      btn.innerHTML = _dealsSelectMode
+        ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/></svg> Quitter sélection`
+        : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke-linecap="round" stroke-linejoin="round"/></svg> Mode sélection`;
+    }
+    if (!_dealsSelectMode) _dealsSelected.clear();
+    _updateBulkBar();
+    renderDeals();
+  }
+
+  function _updateBulkBar() {
+    const bar = $("#deals-bulk-bar");
+    if (!bar) return;
+    const n = _dealsSelected.size;
+    bar.style.display = (_dealsSelectMode && n > 0) ? "flex" : "none";
+    const cnt = $("#deals-bulk-count");
+    if (cnt) cnt.textContent = n;
+  }
+
+  async function _bulkDeleteSelectedDeals() {
+    const ids = Array.from(_dealsSelected);
+    if (!ids.length) return;
+    const confirmMsg =
+      `Supprimer ${ids.length} deal${ids.length > 1 ? 's' : ''} ?\n\n` +
+      `Cette action est irréversible.\n\n` +
+      ids.slice(0, 8).map(id => {
+        const d = (state.deals || []).find(x => x.id === id);
+        return `• ${d?.address || id}`;
+      }).join("\n") +
+      (ids.length > 8 ? `\n• ... et ${ids.length - 8} autres` : "");
+    if (!confirm(confirmMsg)) return;
+
+    const btn = $("#deals-bulk-delete");
+    if (btn) { btn.disabled = true; btn.textContent = "Suppression…"; }
+    let okCount = 0, failCount = 0;
+    for (const id of ids) {
+      try {
+        await API.deleteDeal(id);
+        okCount++;
+      } catch (e) {
+        console.error(`Delete ${id} failed:`, e);
+        failCount++;
+      }
+    }
+    if (btn) { btn.disabled = false; btn.innerHTML =
+      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" stroke-linecap="round"/></svg> Supprimer`;
+    }
+    if (failCount === 0) {
+      toast(`✓ ${okCount} deal${okCount > 1 ? 's' : ''} supprimé${okCount > 1 ? 's' : ''}`, "success");
+    } else {
+      toast(`${okCount} supprimés, ${failCount} échec${failCount > 1 ? 's' : ''}`, "warn");
+    }
+    _dealsSelected.clear();
+    _toggleSelectMode(false);
+    refreshDeals();
+  }
+
+  function _toggleDealSelection(id) {
+    if (_dealsSelected.has(id)) _dealsSelected.delete(id);
+    else _dealsSelected.add(id);
+    _updateBulkBar();
+    // Update the card visual without full re-render
+    const card = document.querySelector(`.deal-card[data-id="${id}"]`);
+    if (card) card.classList.toggle("selected", _dealsSelected.has(id));
+  }
+
   function renderDeals() {
     const deals = filteredDeals();
     if (state.viewMode === "cards") {
@@ -473,19 +553,53 @@
               <span class="status-pill ${(d.status || 'evaluating').replace('_', '-')}" data-id="${d.id}" data-status="${escape(d.status || 'evaluating')}">${escape(d.status || 'evaluating')}</span>
               ${cardSourceBadge(d.source_url)}
             </div>
+            <div class="deal-card-actions">
+              <button class="deal-card-delete" data-id="${d.id}" title="Supprimer ce deal">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" stroke-linecap="round"/></svg>
+                Supprimer
+              </button>
+            </div>
           </div>
         </div>
       `).join('')
     }</div>`;
     $$(".deal-card", container).forEach(card => {
+      const id = card.dataset.id;
+      // Restore selection state after re-render
+      if (_dealsSelected.has(id)) card.classList.add("selected");
       card.addEventListener("click", e => {
         if (e.target.closest(".status-pill")) return;
-        openDeal(card.dataset.id);
+        if (e.target.closest(".deal-card-delete")) return;  // delete handles its own
+        if (_dealsSelectMode) {
+          _toggleDealSelection(id);
+        } else {
+          openDeal(id);
+        }
+      });
+    });
+    // Per-card delete buttons
+    $$(".deal-card-delete", container).forEach(btn => {
+      btn.addEventListener("click", async e => {
+        e.stopPropagation();
+        const id = btn.dataset.id;
+        const deal = (state.deals || []).find(d => d.id === id);
+        const label = deal?.address || id;
+        if (!confirm(`Supprimer "${label}" ?\n\nCette action est irréversible.`)) return;
+        btn.disabled = true;
+        try {
+          await API.deleteDeal(id);
+          toast(`✓ Deal supprimé: ${label}`, "success");
+          await refreshDeals();
+        } catch (err) {
+          toast("Échec: " + err.message, "error");
+          btn.disabled = false;
+        }
       });
     });
     $$(".status-pill", container).forEach(p => {
       p.addEventListener("click", e => {
         e.stopPropagation();
+        if (_dealsSelectMode) return;
         cycleStatus(p.dataset.id, p.dataset.status);
       });
     });
@@ -509,7 +623,10 @@
       return String(av).localeCompare(String(bv)) * state.sortDir;
     });
     tbody.innerHTML = sorted.map(d => `
-      <tr data-id="${d.id}">
+      <tr data-id="${d.id}" ${_dealsSelected.has(d.id) ? 'class="selected"' : ''}>
+        ${_dealsSelectMode
+          ? `<td style="text-align:center;"><input type="checkbox" class="row-select" data-id="${d.id}" ${_dealsSelected.has(d.id) ? 'checked' : ''}></td>`
+          : ''}
         <td><strong>${escape(d.address)}</strong>
             <div class="muted">${escape(d.city || "")} ${escape(d.state || "")}</div></td>
         <td><span class="score-badge" style="background:${scoreColor(d.score)}">${d.score}</span></td>
@@ -525,14 +642,35 @@
       </tr>
     `).join("");
     $$("#deals-tbody tr").forEach(row => {
+      const id = row.dataset.id;
+      if (!id) return;
       row.addEventListener("click", e => {
         if (e.target.closest(".status-pill")) return;
-        openDeal(row.dataset.id);
+        if (e.target.type === "checkbox") return;  // checkbox handles its own event
+        if (_dealsSelectMode) {
+          _toggleDealSelection(id);
+          row.classList.toggle("selected", _dealsSelected.has(id));
+          const cb = row.querySelector(".row-select");
+          if (cb) cb.checked = _dealsSelected.has(id);
+        } else {
+          openDeal(id);
+        }
+      });
+    });
+    $$(".row-select", tbody).forEach(cb => {
+      cb.addEventListener("change", e => {
+        e.stopPropagation();
+        const id = cb.dataset.id;
+        if (cb.checked) _dealsSelected.add(id);
+        else _dealsSelected.delete(id);
+        cb.closest("tr").classList.toggle("selected", cb.checked);
+        _updateBulkBar();
       });
     });
     $$(".status-pill", tbody).forEach(p => {
       p.addEventListener("click", e => {
         e.stopPropagation();
+        if (_dealsSelectMode) return;
         cycleStatus(p.dataset.id, p.dataset.status);
       });
     });
@@ -553,6 +691,31 @@
   $("#deals-search")?.addEventListener("input", e => {
     state.searchQ = e.target.value;
     renderDeals();
+  });
+
+  // ----- Bulk selection wiring -----
+  $("#deals-toggle-select-mode")?.addEventListener("click", () => _toggleSelectMode());
+  $("#deals-bulk-clear")?.addEventListener("click", () => {
+    _dealsSelected.clear();
+    _updateBulkBar();
+    renderDeals();
+  });
+  $("#deals-bulk-select-all")?.addEventListener("click", () => {
+    filteredDeals().forEach(d => _dealsSelected.add(d.id));
+    _updateBulkBar();
+    renderDeals();
+  });
+  $("#deals-bulk-delete")?.addEventListener("click", _bulkDeleteSelectedDeals);
+  $("#deals-bulk-compare")?.addEventListener("click", () => {
+    if (_dealsSelected.size < 2) {
+      toast("Sélectionne au moins 2 deals pour comparer", "warn");
+      return;
+    }
+    // Persist the selection in localStorage and navigate to Compare view
+    try { localStorage.setItem("compare-preselect", JSON.stringify(Array.from(_dealsSelected))); } catch {}
+    showView("compare");
+    _toggleSelectMode(false);
+    toast(`${_dealsSelected.size} deals présélectionnés dans Compare`, "info");
   });
 
   // View toggle
@@ -582,8 +745,161 @@
       state.currentDealId = id;
       renderDealDetail(data);
       showView("detail");
+      updateGlobalDealBar(data);
     } catch (e) { toast(e.message, "error"); }
   }
+
+  // ============== GLOBAL DEAL SELECTOR (top bar) ==============
+  let _gdbIdx = 0;
+  let _gdbFiltered = [];
+
+  function updateGlobalDealBar(deal) {
+    const cur = $("#gdb-current");
+    const picker = $("#gdb-picker");
+    if (!cur || !picker) return;
+    if (deal) {
+      cur.textContent = deal.address || deal.id;
+      picker.classList.add("has-deal");
+      ["#gdb-open", "#gdb-chat", "#gdb-clear"].forEach(s => {
+        const el = $(s); if (el) el.disabled = false;
+      });
+    } else {
+      cur.textContent = "Sélectionner un deal…";
+      picker.classList.remove("has-deal");
+      ["#gdb-open", "#gdb-chat", "#gdb-clear"].forEach(s => {
+        const el = $(s); if (el) el.disabled = true;
+      });
+    }
+  }
+
+  function _gdbOpenDropdown() {
+    const dd = $("#gdb-dropdown");
+    if (!dd) return;
+    dd.style.display = "block";
+    const inp = $("#gdb-search");
+    if (inp) { inp.value = ""; setTimeout(() => inp.focus(), 10); }
+    _gdbRenderList("");
+  }
+
+  function _gdbCloseDropdown() {
+    const dd = $("#gdb-dropdown");
+    if (dd) dd.style.display = "none";
+  }
+
+  function _gdbScoreClass(score) {
+    if (score >= 85) return "A";
+    if (score >= 70) return "A";
+    if (score >= 55) return "B";
+    if (score >= 40) return "C";
+    if (score >= 25) return "D";
+    return "F";
+  }
+
+  function _gdbRenderList(query) {
+    const list = $("#gdb-list");
+    const countEl = $("#gdb-count");
+    if (!list) return;
+    const q = (query || "").toLowerCase().trim();
+    let deals = state.deals || [];
+    if (q) {
+      deals = deals.filter(d => {
+        const hay = `${d.address || ""} ${d.city || ""} ${d.state || ""} ${d.zip || ""} ${d.grade || ""} ${d.signal || ""} ${d.score || ""}`.toLowerCase();
+        return hay.includes(q);
+      });
+    }
+    // Sort by score desc when no query
+    if (!q) deals = [...deals].sort((a, b) => (b.score || 0) - (a.score || 0));
+    _gdbFiltered = deals;
+    _gdbIdx = 0;
+    if (countEl) countEl.textContent = `${deals.length}/${(state.deals||[]).length}`;
+
+    if (!deals.length) {
+      list.innerHTML = `<div class="gdb-empty">Aucun deal ne match "${escape(q)}"</div>`;
+      return;
+    }
+    list.innerHTML = deals.map((d, i) => {
+      const grade = d.grade || (d.score >= 70 ? "A" : d.score >= 55 ? "B" : d.score >= 40 ? "C" : d.score >= 25 ? "D" : "F");
+      const cls = _gdbScoreClass(d.score || 0);
+      const sig = (d.signal || "").toLowerCase();
+      const sigCls = sig.includes("good") || sig.includes("excellent") ? "good"
+                   : sig.includes("avoid") || sig.includes("loss") || sig.includes("risky") ? "bad" : "";
+      const roi = d.roi_pct != null
+                  ? `${d.roi_pct > 0 ? '+' : ''}${d.roi_pct.toFixed(0)}% ROI` : "";
+      return `
+        <div class="gdb-item ${i === _gdbIdx ? 'active' : ''}" data-id="${escape(d.id)}" data-idx="${i}">
+          <div class="gdb-item-score ${cls}">${d.score ?? "?"}</div>
+          <div class="gdb-item-main">
+            <div class="gdb-item-addr">${escape(d.address || d.id)}</div>
+            <div class="gdb-item-meta">
+              ${d.city ? `<span>${escape(d.city)}${d.state ? ', ' + escape(d.state) : ''}</span>` : ''}
+              ${d.purchase_price ? `<span>$${Math.round(d.purchase_price/1000)}K</span>` : ''}
+              ${d.arv_base ? `<span>→ $${Math.round(d.arv_base/1000)}K ARV</span>` : ''}
+            </div>
+          </div>
+          ${d.signal ? `<span class="gdb-item-signal ${sigCls}">${escape(d.signal)}</span>` : ''}
+          ${roi ? `<span class="gdb-item-roi">${roi}</span>` : ''}
+        </div>
+      `;
+    }).join("");
+
+    list.querySelectorAll(".gdb-item").forEach(el => {
+      el.addEventListener("click", () => {
+        const id = el.dataset.id;
+        _gdbSelect(id);
+      });
+    });
+  }
+
+  async function _gdbSelect(id) {
+    _gdbCloseDropdown();
+    state.currentDealId = id;
+    const deal = (state.deals || []).find(d => d.id === id);
+    if (deal) updateGlobalDealBar(deal);
+    // If user clicked from main view, also navigate to detail
+    await openDeal(id);
+  }
+
+  // Wire it up
+  $("#gdb-picker")?.addEventListener("click", e => {
+    e.stopPropagation();
+    const dd = $("#gdb-dropdown");
+    if (dd && dd.style.display === "block") _gdbCloseDropdown();
+    else _gdbOpenDropdown();
+  });
+  $("#gdb-search")?.addEventListener("input", e => _gdbRenderList(e.target.value));
+  $("#gdb-search")?.addEventListener("keydown", e => {
+    if (e.key === "Escape") { _gdbCloseDropdown(); return; }
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      _gdbIdx = Math.min(_gdbIdx + 1, _gdbFiltered.length - 1);
+      _gdbRenderList($("#gdb-search").value);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      _gdbIdx = Math.max(_gdbIdx - 1, 0);
+      _gdbRenderList($("#gdb-search").value);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const d = _gdbFiltered[_gdbIdx];
+      if (d) _gdbSelect(d.id);
+    }
+  });
+  document.addEventListener("click", e => {
+    const bar = e.target.closest("#global-deal-bar");
+    if (!bar) _gdbCloseDropdown();
+  });
+  $("#gdb-open")?.addEventListener("click", () => {
+    if (state.currentDealId) openDeal(state.currentDealId);
+  });
+  $("#gdb-chat")?.addEventListener("click", () => {
+    if (state.currentDealId && typeof openChat === "function") {
+      const panel = $("#chat-panel");
+      if (panel) openChat();
+    }
+  });
+  $("#gdb-clear")?.addEventListener("click", () => {
+    state.currentDealId = null;
+    updateGlobalDealBar(null);
+  });
 
   // Tiny badge for deal cards showing the source platform
   function cardSourceBadge(url) {
@@ -1886,18 +2202,7 @@
     if (!url) return;
     // Auto-detect LEAD URLs and route to Leads view instead
     if (url.includes("/ld/") || url.includes("open_order=")) {
-      const ok = confirm(
-        "This looks like an ispeedtolead LEAD URL (not a property listing).\n\n" +
-        "Open it in the Leads view instead?"
-      );
-      if (ok) {
-        showView("leads");
-        setTimeout(() => {
-          $("#lead-scrape-url").value = url;
-          $("#lead-scrape-btn").click();
-        }, 300);
-        return;
-      }
+      // Leads view removed — fall through to treat it like any other URL
     }
     $("#scrape-status").innerHTML = '<span class="spinner"></span> Fetching...';
     $("#scrape-status").className = "status-line";
@@ -2140,11 +2445,30 @@
     if (e.key === "Enter") { e.preventDefault(); tryFindByAddress(e.target.value.trim()); }
   });
 
+  // Translate Zillow / Redfin enum property types → form select options
+  const _PROPERTY_TYPE_MAP = {
+    "SINGLE_FAMILY":       "Single Family Residence",
+    "SINGLE_FAMILY_HOME":  "Single Family Residence",
+    "Single Family":       "Single Family Residence",
+    "CONDO":               "Condominium",
+    "CONDOMINIUM":         "Condominium",
+    "TOWNHOUSE":           "Townhouse",
+    "MULTI_FAMILY":        "Multi-family (2-4)",
+    "MULTIFAMILY":         "Multi-family (2-4)",
+    "DUPLEX":              "Multi-family (2-4)",
+    "TRIPLEX":             "Multi-family (2-4)",
+    "QUADPLEX":            "Multi-family (2-4)",
+  };
+  function _normalizePropertyType(t) {
+    if (!t) return undefined;
+    return _PROPERTY_TYPE_MAP[t] || _PROPERTY_TYPE_MAP[t.toUpperCase()] || t;
+  }
+
   function seedToFormData(seed) {
     const out = {
       address: seed.address || "",
       city: seed.city, state: seed.state, zip: seed.zip,
-      property_type: seed.property_type,
+      property_type: _normalizePropertyType(seed.property_type),
       beds: seed.beds, baths: seed.baths, sqft: seed.sqft,
       year_built: seed.year_built, lot_size: seed.lot_size,
       purchase_price: seed.listing_price,
@@ -2153,7 +2477,13 @@
       arv_high: seed.comp_value_high,
       rehab_base: seed.rehab_estimate,
       estimated_rent: seed.rent_zestimate,
-      monthly_taxes: seed.monthly_taxes,
+      // If backend gave us monthly_taxes, use it. Otherwise estimate from
+      // property_tax_rate_pct × listing_price (annual / 12).
+      monthly_taxes: seed.monthly_taxes
+        || (seed.property_tax_rate_pct && seed.listing_price
+              ? Math.round(seed.listing_price * seed.property_tax_rate_pct / 100 / 12)
+              : null),
+      monthly_hoa: seed.monthly_hoa,
       median_dom: seed.median_dom,
       source_url: seed.source_url,
       image: seed.image,
@@ -2254,11 +2584,43 @@
       $("#compare-pdf-preview").style.display = "block";
       $("#compare-status").textContent = "Done.";
       $("#compare-status").className = "status-line success";
+      // Stash the URL so the download button can use it
+      const dl = $("#compare-pdf-download");
+      if (dl) { dl.dataset.url = url; dl.dataset.filename = "flip-board-comparison.pdf"; }
       $("#compare-pdf-preview").scrollIntoView({ behavior: "smooth" });
     } catch (e) {
       $("#compare-status").textContent = e.message;
       $("#compare-status").className = "status-line error";
     }
+  });
+
+  // Comparison PDF download (uses native dialog if pywebview is available)
+  $("#compare-pdf-download")?.addEventListener("click", async () => {
+    const btn = $("#compare-pdf-download");
+    const url = btn?.dataset.url || API.comparePdfUrl();
+    const filename = btn?.dataset.filename || "flip-board-comparison.pdf";
+    btn.disabled = true;
+    const orig = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner"></span> Saving…';
+    try {
+      // Native save (most reliable in WebKit)
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.save_pdf) {
+        const r = await window.pywebview.api.save_pdf(url, filename);
+        if (r.ok) toast(`✓ Enregistré : ${r.path}`, "success");
+        else if (r.cancelled) toast("Annulé", "info");
+        else toast("Échec : " + (r.error || "?"), "error");
+      } else {
+        // Fallback: open URL in new tab so user can save manually
+        const a = document.createElement("a");
+        a.href = url; a.download = filename; a.target = "_blank";
+        document.body.appendChild(a); a.click(); a.remove();
+      }
+    } finally {
+      btn.disabled = false; btn.innerHTML = orig;
+    }
+  });
+  $("#compare-pdf-close")?.addEventListener("click", () => {
+    $("#compare-pdf-preview").style.display = "none";
   });
 
   // ============== PDF OPTIONS MODAL ==============
@@ -2345,6 +2707,65 @@
     el.addEventListener("change", updateLivePreview);
   });
 
+  // Bulletproof PDF download — tries pywebview native save dialog first,
+  // falls back to browser download via temporary <a> click.
+  async function downloadPdfBulletproof(blobUrl, filename) {
+    // Path A: pywebview native save dialog (most reliable in WKWebView)
+    if (window.pywebview && window.pywebview.api && window.pywebview.api.save_pdf_blob) {
+      try {
+        // Read the blob as base64
+        const resp = await fetch(blobUrl);
+        const blob = await resp.blob();
+        const b64 = await new Promise((resolve, reject) => {
+          const r = new FileReader();
+          r.onloadend = () => resolve(r.result.split(",", 2)[1]);
+          r.onerror = reject;
+          r.readAsDataURL(blob);
+        });
+        const result = await window.pywebview.api.save_pdf_blob(b64, filename);
+        if (result.ok) {
+          toast(`✓ Enregistré : ${result.path}`, "success");
+        } else if (result.cancelled) {
+          toast("Annulé", "info");
+        } else {
+          toast("Sauvegarde échouée : " + (result.error || "?"), "error");
+        }
+        return;
+      } catch (e) {
+        console.warn("[pdf] native save failed, falling back:", e);
+      }
+    }
+    // Path B: fallback — temporary <a> click (works in browsers, sometimes in WebKit)
+    const a = document.createElement("a");
+    a.href = blobUrl;
+    a.download = filename;
+    a.target = "_blank";
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => a.remove(), 100);
+    toast("Téléchargement lancé (vérifie ton dossier Downloads)", "info");
+  }
+
+  $("#pdf-download")?.addEventListener("click", async (e) => {
+    e.preventDefault();
+    const btn = $("#pdf-download");
+    const blobUrl = btn?.dataset.blobUrl;
+    const filename = btn?.dataset.filename || "report.pdf";
+    if (!blobUrl) {
+      toast("Génère d'abord le PDF (bouton 'Generate PDF')", "warn");
+      return;
+    }
+    btn.disabled = true;
+    const originalHTML = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner"></span> Saving…';
+    try {
+      await downloadPdfBulletproof(blobUrl, filename);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = originalHTML;
+    }
+  });
+
   $("#modal-generate")?.addEventListener("click", async () => {
     if (!state.currentDealId) return;
     const opts = collectModalOptions();
@@ -2353,8 +2774,12 @@
     try {
       const blobUrl = await API.generatePdf(state.currentDealId, opts);
       $("#pdf-iframe").src = blobUrl;
-      $("#pdf-download").href = blobUrl;
-      $("#pdf-download").download = `flip-report-${state.currentDealId}.pdf`;
+      // Stash blob URL on the button for the download handler
+      const dlBtn = $("#pdf-download");
+      if (dlBtn) {
+        dlBtn.dataset.blobUrl = blobUrl;
+        dlBtn.dataset.filename = `flip-report-${state.currentDealId}.pdf`;
+      }
       $("#pdf-preview").style.display = "block";
       closePdfModal();
       $("#pdf-preview").scrollIntoView({ behavior: "smooth", block: "start" });
@@ -2639,20 +3064,12 @@
       return;
     }
 
-    // 2) URL drop → existing behavior
+    // 2) URL drop → route everything to Add Deal (Leads view is gone)
     const url = e.dataTransfer.getData("text/uri-list") || e.dataTransfer.getData("text/plain");
     if (url && url.startsWith("http")) {
-      if (url.includes("/ld/") || url.includes("open_order=")) {
-        showView("leads");
-        setTimeout(() => {
-          $("#lead-scrape-url").value = url;
-          $("#lead-scrape-btn").click();
-        }, 300);
-      } else {
-        showView("add");
-        $("#scrape-url").value = url;
-        tryScrape(url);
-      }
+      showView("add");
+      $("#scrape-url").value = url;
+      tryScrape(url);
     }
   });
 
@@ -2667,6 +3084,208 @@
     passed:    { icon: "⏭",  label: "Passed",     desc: "Skipped" },
   };
   let skipTraceCurrentStage = null;  // null = all
+
+  // ============== USA MAP VIEW ==============
+  let _usamapData = null;
+  let _usamapMetric = "market_score";
+
+  async function refreshUsaMapView() {
+    try {
+      _usamapData = await API.statesMap();
+      renderUsaMapStats(_usamapData);
+      renderUsaMapMain();
+      renderUsaMapRanking();
+    } catch (e) { toast("USA Map error: " + e.message, "error"); }
+  }
+
+  function renderUsaMapStats(data) {
+    const grid = $("#usamap-stats");
+    if (!grid) return;
+    const states = data.states || [];
+    const topState = states[0];
+    const stateWithDeals = states.filter(s => s.my_deals_count > 0);
+    grid.innerHTML = `
+      <div class="stat-card">
+        <div class="stat-label">Total deals (board)</div>
+        <div class="stat-value">${data.total_deals || 0}</div>
+        <div class="stat-sub">${data.total_states_with_deals} états couverts</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Top potentiel marché</div>
+        <div class="stat-value">${topState?.code || '?'}</div>
+        <div class="stat-sub">${topState?.name || ''} · ${topState?.market_grade || ''}</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Profit potentiel cumulé</div>
+        <div class="stat-value ${(data.total_profit_potential >= 0) ? 'good' : 'bad'}">
+          ${data.total_profit_potential >= 0 ? '+' : '-'}$${Math.abs(Math.round(data.total_profit_potential / 1000))}K
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">État #1 (tes deals)</div>
+        <div class="stat-value">${
+          stateWithDeals.sort((a,b) => (b.my_avg_score||0) - (a.my_avg_score||0))[0]?.code || '—'
+        }</div>
+        <div class="stat-sub">par score moyen</div>
+      </div>
+    `;
+  }
+
+  function renderUsaMapMain() {
+    const container = $("#usamap-svg-container");
+    if (!container || !_usamapData) return;
+    window.renderUsaMap(container, _usamapData.states, _usamapMetric, (state) => {
+      renderUsaMapStateDetail(state);
+    });
+    renderUsaMapLegend();
+  }
+
+  function renderUsaMapLegend() {
+    const el = $("#usamap-legend");
+    if (!el) return;
+    const labels = {
+      market_score:    ["Faible (15)", "Excellent (95)"],
+      yoy_pct:         ["-3%", "+6%"],
+      median_price:    ["$160K", "$820K"],
+      my_deals_count:  ["0", `${Math.max(...(_usamapData.states.map(s=>s.my_deals_count)))} deals`],
+      my_total_profit: ["Perte", "Profit max"],
+    };
+    const [lo, hi] = labels[_usamapMetric] || ["Low", "High"];
+    el.innerHTML = `
+      <span class="usamap-legend-label">${escape(lo)}</span>
+      <div class="usamap-legend-bar"></div>
+      <span class="usamap-legend-label">${escape(hi)}</span>
+      <span style="margin-left:auto; color:var(--muted); font-size:11px;">
+        ⚪ pastille = nombre de tes deals dans l'état
+      </span>
+    `;
+  }
+
+  function renderUsaMapStateDetail(s) {
+    const wrap = $("#usamap-state-info");
+    if (!wrap) return;
+    const gradeClass = "grade-" + (s.market_grade || "?").replace("+", "plus").replace("-", "minus");
+    const yoyClass = (s.yoy_pct >= 0) ? "good" : "bad";
+    let html = `
+      <div class="usamap-state-card">
+        <h4>
+          <span class="state-code">${escape(s.code)}</span>
+          ${escape(s.name)}
+        </h4>
+        <div class="usamap-state-row">
+          <span class="label">Région</span>
+          <span class="val">${escape(s.region || '?')}</span>
+        </div>
+        <div class="usamap-state-row">
+          <span class="label">Grade marché</span>
+          <span class="val"><span class="grade-pill ${gradeClass}">${escape(s.market_grade)}</span> (${s.market_score}/100)</span>
+        </div>
+        <div class="usamap-state-row">
+          <span class="label">Prix médian (2026)</span>
+          <span class="val">$${(s.median_price/1000).toFixed(0)}K</span>
+        </div>
+        <div class="usamap-state-row">
+          <span class="label">Croissance YoY</span>
+          <span class="val ${yoyClass}">${s.yoy_pct >= 0 ? '+' : ''}${s.yoy_pct.toFixed(1)}%</span>
+        </div>
+        <div class="usamap-state-row">
+          <span class="label">Rang national</span>
+          <span class="val">#${s.rank} sur 51</span>
+        </div>
+      </div>
+    `;
+    if (s.my_deals_count > 0) {
+      html += `
+        <div class="usamap-state-card">
+          <h4>📍 Tes deals dans cet état (${s.my_deals_count})</h4>
+          <div class="usamap-state-row">
+            <span class="label">Score moyen</span>
+            <span class="val">${s.my_avg_score || '?'}/100</span>
+          </div>
+          <div class="usamap-state-row">
+            <span class="label">Profit potentiel cumulé</span>
+            <span class="val ${(s.my_total_profit >= 0) ? 'good' : 'bad'}">
+              ${s.my_total_profit >= 0 ? '+$' : '-$'}${Math.abs(Math.round(s.my_total_profit/1000))}K
+            </span>
+          </div>
+          <div class="usamap-state-deals">
+            <h5>Tes deals</h5>
+            ${(s.my_deals || []).map(d => `
+              <div class="usamap-mini-deal" data-id="${escape(d.id)}">
+                <div class="mini-score" style="background:${scoreColor(d.score)}; color:white;">${d.score ?? '?'}</div>
+                <div style="flex:1; min-width:0;">
+                  <div style="font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escape(d.address || d.id)}</div>
+                  <div class="muted" style="font-size:10.5px;">${escape(d.city || '')} · ${d.net_profit >= 0 ? '+$' : '-$'}${Math.abs(Math.round((d.net_profit||0)/1000))}K</div>
+                </div>
+              </div>
+            `).join("")}
+          </div>
+        </div>
+      `;
+    } else {
+      html += `
+        <div class="usamap-state-card" style="background: rgba(245,158,11,0.08); border-left: 3px solid #f59e0b;">
+          <strong style="font-size:13px;">🎯 Aucun deal dans cet état</strong>
+          <p class="muted" style="font-size:12px; margin-top:4px;">
+            ${s.market_grade && s.market_grade[0] === 'A'
+              ? `Excellent marché — explore ! Median ${'$'+(s.median_price/1000).toFixed(0)}K, YoY ${s.yoy_pct >= 0 ? '+' : ''}${s.yoy_pct.toFixed(1)}%`
+              : `Marché moyen — autres états sont plus prometteurs.`}
+          </p>
+        </div>
+      `;
+    }
+    wrap.innerHTML = html;
+    // Wire deal clicks
+    wrap.querySelectorAll(".usamap-mini-deal").forEach(el => {
+      el.addEventListener("click", () => openDeal(el.dataset.id));
+    });
+  }
+
+  function renderUsaMapRanking() {
+    const tbody = $("#usamap-ranking-tbody");
+    if (!tbody || !_usamapData) return;
+    const top = _usamapData.states.slice(0, 20);
+    tbody.innerHTML = top.map(s => {
+      const rankClass = s.rank <= 3 ? `rank-${s.rank}` : "";
+      const gradeClass = "grade-" + (s.market_grade || "?").replace("+", "plus").replace("-", "minus");
+      const yoyClass = (s.yoy_pct >= 0) ? "good" : "bad";
+      const profitClass = (s.my_total_profit >= 0) ? "good" : "bad";
+      return `
+        <tr data-code="${escape(s.code)}">
+          <td><span class="rank-badge ${rankClass}">${s.rank}</span></td>
+          <td><strong>${escape(s.name)}</strong> <span class="muted" style="font-family:monospace;">${escape(s.code)}</span></td>
+          <td><span class="muted">${escape(s.region || '?')}</span></td>
+          <td><span class="grade-pill ${gradeClass}">${escape(s.market_grade)}</span></td>
+          <td>$${(s.median_price/1000).toFixed(0)}K</td>
+          <td class="${yoyClass}">${s.yoy_pct >= 0 ? '+' : ''}${s.yoy_pct.toFixed(1)}%</td>
+          <td>${s.my_deals_count || '—'}</td>
+          <td class="${profitClass}">${s.my_total_profit ? (s.my_total_profit >= 0 ? '+$' : '-$') + Math.abs(Math.round(s.my_total_profit/1000)) + 'K' : '—'}</td>
+        </tr>
+      `;
+    }).join("");
+    tbody.querySelectorAll("tr").forEach(row => {
+      row.addEventListener("click", () => {
+        const code = row.dataset.code;
+        const state = (_usamapData.states || []).find(x => x.code === code);
+        if (state) {
+          renderUsaMapStateDetail(state);
+          // Highlight on map
+          const tile = document.querySelector(`#usamap-svg-container [data-code="${code}"]`);
+          if (tile) {
+            document.querySelectorAll("#usamap-svg-container .usamap-state.active").forEach(e => e.classList.remove("active"));
+            tile.classList.add("active");
+            tile.scrollIntoView({behavior: "smooth", block: "center"});
+          }
+        }
+      });
+    });
+  }
+
+  // Wire metric selector
+  $("#usamap-metric")?.addEventListener("change", e => {
+    _usamapMetric = e.target.value;
+    renderUsaMapMain();
+  });
 
   async function refreshSkipTraceView() {
     try {
@@ -3673,8 +4292,14 @@
     $("#lead-analysis-body").innerHTML = html;
   }
 
-  $("#lead-analysis-close")?.addEventListener("click", () => $("#lead-analysis-modal").style.display = "none");
-  $(".modal-backdrop", $("#lead-analysis-modal"))?.addEventListener("click", () => $("#lead-analysis-modal").style.display = "none");
+  // Lead-analysis modal removed with the Leads view
+  {
+    const analModal = $("#lead-analysis-modal");
+    if (analModal) {
+      $("#lead-analysis-close")?.addEventListener("click", () => analModal.style.display = "none");
+      $(".modal-backdrop", analModal)?.addEventListener("click", () => analModal.style.display = "none");
+    }
+  }
 
   // ----- Lead modal (form) -----
   function openLeadModal(lead) {
@@ -3691,9 +4316,15 @@
     } else { delete form.dataset.editing; }
     m.style.display = "flex";
   }
-  $("#lead-modal-close")?.addEventListener("click", () => $("#lead-modal").style.display = "none");
-  $("#lead-modal-cancel")?.addEventListener("click", () => $("#lead-modal").style.display = "none");
-  $(".modal-backdrop", $("#lead-modal"))?.addEventListener("click", () => $("#lead-modal").style.display = "none");
+  // Lead form modal removed with the Leads view
+  {
+    const lm = $("#lead-modal");
+    if (lm) {
+      $("#lead-modal-close")?.addEventListener("click", () => lm.style.display = "none");
+      $("#lead-modal-cancel")?.addEventListener("click", () => lm.style.display = "none");
+      $(".modal-backdrop", lm)?.addEventListener("click", () => lm.style.display = "none");
+    }
+  }
 
   $("#lead-form")?.addEventListener("submit", async e => {
     e.preventDefault();
@@ -3833,11 +4464,309 @@
       renderCrmStats(agg);
       renderCrmContacts(contacts);
       renderCrmActivity(interactions, contacts);
-      // Update sidebar badge
+      renderLeadsKanban();
       const badge = $("#nav-crm-count");
       if (badge) badge.textContent = agg.contacts_count || "";
     } catch (e) { toast(e.message, "error"); }
   }
+
+  // ============== LEADS KANBAN ==============
+  const KANBAN_STATUSES = [
+    { key: "new",         label: "🆕 New",        desc: "Just imported" },
+    { key: "contacted",   label: "📞 Contacted",  desc: "Reached out" },
+    { key: "appointment", label: "📅 Appointment", desc: "Meeting set" },
+    { key: "offer",       label: "💰 Offer",      desc: "Offer sent" },
+    { key: "closed",      label: "✅ Closed",     desc: "Under contract" },
+    { key: "passed",      label: "⏭ Passed",     desc: "Skipped" },
+  ];
+  let _kanbanLeadsCache = [];
+  let _kanbanSearchFilter = "";
+
+  async function renderLeadsKanban() {
+    const board = $("#leads-kanban");
+    if (!board) return;
+    try {
+      _kanbanLeadsCache = await API.leadsList();
+    } catch (e) {
+      board.innerHTML = `<div class="muted" style="padding:20px;">Error loading leads: ${escape(e.message)}</div>`;
+      return;
+    }
+    _renderKanbanColumns();
+  }
+
+  function _renderKanbanColumns() {
+    const board = $("#leads-kanban");
+    if (!board) return;
+    const filter = (_kanbanSearchFilter || "").toLowerCase();
+    const filtered = filter
+      ? _kanbanLeadsCache.filter(l =>
+          ((l.address || "") + " " + (l.city || "") + " " + (l.owner_name || ""))
+            .toLowerCase().includes(filter))
+      : _kanbanLeadsCache;
+
+    board.innerHTML = KANBAN_STATUSES.map(s => {
+      const leads = filtered.filter(l => (l.status || "new") === s.key);
+      return `
+        <div class="kanban-col" data-status="${s.key}">
+          <div class="kanban-col-header">
+            <span>${s.label}</span>
+            <span class="col-count">${leads.length}</span>
+          </div>
+          <div class="kanban-col-body">
+            ${leads.length === 0
+              ? `<div class="kanban-empty">${s.desc}</div>`
+              : leads.map(l => _renderKanbanCard(l)).join("")}
+          </div>
+          <button class="kanban-add-btn" data-add-status="${s.key}">+ Add lead here</button>
+        </div>
+      `;
+    }).join("");
+    _wireKanbanEvents();
+  }
+
+  function _renderKanbanCard(lead) {
+    const addr = lead.address || lead.owner_name || "(no address)";
+    const price = lead.asking_price ? `$${Math.round(lead.asking_price / 1000)}K` : "";
+    const arv = lead.estimated_arv ? `→ $${Math.round(lead.estimated_arv / 1000)}K` : "";
+    const grade = lead.ai_analysis?.result?.flip_grade || lead.grade;
+    const worthBuying = lead.ai_analysis?.result?.worth_buying;
+    return `
+      <div class="kanban-card" draggable="true" data-id="${escape(lead.id)}">
+        <div class="kanban-card-title">${escape(addr)}</div>
+        <div class="kanban-card-meta">
+          ${price ? `<span class="money">${price}</span>` : ''}
+          ${arv ? `<span>${arv}</span>` : ''}
+          ${lead.beds ? `<span>${lead.beds}b</span>` : ''}
+          ${grade ? `<span class="${grade.startsWith('A') || grade.startsWith('B') ? 'money' : grade.startsWith('D') || grade === 'F' ? 'risk' : ''}">${escape(grade)}</span>` : ''}
+          ${worthBuying === false ? '<span class="risk">⚠ skip</span>' : ''}
+          ${worthBuying === true ? '<span class="money">✓ buy</span>' : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  let _draggedLeadId = null;
+  function _wireKanbanEvents() {
+    const board = $("#leads-kanban");
+    if (!board) return;
+
+    // Card click → open lead in Leads view (auto-focus)
+    board.querySelectorAll(".kanban-card").forEach(card => {
+      card.addEventListener("click", e => {
+        if (e.target.tagName === "BUTTON") return;
+        const id = card.dataset.id;
+        // Leads view is gone — if this card came from a deal, jump to that deal
+        const lead = _kanbanLeadsCache.find(l => l.id === id);
+        if (lead?.external_id) {
+          const deal = (state.deals || []).find(d => d.id === lead.external_id);
+          if (deal) { openDeal(deal.id); return; }
+        }
+        // Otherwise: edit inline (open a quick prompt to change status/notes)
+        const newStatus = prompt(
+          `Lead "${lead?.address || id}"\nChange status to (new/contacted/appointment/offer/closed/passed):`,
+          lead?.status || "new"
+        );
+        if (newStatus && KANBAN_STATUSES.some(s => s.key === newStatus)) {
+          API.leadPatch(id, { status: newStatus })
+             .then(() => { toast(`Status updated to "${newStatus}"`, "success"); renderLeadsKanban(); })
+             .catch(e => toast(e.message, "error"));
+        }
+      });
+      // Drag start
+      card.addEventListener("dragstart", e => {
+        _draggedLeadId = card.dataset.id;
+        card.classList.add("dragging");
+        e.dataTransfer.effectAllowed = "move";
+        try { e.dataTransfer.setData("text/plain", card.dataset.id); } catch {}
+      });
+      card.addEventListener("dragend", () => {
+        card.classList.remove("dragging");
+        _draggedLeadId = null;
+        board.querySelectorAll(".kanban-col.drag-over")
+              .forEach(c => c.classList.remove("drag-over"));
+      });
+    });
+
+    // Columns as drop targets
+    board.querySelectorAll(".kanban-col").forEach(col => {
+      col.addEventListener("dragover", e => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        col.classList.add("drag-over");
+      });
+      col.addEventListener("dragleave", e => {
+        // Only remove if we're actually leaving (not entering a child)
+        if (!col.contains(e.relatedTarget)) col.classList.remove("drag-over");
+      });
+      col.addEventListener("drop", async e => {
+        e.preventDefault();
+        col.classList.remove("drag-over");
+        const newStatus = col.dataset.status;
+        const leadId = _draggedLeadId
+                        || e.dataTransfer.getData("text/plain");
+        if (!leadId) return;
+        const lead = _kanbanLeadsCache.find(l => l.id === leadId);
+        if (!lead || lead.status === newStatus) return;
+        // Optimistic update
+        lead.status = newStatus;
+        _renderKanbanColumns();
+        try {
+          await API.leadPatch(leadId, { status: newStatus });
+          toast(`Lead moved to "${newStatus}"`, "success");
+        } catch (err) {
+          toast("Failed to update: " + err.message, "error");
+          renderLeadsKanban();
+        }
+      });
+    });
+
+    // "+ Add lead here" buttons → open the deal picker (pre-filtered to this status)
+    board.querySelectorAll("[data-add-status]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        _newLeadInitialStatus = btn.dataset.addStatus || "new";
+        openKanbanDealPicker();
+      });
+    });
+  }
+  let _newLeadInitialStatus = "new";
+
+  // Wire the kanban search + "New lead" button (once)
+  $("#kanban-search")?.addEventListener("input", e => {
+    _kanbanSearchFilter = e.target.value;
+    _renderKanbanColumns();
+  });
+  // "New lead" toolbar button → opens the deal picker (any deal can become a lead)
+  $("#kanban-add-lead")?.addEventListener("click", () => {
+    _newLeadInitialStatus = "new";
+    openKanbanDealPicker();
+  });
+
+  // ---- "+ Depuis un deal" → modal picker to convert a deal into a lead ----
+  function openKanbanDealPicker() {
+    const modal = $("#kanban-deal-picker-modal");
+    if (!modal) return;
+    modal.style.display = "flex";
+    const inp = $("#kanban-picker-search");
+    if (inp) { inp.value = ""; setTimeout(() => inp.focus(), 50); }
+    renderKanbanPickerList("");
+  }
+  function closeKanbanDealPicker() {
+    const modal = $("#kanban-deal-picker-modal");
+    if (modal) modal.style.display = "none";
+  }
+
+  function renderKanbanPickerList(query) {
+    const list = $("#kanban-picker-list");
+    if (!list) return;
+    const q = (query || "").toLowerCase().trim();
+    // Exclude deals that are already in the kanban (matched by address)
+    const existing = new Set(
+      (_kanbanLeadsCache || []).map(l => (l.address || "").toLowerCase().trim())
+    );
+    let deals = (state.deals || []).filter(d => {
+      if (existing.has((d.address || "").toLowerCase().trim())) return false;
+      if (!q) return true;
+      const hay = `${d.address || ""} ${d.city || ""} ${d.state || ""} ${d.zip || ""} ${d.signal || ""} ${d.score || ""}`.toLowerCase();
+      return hay.includes(q);
+    });
+    // Sort by score desc
+    deals.sort((a, b) => (b.score || 0) - (a.score || 0));
+
+    if (!deals.length) {
+      list.innerHTML = `<div class="gdb-empty">
+        ${(state.deals || []).length === existing.size
+          ? "Tous tes deals sont déjà dans le kanban."
+          : `Aucun deal ne match "${escape(q)}".`}
+      </div>`;
+      return;
+    }
+
+    list.innerHTML = deals.map(d => {
+      const grade = d.grade || (d.score >= 70 ? "A" : d.score >= 55 ? "B" : d.score >= 40 ? "C" : d.score >= 25 ? "D" : "F");
+      const cls = _gdbScoreClass(d.score || 0);
+      const sig = (d.signal || "").toLowerCase();
+      const sigCls = sig.includes("good") || sig.includes("excellent") ? "good"
+                   : sig.includes("avoid") || sig.includes("loss") || sig.includes("risky") ? "bad" : "";
+      return `
+        <div class="gdb-item" data-id="${escape(d.id)}" style="border-bottom:1px solid var(--divider);">
+          <div class="gdb-item-score ${cls}">${d.score ?? "?"}</div>
+          <div class="gdb-item-main">
+            <div class="gdb-item-addr">${escape(d.address || d.id)}</div>
+            <div class="gdb-item-meta">
+              ${d.city ? `<span>${escape(d.city)}${d.state ? ', ' + escape(d.state) : ''}</span>` : ''}
+              ${d.purchase_price ? `<span>$${Math.round(d.purchase_price/1000)}K</span>` : ''}
+              ${d.arv_base ? `<span>→ $${Math.round(d.arv_base/1000)}K ARV</span>` : ''}
+            </div>
+          </div>
+          ${d.signal ? `<span class="gdb-item-signal ${sigCls}">${escape(d.signal)}</span>` : ''}
+          <button class="btn primary" style="font-size:11px; padding:5px 10px;">+ Ajouter</button>
+        </div>
+      `;
+    }).join("");
+
+    list.querySelectorAll(".gdb-item").forEach(el => {
+      el.addEventListener("click", async () => {
+        const id = el.dataset.id;
+        await addDealToKanban(id);
+      });
+    });
+  }
+
+  async function addDealToKanban(dealId) {
+    const d = (state.deals || []).find(x => x.id === dealId);
+    if (!d) { toast("Deal introuvable", "error"); return; }
+    // Build a lead payload from the deal
+    const leadPayload = {
+      source: "deal_promotion",
+      source_url: d.source_url || `internal:deal/${d.id}`,
+      lead_price: 0,
+      address: d.address || "",
+      city: d.city || "",
+      state: d.state || "",
+      zip: d.zip || "",
+      property_type: d.property_type || "Single Family Residence",
+      beds: d.beds,
+      baths: d.baths,
+      sqft: d.sqft,
+      year_built: d.year_built,
+      asking_price: d.purchase_price,
+      estimated_arv: d.arv_base,
+      estimated_rehab: d.rehab_base,
+      grade: d.grade,
+      score: d.score,
+      signal: d.signal,
+      description: (
+        `[Importé depuis le board des deals]\n\n` +
+        `Deal ID: ${d.id}\n` +
+        `Score: ${d.score ?? '?'}/100 (${d.grade ?? '?'}, ${d.signal ?? '?'})\n` +
+        (d.purchase_price ? `Prix: $${d.purchase_price.toLocaleString()}\n` : '') +
+        (d.arv_base ? `ARV: $${d.arv_base.toLocaleString()}\n` : '') +
+        (d.notes ? `\nNotes:\n${d.notes}` : '')
+      ),
+      status: _newLeadInitialStatus || "new",
+      external_id: d.id,
+      ai_analysis: d.ai_insights ? { result: d.ai_insights } : undefined,
+    };
+    try {
+      const saved = await API.leadCreate(leadPayload);
+      const col = KANBAN_STATUSES.find(s => s.key === leadPayload.status);
+      toast(`✓ "${d.address}" ajouté à la colonne "${col?.label || leadPayload.status}"`, "success");
+      closeKanbanDealPicker();
+      _newLeadInitialStatus = "new";  // reset
+      await renderLeadsKanban();
+    } catch (e) {
+      toast("Échec ajout: " + e.message, "error");
+    }
+  }
+
+  // Wire the new buttons
+  $("#kanban-add-from-deal")?.addEventListener("click", openKanbanDealPicker);
+  $("#kanban-picker-close")?.addEventListener("click", closeKanbanDealPicker);
+  $(".modal-backdrop", $("#kanban-deal-picker-modal"))?.addEventListener("click", closeKanbanDealPicker);
+  $("#kanban-picker-search")?.addEventListener("input", e => renderKanbanPickerList(e.target.value));
+  $("#kanban-picker-search")?.addEventListener("keydown", e => {
+    if (e.key === "Escape") closeKanbanDealPicker();
+  });
 
   function renderCrmStats(agg) {
     const grid = $("#crm-stats");

@@ -84,13 +84,75 @@ class JSApi:
             )
             if not paths:
                 return None
-            # paths is a tuple/list of strings
             p = paths[0] if isinstance(paths, (list, tuple)) else paths
             log.info("User picked PDF: %s", p)
             return p
         except Exception as e:
             log.exception("pick_pdf failed: %s", e)
             return None
+
+    def save_pdf(self, url: str, default_filename: str = "report.pdf"):
+        """Open native Save dialog → fetch PDF from backend URL → write to disk.
+
+        WKWebView's `<a download>` attribute is unreliable. This method uses
+        pywebview's create_file_dialog(SAVE_DIALOG) for the picker + httpx to
+        download the bytes. Returns {ok, path} or {ok: false, error, cancelled}.
+        """
+        try:
+            import httpx
+            win = webview.windows[0] if webview.windows else None
+            if not win:
+                return {"ok": False, "error": "No window"}
+            # Open save dialog
+            path = win.create_file_dialog(
+                webview.SAVE_DIALOG,
+                save_filename=default_filename,
+                file_types=("PDF Files (*.pdf)",),
+            )
+            if not path:
+                return {"ok": False, "cancelled": True}
+            if isinstance(path, (list, tuple)):
+                path = path[0]
+            # If the URL is relative, prepend the backend host
+            if url.startswith("/"):
+                url = f"http://127.0.0.1:{self.backend_port}{url}"
+            log.info("Downloading %s → %s", url, path)
+            with httpx.Client(timeout=120, follow_redirects=True) as c:
+                r = c.get(url)
+                r.raise_for_status()
+                from pathlib import Path
+                Path(path).write_bytes(r.content)
+            return {"ok": True, "path": str(path), "size": len(r.content)}
+        except Exception as e:
+            log.exception("save_pdf failed: %s", e)
+            return {"ok": False, "error": str(e)}
+
+    def save_pdf_blob(self, base64_data: str, default_filename: str = "report.pdf"):
+        """Save a base64-encoded PDF (e.g. from /pdf-with-options POST) to disk."""
+        try:
+            import base64 as _b64
+            win = webview.windows[0] if webview.windows else None
+            if not win:
+                return {"ok": False, "error": "No window"}
+            path = win.create_file_dialog(
+                webview.SAVE_DIALOG,
+                save_filename=default_filename,
+                file_types=("PDF Files (*.pdf)",),
+            )
+            if not path:
+                return {"ok": False, "cancelled": True}
+            if isinstance(path, (list, tuple)):
+                path = path[0]
+            # Strip data URL prefix if present
+            if "," in base64_data and base64_data.startswith("data:"):
+                base64_data = base64_data.split(",", 1)[1]
+            data = _b64.b64decode(base64_data)
+            from pathlib import Path
+            Path(path).write_bytes(data)
+            return {"ok": True, "path": str(path), "size": len(data)}
+        except Exception as e:
+            log.exception("save_pdf_blob failed: %s", e)
+            return {"ok": False, "error": str(e)}
 
     def ping(self):
         """Sanity check that the JS bridge is wired up."""

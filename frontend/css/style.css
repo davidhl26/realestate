@@ -3667,3 +3667,499 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* ============== LEADS KANBAN ============== */
+.kanban-board {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(220px, 1fr));
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+.kanban-col {
+  background: var(--surface-2);
+  border-radius: 10px;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  min-height: 200px;
+  max-height: 600px;
+  border-top: 3px solid var(--border);
+  transition: background 0.15s;
+}
+.kanban-col.drag-over {
+  background: rgba(139, 92, 246, 0.12);
+  outline: 2px dashed var(--accent);
+}
+.kanban-col-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 4px 6px 8px; font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.kanban-col-header .col-count {
+  background: var(--card); color: var(--muted);
+  padding: 1px 7px; border-radius: 10px; font-size: 10px;
+}
+.kanban-col[data-status="new"]         { border-top-color: #6b7280; }
+.kanban-col[data-status="contacted"]   { border-top-color: #3b82f6; }
+.kanban-col[data-status="appointment"] { border-top-color: #f59e0b; }
+.kanban-col[data-status="offer"]       { border-top-color: #8b5cf6; }
+.kanban-col[data-status="closed"]      { border-top-color: var(--green); }
+.kanban-col[data-status="passed"]      { border-top-color: var(--red); }
+.kanban-col-body {
+  flex: 1; overflow-y: auto; display: flex; flex-direction: column;
+  gap: 6px; padding: 2px;
+}
+.kanban-card {
+  background: var(--card);
+  border-radius: 8px;
+  padding: 10px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  border: 1px solid var(--border);
+  cursor: grab;
+  transition: transform 0.1s, box-shadow 0.15s;
+}
+.kanban-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(0,0,0,0.1);
+  border-color: var(--accent);
+}
+.kanban-card.dragging {
+  opacity: 0.4; cursor: grabbing;
+}
+.kanban-card-title {
+  font-size: 12.5px; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  margin-bottom: 4px;
+}
+.kanban-card-meta {
+  font-size: 11px; color: var(--muted);
+  display: flex; gap: 8px; flex-wrap: wrap;
+}
+.kanban-card-meta .money { color: var(--green); font-weight: 600; }
+.kanban-card-meta .risk  { color: var(--red);   font-weight: 600; }
+.kanban-empty {
+  text-align: center; color: var(--muted);
+  font-size: 11px; padding: 16px 4px; font-style: italic;
+}
+.kanban-add-btn {
+  margin-top: 6px;
+  background: transparent; border: 1px dashed var(--border-2);
+  color: var(--muted); padding: 6px; border-radius: 6px;
+  font-size: 11px; cursor: pointer; width: 100%;
+}
+.kanban-add-btn:hover { background: var(--card); color: var(--text); }
+
+/* ============== GLOBAL DEAL SELECTOR ============== */
+.global-deal-bar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px;
+  background: var(--card);
+  border-bottom: 1px solid var(--divider);
+  margin: -12px -12px 14px;
+  backdrop-filter: blur(10px);
+  background: color-mix(in srgb, var(--card) 92%, transparent);
+}
+.gdb-label {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11.5px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.gdb-picker {
+  flex: 1;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 7px 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  cursor: pointer;
+  max-width: 600px;
+  transition: all 0.15s;
+}
+.gdb-picker:hover { border-color: var(--accent); background: var(--card); }
+.gdb-picker.has-deal { border-color: var(--accent); }
+.gdb-actions {
+  display: flex; gap: 4px;
+}
+.gdb-actions .btn {
+  padding: 6px 10px; font-size: 12px;
+}
+.gdb-actions .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.gdb-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 18px;
+  right: 18px;
+  max-width: 600px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.25);
+  margin-top: 6px;
+  overflow: hidden;
+  z-index: 60;
+}
+.gdb-search {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--divider);
+  background: var(--surface-2);
+}
+.gdb-search svg { color: var(--muted); flex-shrink: 0; }
+.gdb-search input {
+  flex: 1; background: transparent; border: none; outline: none;
+  font-size: 13px; color: var(--text);
+}
+.gdb-count {
+  font-size: 11px; color: var(--muted); white-space: nowrap;
+}
+.gdb-list {
+  max-height: 480px;
+  overflow-y: auto;
+}
+.gdb-item {
+  display: grid;
+  grid-template-columns: 36px 1fr auto auto;
+  gap: 10px; align-items: center;
+  padding: 9px 14px; cursor: pointer;
+  border-bottom: 1px solid var(--divider);
+  transition: background 0.08s;
+}
+.gdb-item:last-child { border-bottom: none; }
+.gdb-item:hover, .gdb-item.active { background: var(--surface-2); }
+.gdb-item-score {
+  display: flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  font-size: 12px; font-weight: 700;
+  background: var(--surface-2);
+}
+.gdb-item-score.A { background: rgba(34, 197, 94, 0.15); color: var(--green); }
+.gdb-item-score.B { background: rgba(59, 130, 246, 0.15); color: #3b82f6; }
+.gdb-item-score.C { background: rgba(245, 158, 11, 0.15); color: #f59e0b; }
+.gdb-item-score.D { background: rgba(239, 68, 68, 0.15); color: var(--red); }
+.gdb-item-score.F { background: rgba(127, 29, 29, 0.2); color: var(--red); }
+.gdb-item-main {
+  min-width: 0;
+}
+.gdb-item-addr {
+  font-size: 13px; font-weight: 600;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.gdb-item-meta {
+  font-size: 11px; color: var(--muted); margin-top: 1px;
+  display: flex; gap: 8px;
+}
+.gdb-item-signal {
+  font-size: 10px; font-weight: 600;
+  padding: 2px 7px; border-radius: 10px;
+  background: var(--surface-2); color: var(--muted);
+  white-space: nowrap;
+}
+.gdb-item-signal.good { background: rgba(34, 197, 94, 0.15); color: var(--green); }
+.gdb-item-signal.bad  { background: rgba(239, 68, 68, 0.15); color: var(--red); }
+.gdb-item-roi {
+  font-size: 11px; font-weight: 600; color: var(--muted);
+  white-space: nowrap;
+}
+.gdb-empty {
+  padding: 24px; text-align: center;
+  color: var(--muted); font-size: 12px;
+}
+
+@media (max-width: 720px) {
+  .global-deal-bar { flex-wrap: wrap; }
+  .gdb-label { width: 100%; }
+  .gdb-actions .btn span { display: none; }
+}
+
+/* ============== DEALS BULK SELECTION ============== */
+.deals-bulk-bar {
+  position: sticky;
+  top: 60px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: white;
+  border-radius: 10px;
+  margin-bottom: 12px;
+  box-shadow: 0 4px 16px rgba(139, 92, 246, 0.3);
+  animation: slideDown 0.2s;
+}
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.dbb-left {
+  font-size: 13px;
+  font-weight: 600;
+}
+.dbb-left #deals-bulk-count {
+  background: rgba(255,255,255,0.25);
+  padding: 2px 10px;
+  border-radius: 12px;
+  margin-right: 4px;
+}
+.dbb-actions {
+  display: flex;
+  gap: 6px;
+}
+.dbb-actions .btn {
+  background: rgba(255,255,255,0.18);
+  color: white;
+  border: none;
+  font-size: 12px;
+  padding: 6px 12px;
+}
+.dbb-actions .btn:hover { background: rgba(255,255,255,0.3); }
+.dbb-actions .btn.danger {
+  background: rgba(239, 68, 68, 0.7);
+}
+.dbb-actions .btn.danger:hover { background: rgba(220, 38, 38, 0.9); }
+
+/* Selection-mode UI on cards */
+body.deals-select-mode .deal-card {
+  position: relative;
+  cursor: pointer;
+}
+body.deals-select-mode .deal-card::before {
+  content: "";
+  position: absolute;
+  top: 8px; left: 8px;
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: white;
+  border: 2px solid var(--accent);
+  z-index: 5;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+  transition: all 0.15s;
+}
+body.deals-select-mode .deal-card.selected::before {
+  content: "✓";
+  display: flex; align-items: center; justify-content: center;
+  background: var(--accent);
+  color: white;
+  font-weight: 700;
+}
+body.deals-select-mode .deal-card.selected {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+  transform: scale(0.98);
+}
+
+/* Select-mode toggle button visual */
+#deals-toggle-select-mode.active {
+  background: var(--accent);
+  color: white;
+}
+
+/* ============== DEAL CARD DELETE BUTTON ============== */
+.deal-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--divider);
+}
+.deal-card-delete {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.deal-card-delete:hover {
+  background: rgba(239, 68, 68, 0.1);
+  border-color: var(--red);
+  color: var(--red);
+}
+.deal-card-delete:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.deal-card-delete svg { flex-shrink: 0; }
+
+/* ============== USA MAP ============== */
+.usamap-layout {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 14px;
+}
+@media (max-width: 900px) {
+  .usamap-layout { grid-template-columns: 1fr; }
+}
+
+#usamap-svg-container {
+  width: 100%;
+  position: relative;
+}
+#usamap-svg-container svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.usamap-state {
+  cursor: pointer;
+  stroke: var(--card);
+  stroke-width: 1.2;
+  transition: fill 0.15s, transform 0.1s;
+  transform-origin: center;
+  transform-box: fill-box;
+}
+.usamap-state:hover {
+  stroke: var(--text);
+  stroke-width: 2;
+  filter: brightness(1.15);
+}
+.usamap-state.active {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  filter: brightness(1.2);
+}
+
+.usamap-legend {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  margin-top: 12px;
+  font-size: 11px;
+  flex-wrap: wrap;
+}
+.usamap-legend-bar {
+  flex: 1;
+  height: 16px;
+  border-radius: 8px;
+  background: linear-gradient(90deg,
+    #ef4444 0%, #f59e0b 30%, #fbbf24 50%, #84cc16 75%, #22c55e 100%);
+}
+.usamap-legend-label {
+  color: var(--muted);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.usamap-state-card {
+  padding: 12px;
+  background: var(--surface-2);
+  border-radius: 10px;
+  margin-bottom: 12px;
+}
+.usamap-state-card h4 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.usamap-state-card .state-code {
+  font-family: monospace;
+  background: var(--accent);
+  color: white;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 700;
+}
+.usamap-state-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 0;
+  font-size: 12.5px;
+  border-bottom: 1px solid var(--divider);
+}
+.usamap-state-row:last-child { border-bottom: none; }
+.usamap-state-row .label { color: var(--muted); }
+.usamap-state-row .val { font-weight: 600; }
+
+.usamap-state-deals {
+  margin-top: 10px;
+}
+.usamap-state-deals h5 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+.usamap-mini-deal {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 8px;
+  background: var(--card);
+  border-radius: 6px;
+  margin-bottom: 4px;
+  cursor: pointer;
+  font-size: 11.5px;
+  border: 1px solid var(--border);
+  transition: all 0.1s;
+}
+.usamap-mini-deal:hover {
+  border-color: var(--accent);
+  transform: translateX(2px);
+}
+.usamap-mini-deal .mini-score {
+  width: 28px; height: 28px;
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 11px;
+  flex-shrink: 0;
+}
+
+/* Ranking table */
+#usamap-ranking-table tbody tr {
+  cursor: pointer;
+  transition: background 0.08s;
+}
+#usamap-ranking-table tbody tr:hover {
+  background: var(--surface-2);
+}
+#usamap-ranking-table .rank-badge {
+  font-weight: 700;
+  font-size: 13px;
+  width: 24px;
+  display: inline-block;
+}
+#usamap-ranking-table .rank-1 { color: #d4af37; }
+#usamap-ranking-table .rank-2 { color: #a8a8a8; }
+#usamap-ranking-table .rank-3 { color: #cd7f32; }
+.grade-pill {
+  font-family: monospace;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 5px;
+  font-size: 11.5px;
+}
+.grade-A  { background: rgba(34,197,94,0.18);  color: var(--green); }
+.grade-Aplus { background: rgba(34,197,94,0.3); color: #15803d; }
+.grade-Aminus { background: rgba(132,204,22,0.18); color: #65a30d; }
+.grade-Bplus { background: rgba(59,130,246,0.18); color: #2563eb; }
+.grade-B  { background: rgba(59,130,246,0.12); color: #3b82f6; }
+.grade-Bminus { background: rgba(168,162,158,0.18); color: #6b7280; }
+.grade-Cplus { background: rgba(251,191,36,0.18); color: #d97706; }
+.grade-C  { background: rgba(245,158,11,0.18); color: #f59e0b; }
+.grade-Cminus { background: rgba(245,101,11,0.18); color: #ea580c; }
+.grade-D  { background: rgba(239,68,68,0.18); color: var(--red); }
+.grade-F  { background: rgba(127,29,29,0.25); color: #7f1d1d; }

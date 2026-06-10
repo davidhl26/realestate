@@ -425,6 +425,139 @@ def board_compare_all():
     return comparator.compare_deals(deals)
 
 
+# State-level investment potential data (median price, market trend, flip ROI
+# baseline, etc). Used by the USA Map view to color states even when the user
+# has no deals there yet.
+# Sources: 2026 H1 Realtor.com / Zillow / NAR market data + flip benchmarks.
+_STATE_BASELINE = {
+    # state: (median_price, yoy_pct, flip_market_grade, region)
+    "AL": (180000,  2.5, "B",  "South"),    "AK": (340000, -1.5, "C",  "West"),
+    "AZ": (440000,  1.0, "C+", "West"),     "AR": (185000,  3.0, "B",  "South"),
+    "CA": (770000, -2.0, "C-", "West"),     "CO": (560000, -0.5, "C",  "West"),
+    "CT": (380000,  4.0, "B+", "Northeast"),"DE": (370000,  3.5, "B+", "Northeast"),
+    "FL": (380000,  0.5, "B-", "South"),    "GA": (340000,  3.5, "B+", "South"),
+    "HI": (820000, -3.0, "D",  "West"),     "ID": (450000, -2.5, "C-", "West"),
+    "IL": (260000,  4.5, "A-", "Midwest"),  "IN": (235000,  6.0, "A",  "Midwest"),
+    "IA": (220000,  4.0, "A-", "Midwest"),  "KS": (215000,  3.5, "B+", "Midwest"),
+    "KY": (210000,  5.0, "A-", "South"),    "LA": (220000,  1.5, "C+", "South"),
+    "ME": (390000,  5.5, "A-", "Northeast"),"MD": (430000,  3.0, "B+", "Northeast"),
+    "MA": (610000,  3.5, "B+", "Northeast"),"MI": (250000,  4.5, "A-", "Midwest"),
+    "MN": (340000,  3.0, "B+", "Midwest"),  "MS": (170000,  3.5, "B+", "South"),
+    "MO": (245000,  4.0, "A-", "Midwest"),  "MT": (480000, -2.0, "C-", "West"),
+    "NE": (260000,  3.5, "B+", "Midwest"),  "NV": (445000, -1.0, "C",  "West"),
+    "NH": (475000,  4.5, "A-", "Northeast"),"NJ": (510000,  4.0, "B+", "Northeast"),
+    "NM": (320000,  1.5, "C+", "West"),     "NY": (480000,  2.5, "B",  "Northeast"),
+    "NC": (370000,  3.0, "B+", "South"),    "ND": (260000,  3.5, "B+", "Midwest"),
+    "OH": (215000,  5.5, "A",  "Midwest"),  "OK": (200000,  3.0, "B+", "South"),
+    "OR": (510000, -1.5, "C",  "West"),     "PA": (260000,  4.0, "A-", "Northeast"),
+    "RI": (455000,  4.0, "B+", "Northeast"),"SC": (310000,  3.5, "B+", "South"),
+    "SD": (310000,  3.0, "B+", "Midwest"),  "TN": (370000,  3.5, "B+", "South"),
+    "TX": (315000,  0.5, "B-", "South"),    "UT": (510000, -1.0, "C",  "West"),
+    "VT": (380000,  4.0, "A-", "Northeast"),"VA": (400000,  3.5, "B+", "South"),
+    "WA": (610000, -1.0, "C",  "West"),     "WV": (160000,  4.0, "A-", "South"),
+    "WI": (290000,  4.0, "A-", "Midwest"),  "WY": (340000,  0.5, "C+", "West"),
+    "DC": (610000,  1.0, "C+", "Northeast"),
+}
+
+_STATE_NAMES = {
+    "AL":"Alabama","AK":"Alaska","AZ":"Arizona","AR":"Arkansas","CA":"California",
+    "CO":"Colorado","CT":"Connecticut","DE":"Delaware","FL":"Florida","GA":"Georgia",
+    "HI":"Hawaii","ID":"Idaho","IL":"Illinois","IN":"Indiana","IA":"Iowa",
+    "KS":"Kansas","KY":"Kentucky","LA":"Louisiana","ME":"Maine","MD":"Maryland",
+    "MA":"Massachusetts","MI":"Michigan","MN":"Minnesota","MS":"Mississippi",
+    "MO":"Missouri","MT":"Montana","NE":"Nebraska","NV":"Nevada","NH":"New Hampshire",
+    "NJ":"New Jersey","NM":"New Mexico","NY":"New York","NC":"North Carolina",
+    "ND":"North Dakota","OH":"Ohio","OK":"Oklahoma","OR":"Oregon","PA":"Pennsylvania",
+    "RI":"Rhode Island","SC":"South Carolina","SD":"South Dakota","TN":"Tennessee",
+    "TX":"Texas","UT":"Utah","VT":"Vermont","VA":"Virginia","WA":"Washington",
+    "WV":"West Virginia","WI":"Wisconsin","WY":"Wyoming","DC":"D.C.",
+}
+
+
+@app.get("/api/board/states-map")
+def board_states_map():
+    """Per-state aggregate data for the USA heatmap view.
+
+    Combines:
+    - Your own deals data (count, avg score, total potential profit, top deal)
+    - National baseline (median price, market YoY, flip-market grade)
+
+    Returns a list of states with all metrics + a national ranking.
+    """
+    deals = db.list_deals()
+
+    # Aggregate deals by state
+    by_state: dict = {}
+    for d in deals:
+        st = (d.get("state") or "").strip().upper()
+        if not st or len(st) != 2: continue
+        if st not in by_state:
+            by_state[st] = {
+                "code": st, "count": 0, "scores": [], "net_profits": [],
+                "best_deal": None, "best_score": -1, "deals": [],
+            }
+        rec = by_state[st]
+        rec["count"] += 1
+        if d.get("score") is not None: rec["scores"].append(d["score"])
+        if d.get("net_profit") is not None: rec["net_profits"].append(d["net_profit"])
+        if (d.get("score") or 0) > rec["best_score"]:
+            rec["best_score"] = d.get("score") or 0
+            rec["best_deal"] = {
+                "id": d.get("id"), "address": d.get("address"),
+                "score": d.get("score"), "net_profit": d.get("net_profit"),
+            }
+        rec["deals"].append({
+            "id": d.get("id"), "address": d.get("address"),
+            "score": d.get("score"), "city": d.get("city"),
+            "net_profit": d.get("net_profit"), "signal": d.get("signal"),
+        })
+
+    # Merge with baseline for all 50 + DC
+    out = []
+    for code, name in _STATE_NAMES.items():
+        baseline = _STATE_BASELINE.get(code, (0, 0, "?", "?"))
+        median_price, yoy, market_grade, region = baseline
+        my = by_state.get(code, {})
+        scores = my.get("scores", [])
+        avg_score = sum(scores) / len(scores) if scores else None
+        total_profit = sum(my.get("net_profits", []) or [])
+
+        # Combined score: market potential + your data
+        # Market score from grade (A+=95, A=85, A-=80, B+=75, B=70, etc.)
+        grade_to_score = {
+            "A+": 95, "A": 88, "A-": 82, "B+": 75, "B": 68, "B-": 62,
+            "C+": 55, "C": 48, "C-": 42, "D+": 35, "D": 28, "D-": 22, "F": 15, "?": 50,
+        }
+        market_score = grade_to_score.get(market_grade, 50)
+
+        out.append({
+            "code": code,
+            "name": name,
+            "region": region,
+            "median_price": median_price,
+            "yoy_pct": yoy,
+            "market_grade": market_grade,
+            "market_score": market_score,
+            "my_deals_count": my.get("count", 0),
+            "my_avg_score": round(avg_score, 1) if avg_score else None,
+            "my_total_profit": int(total_profit) if total_profit else 0,
+            "my_best_deal": my.get("best_deal"),
+            "my_deals": my.get("deals", []),
+        })
+
+    # Sort by combined potential
+    out.sort(key=lambda x: (-x["market_score"], -(x["my_avg_score"] or 0)))
+    for i, s in enumerate(out, 1):
+        s["rank"] = i
+
+    return {
+        "states": out,
+        "total_states_with_deals": sum(1 for s in out if s["my_deals_count"] > 0),
+        "total_deals": sum(s["my_deals_count"] for s in out),
+        "total_profit_potential": sum(s["my_total_profit"] for s in out),
+    }
+
+
 @app.post("/api/batch/start")
 def batch_start(payload: dict = Body(...)):
     """Start a batch scraping job.

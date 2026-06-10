@@ -38,6 +38,7 @@ const API = (() => {
         focus: focus || null,
       }) }),
     compareAll: () => req("/api/board/compare/all"),
+    statesMap: () => req("/api/board/states-map"),
 
     // ---- PDF Import (extract properties via Claude, bulk-create) ----
     importPdfAnalyze: async (file) => {
