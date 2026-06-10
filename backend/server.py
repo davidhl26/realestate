@@ -1283,13 +1283,17 @@ def reset_browser_session():
 # ---- AI configuration + ARV research ----
 @app.get("/api/ai/config")
 def ai_config_get():
-    """Return AI config (API key masked)."""
+    """Return AI config (API key masked). Honours both the file config and
+    the ANTHROPIC_API_KEY env var (used in production / Render)."""
     cfg = ai_research.read_config()
-    key = cfg.get("anthropic_api_key", "")
+    # Prefer env var if present (production), fall back to file (local dev)
+    key = os.environ.get("ANTHROPIC_API_KEY") or cfg.get("anthropic_api_key", "")
+    source = "env" if os.environ.get("ANTHROPIC_API_KEY") else "file"
     return {
         "configured": bool(key),
         "key_preview": (key[:8] + "..." + key[-4:]) if key else "",
         "model": cfg.get("model", "claude-opus-4-7"),
+        "source": source,
     }
 
 
