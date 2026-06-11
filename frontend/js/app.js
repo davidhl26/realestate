@@ -57,7 +57,8 @@
   const state = {
     deals: [],
     aggregates: null,
-    currentDealId: null,
+    currentDealId: null,   // the deal currently being VIEWED
+    formDealId: null,      // the deal the Add/Edit form saves to (null = new deal)
     sortKey: "score",
     sortDir: -1,
     charts: {},
@@ -100,7 +101,12 @@
     if (name === "batch") refreshBatchView();
     if (name === "skiptrace") refreshSkipTraceView();
     if (name === "usamap") refreshUsaMapView();
-    if (name === "add" && typeof loadRecentPdfs === "function") loadRecentPdfs();
+    if (name === "add") {
+      // Entering the form defaults to a NEW deal. The edit flow re-binds
+      // formDealId to the edited deal AFTER calling showView("add").
+      state.formDealId = null;
+      if (typeof loadRecentPdfs === "function") loadRecentPdfs();
+    }
     window.scrollTo({ top: 0, behavior: "smooth" });
     // FAB visibility — hide on add/detail views
     const fab = $("#fab");
@@ -114,9 +120,22 @@
   $$(".nav-link").forEach(a => {
     a.addEventListener("click", e => {
       e.preventDefault();
+      if (a.dataset.view === "add") resetDealForm();  // start a blank new deal
       showView(a.dataset.view);
     });
   });
+
+  // Clear the Add/Edit form back to a blank NEW deal (no id binding, no stale
+  // fields, no leftover scrape/search status).
+  function resetDealForm() {
+    const f = $("#deal-form");
+    if (f) { f.reset(); f._extraFields = {}; }
+    state.formDealId = null;
+    const ss = $("#scrape-status"); if (ss) { ss.textContent = ""; ss.className = "status-line"; }
+    const as = $("#address-search-status"); if (as) { as.textContent = ""; as.className = "status-line"; }
+    const su = $("#scrape-url"); if (su) su.value = "";
+  }
+  window._resetDealForm = resetDealForm;
 
   // ============== DASHBOARD ==============
   async function refreshDashboard() {
@@ -2157,7 +2176,8 @@
     try {
       const data = await API.getDeal(state.currentDealId);
       fillForm(data.deal);
-      showView("add");
+      showView("add");                         // sets formDealId = null
+      state.formDealId = state.currentDealId;  // re-bind: we're EDITING this deal
     } catch (e) { toast(e.message, "error"); }
   });
 
@@ -2571,11 +2591,15 @@
       } else obj[k] = v;
     });
     if (form._extraFields) Object.assign(obj, form._extraFields);
-    if (state.currentDealId) obj.id = state.currentDealId;
+    // Only attach an id when the form is bound to an existing deal (edit, or a
+    // re-submit of a deal we just created). A fresh add has formDealId == null,
+    // so the backend mints a new id instead of overwriting the last-viewed deal.
+    if (state.formDealId) obj.id = state.formDealId;
     try {
       const data = await API.createDeal(obj);
-      toast("Deal saved", "success");
+      toast(state.formDealId ? "Deal updated" : "Deal saved", "success");
       state.currentDealId = data.deal.id;
+      state.formDealId = data.deal.id;  // a re-submit now updates this same deal
       openDeal(state.currentDealId);
     } catch (e) { toast(e.message, "error"); }
   });
@@ -2967,7 +2991,7 @@
   const CMDK_COMMANDS = [
     { id: "go-dashboard", label: "Go to Dashboard", sub: "G D", action: () => showView("dashboard") },
     { id: "go-deals", label: "Go to Deals", sub: "G L", action: () => showView("deals") },
-    { id: "go-add", label: "Add new deal", sub: "⌘N", action: () => showView("add") },
+    { id: "go-add", label: "Add new deal", sub: "⌘N", action: () => { resetDealForm(); showView("add"); } },
     { id: "go-compare", label: "Compare deals", sub: "", action: () => showView("compare") },
     { id: "go-settings", label: "Settings", sub: "", action: () => showView("settings") },
     { id: "theme", label: "Toggle dark mode", sub: "⌘⇧L", action: () => applyTheme(state.theme === "dark" ? "light" : "dark") },
@@ -3034,7 +3058,7 @@
       e.preventDefault(); openCmdk(); return;
     }
     if ((e.metaKey || e.ctrlKey) && e.key === "n" && !inField) {
-      e.preventDefault(); showView("add"); return;
+      e.preventDefault(); resetDealForm(); showView("add"); return;
     }
     if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === "L" || e.key === "l")) {
       e.preventDefault(); applyTheme(state.theme === "dark" ? "light" : "dark"); return;
@@ -3049,8 +3073,11 @@
       gKeyTime = Date.now();
     } else if (!inField && Date.now() - gKeyTime < 1000) {
       const map = { d: "dashboard", l: "deals", a: "add", c: "compare", s: "settings" };
-      if (map[e.key.toLowerCase()]) {
-        e.preventDefault(); showView(map[e.key.toLowerCase()]); gKeyTime = 0;
+      const target = map[e.key.toLowerCase()];
+      if (target) {
+        e.preventDefault();
+        if (target === "add") resetDealForm();
+        showView(target); gKeyTime = 0;
       }
     }
   });
@@ -5302,7 +5329,7 @@
 
   // ============== FAB + extras ==============
   const fabBtn = $("#fab");
-  if (fabBtn) fabBtn.addEventListener("click", () => showView("add"));
+  if (fabBtn) fabBtn.addEventListener("click", () => { resetDealForm(); showView("add"); });
   const openCmdkBtn = $("#open-cmdk");
   if (openCmdkBtn) openCmdkBtn.addEventListener("click", () => openCmdk());
 

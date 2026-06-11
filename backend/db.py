@@ -50,8 +50,10 @@ class DealsDB:
     def upsert_deal(self, deal: dict) -> dict:
         data = self._read()
         if "id" not in deal or not deal["id"]:
-            base = deal.get("address", "deal")
-            deal["id"] = _slugify(base)
+            base = deal.get("address") or "deal"
+            # _slugify can return "" for a symbol-only address — never allow a
+            # blank id (it would collide and overwrite other blank-id deals).
+            deal["id"] = _slugify(base) or "deal"
         # Ensure unique id
         existing_ids = {d["id"] for d in data["deals"] if d["id"] != deal["id"]}
         original = deal["id"]
