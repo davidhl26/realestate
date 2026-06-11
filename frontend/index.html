@@ -1225,44 +1225,14 @@ https://app.ispeedtolead.com/deal-speed/property/...
     <section id="view-crm" class="view">
       <header class="page-header">
         <div class="page-header-text">
-          <div class="page-eyebrow">Relationships</div>
-          <h2>CRM</h2>
-          <p>Track contacts (sellers, agents, contractors, lenders) and your interactions across all deals.</p>
-        </div>
-        <div class="toolbar">
-          <button class="btn primary" id="crm-add-contact-btn">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><path d="M20 8v6M23 11h-6" stroke-linecap="round"/></svg>
-            New contact
-          </button>
+          <div class="page-eyebrow">Pipeline</div>
+          <h2>CRM — Pipeline des leads</h2>
+          <p>Tous tes leads en un coup d'œil. Glisse-dépose pour changer le statut, clique un lead pour ouvrir le détail.</p>
         </div>
       </header>
 
-      <div class="stats-grid" id="crm-stats"></div>
-
-      <div class="crm-layout">
-        <div class="card">
-          <h3>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
-            Contacts
-          </h3>
-          <div class="search-bar" style="max-width:none; margin-bottom:12px;">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg>
-            <input type="search" id="crm-contact-search" placeholder="Search contacts…">
-          </div>
-          <div id="crm-contacts-list"></div>
-        </div>
-
-        <div class="card">
-          <h3>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20" stroke-linecap="round"/></svg>
-            Recent activity
-          </h3>
-          <div id="crm-activity-list"></div>
-        </div>
-      </div>
-
       <!-- ============ LEADS KANBAN ============ -->
-      <div class="card" style="margin-top:18px;">
+      <div class="card crm-kanban-card">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:10px;">
           <div>
             <h3 style="margin:0;">

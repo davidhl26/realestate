@@ -3682,8 +3682,8 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
   padding: 8px;
   display: flex;
   flex-direction: column;
-  min-height: 200px;
-  max-height: 600px;
+  min-height: 440px;
+  max-height: calc(100vh - 250px);
   border-top: 3px solid var(--border);
   transition: background 0.15s;
 }

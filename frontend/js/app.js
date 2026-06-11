@@ -4597,15 +4597,9 @@
 
   async function refreshCrmView() {
     try {
-      const [contacts, interactions, agg] = await Promise.all([
-        API.crmContacts(), API.crmInteractions(), API.crmAggregates(),
-      ]);
-      renderCrmStats(agg);
-      renderCrmContacts(contacts);
-      renderCrmActivity(interactions, contacts);
-      renderLeadsKanban();
+      await renderLeadsKanban();
       const badge = $("#nav-crm-count");
-      if (badge) badge.textContent = agg.contacts_count || "";
+      if (badge) badge.textContent = _kanbanLeadsCache.length || "";
     } catch (e) { toast(e.message, "error"); }
   }
 
