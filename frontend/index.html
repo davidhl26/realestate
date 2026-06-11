@@ -45,10 +45,6 @@
         <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><path d="M10 7h4M10 17h4M7 10v4M17 10v4" stroke-linecap="round"/></svg></span>
         Batch Import
       </a>
-      <a data-view="compare" class="nav-link">
-        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M7 4l-4 4 4 4M3 8h12M17 14l4 4-4 4M21 18H9" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
-        Compare
-      </a>
       <a data-view="crm" class="nav-link">
         <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke-linecap="round"/></svg></span>
         CRM
@@ -205,7 +201,6 @@
         <div class="dbb-actions">
           <button class="btn ghost" id="deals-bulk-select-all">Tout sélectionner</button>
           <button class="btn ghost" id="deals-bulk-clear">Désélectionner</button>
-          <button class="btn" id="deals-bulk-compare">📊 Comparer</button>
           <button class="btn danger" id="deals-bulk-delete">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" stroke-linecap="round"/></svg>
             Supprimer
@@ -738,126 +733,7 @@
     </section>
 
     <!-- ============ COMPARE ============ -->
-    <section id="view-compare" class="view">
-      <header class="page-header">
-        <div class="page-header-text">
-          <div class="page-eyebrow">Multi-deal analysis</div>
-          <h2>Compare &amp; pick the winner</h2>
-          <p>Pick 2+ deals, run every analysis (Flip Score, P&amp;L, ROI, BRRRR, rental cap), and let Claude tell you which one to do.</p>
-        </div>
-        <div class="toolbar">
-          <button id="compare-pdf-btn" class="btn ghost" title="Export classic side-by-side PDF">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/></svg>
-            PDF
-          </button>
-        </div>
-      </header>
-
-      <!-- Step 1: Deal picker -->
-      <div class="card hero-card">
-        <div style="display:flex; justify-content:space-between; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:12px;">
-          <h3 style="margin:0;">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke-linecap="round"/></svg>
-            Pick deals to compare
-          </h3>
-          <div style="display:flex; gap:6px;">
-            <button id="cmp-select-all" class="btn ghost" style="font-size:11px;">Select all</button>
-            <button id="cmp-select-none" class="btn ghost" style="font-size:11px;">Select none</button>
-            <button id="cmp-select-top5" class="btn ghost" style="font-size:11px;">Top 5</button>
-          </div>
-        </div>
-        <div id="cmp-deal-grid" class="cmp-deal-grid"></div>
-
-        <div style="display:flex; gap:10px; margin-top:14px; align-items:center; flex-wrap:wrap;">
-          <label style="font-size:11.5px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:var(--muted);">
-            Priority (optional)
-          </label>
-          <select id="cmp-focus" class="input" style="font-size:12.5px; padding:6px 10px; max-width:240px;">
-            <option value="">Best overall</option>
-            <option value="fastest flip with the highest ROI">Fastest flip / highest ROI</option>
-            <option value="biggest absolute net profit">Biggest profit $</option>
-            <option value="lowest cash needed (capital efficient)">Lowest cash needed</option>
-            <option value="best cash-flowing rental conversion">Best rental / BRRRR</option>
-            <option value="lowest risk and safest">Lowest risk</option>
-          </select>
-          <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;">
-            <input type="checkbox" id="cmp-verdict" checked>
-            <span>Ask Claude for a winner verdict</span>
-          </label>
-          <span style="flex:1;"></span>
-          <button id="cmp-run-btn" class="btn primary" style="font-size:13px; padding:8px 18px;">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="14" height="14"><path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            Run comparison
-          </button>
-        </div>
-      </div>
-
-      <!-- Loading state -->
-      <div id="cmp-loading" class="card" style="display:none; text-align:center; padding:40px 20px;">
-        <div class="loading-spinner" style="margin:0 auto 14px;"></div>
-        <div id="cmp-loading-msg" style="font-size:14px;">Running comparison…</div>
-      </div>
-
-      <!-- Result: AI verdict (top) -->
-      <div id="cmp-verdict-card" class="card hero-card" style="display:none; background:linear-gradient(135deg, rgba(99,102,241,0.08), rgba(139,92,246,0.04));">
-        <div style="display:flex; gap:14px; align-items:start;">
-          <div style="font-size:36px; line-height:1;">🏆</div>
-          <div style="flex:1;">
-            <div class="page-eyebrow" style="color:var(--accent);">CLAUDE'S VERDICT</div>
-            <h3 id="cmp-winner-title" style="margin:6px 0 8px;"></h3>
-            <p id="cmp-verdict-text" style="font-size:14px; line-height:1.5;"></p>
-            <div id="cmp-why-winner" style="margin-top:10px;"></div>
-          </div>
-        </div>
-        <div id="cmp-portfolio-play" style="margin-top:14px; padding:12px; background:var(--surface-2); border-radius:8px; font-size:13px;"></div>
-        <div id="cmp-next-actions" style="margin-top:10px;"></div>
-        <div id="cmp-honorable-avoid" style="margin-top:14px; display:grid; grid-template-columns:1fr 1fr; gap:10px;"></div>
-      </div>
-
-      <!-- Result: per-category winners -->
-      <div id="cmp-winners-grid" class="stats-grid" style="display:none;"></div>
-
-      <!-- Result: aggregate stats -->
-      <div id="cmp-aggregates" class="card" style="display:none;"></div>
-
-      <!-- Result: ranked side-by-side table -->
-      <div id="cmp-table-card" class="card" style="display:none;">
-        <h3>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M3 12h18M3 18h18" stroke-linecap="round"/></svg>
-          Side-by-side ranking
-        </h3>
-        <div class="table-wrap" style="overflow-x:auto;">
-          <table class="data-table" id="cmp-table">
-            <thead><tr id="cmp-thead"></tr></thead>
-            <tbody id="cmp-tbody"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <!-- Result: score breakdowns -->
-      <div id="cmp-breakdown-card" class="card" style="display:none;">
-        <h3>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18" stroke-linecap="round"/><path d="M7 14l4-4 4 4 4-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          Flip Score breakdown
-        </h3>
-        <div id="cmp-breakdown-grid"></div>
-      </div>
-
-      <div id="compare-status" class="status-line"></div>
-      <div id="compare-pdf-preview" class="pdf-preview" style="display:none">
-        <div class="pdf-actions">
-          <strong>Comparison PDF</strong>
-          <div style="display:flex;gap:8px">
-            <button id="compare-pdf-download" class="btn primary" type="button">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              Télécharger
-            </button>
-            <button id="compare-pdf-close" class="btn ghost icon-only">×</button>
-          </div>
-        </div>
-        <iframe id="compare-iframe" src="about:blank"></iframe>
-      </div>
-    </section>
+    
 
     <!-- ============ BATCH IMPORT ============ -->
     <section id="view-batch" class="view">

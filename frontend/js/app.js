@@ -90,7 +90,6 @@
     $$(".nav-link").forEach(a => a.classList.toggle("active", a.dataset.view === name));
     if (name === "dashboard") refreshDashboard();
     if (name === "deals") refreshDeals();
-    if (name === "compare") { $("#compare-status").textContent = ""; refreshCompareView(); }
     if (name === "settings") { refreshCookies(); refreshAiConfig(); refreshBrowserSessionStatus(); }
     if (name === "crm") refreshCrmView();
     if (name === "leads") {
@@ -725,17 +724,6 @@
     renderDeals();
   });
   $("#deals-bulk-delete")?.addEventListener("click", _bulkDeleteSelectedDeals);
-  $("#deals-bulk-compare")?.addEventListener("click", () => {
-    if (_dealsSelected.size < 2) {
-      toast("Sélectionne au moins 2 deals pour comparer", "warn");
-      return;
-    }
-    // Persist the selection in localStorage and navigate to Compare view
-    try { localStorage.setItem("compare-preselect", JSON.stringify(Array.from(_dealsSelected))); } catch {}
-    showView("compare");
-    _toggleSelectMode(false);
-    toast(`${_dealsSelected.size} deals présélectionnés dans Compare`, "info");
-  });
 
   // View toggle
   $$("#view-toggle button").forEach(b => {
@@ -2992,7 +2980,6 @@
     { id: "go-dashboard", label: "Go to Dashboard", sub: "G D", action: () => showView("dashboard") },
     { id: "go-deals", label: "Go to Deals", sub: "G L", action: () => showView("deals") },
     { id: "go-add", label: "Add new deal", sub: "⌘N", action: () => { resetDealForm(); showView("add"); } },
-    { id: "go-compare", label: "Compare deals", sub: "", action: () => showView("compare") },
     { id: "go-settings", label: "Settings", sub: "", action: () => showView("settings") },
     { id: "theme", label: "Toggle dark mode", sub: "⌘⇧L", action: () => applyTheme(state.theme === "dark" ? "light" : "dark") },
   ];
@@ -3072,7 +3059,7 @@
     if (!inField && e.key === "g") {
       gKeyTime = Date.now();
     } else if (!inField && Date.now() - gKeyTime < 1000) {
-      const map = { d: "dashboard", l: "deals", a: "add", c: "compare", s: "settings" };
+      const map = { d: "dashboard", l: "deals", a: "add", s: "settings" };
       const target = map[e.key.toLowerCase()];
       if (target) {
         e.preventDefault();
