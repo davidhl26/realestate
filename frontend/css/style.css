@@ -3747,11 +3747,12 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
 .kanban-card {
   background: var(--card);
   border-radius: 8px;
-  padding: 10px;
+  padding: 6px 7px;
   box-shadow: 0 1px 2px rgba(0,0,0,0.05);
   border: 1px solid var(--border);
-  cursor: grab;
+  cursor: pointer;
   transition: transform 0.1s, box-shadow 0.15s;
+  display: flex; align-items: center; gap: 8px;
 }
 .kanban-card:hover {
   transform: translateY(-1px);
@@ -3761,15 +3762,32 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
 .kanban-card.dragging {
   opacity: 0.4; cursor: grabbing;
 }
+.kanban-card-thumb {
+  flex: 0 0 40px; width: 40px; height: 40px; border-radius: 7px;
+  background-size: cover; background-position: center;
+  background-color: var(--surface-2); cursor: grab;
+}
+.kanban-card-thumb.empty {
+  display: flex; align-items: center; justify-content: center; font-size: 19px;
+}
+.kanban-card-main { flex: 1; min-width: 0; }
 .kanban-card-title {
   font-size: 12.5px; font-weight: 600;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  margin-bottom: 4px;
+  margin-bottom: 2px;
 }
 .kanban-card-meta {
   font-size: 11px; color: var(--muted);
-  display: flex; gap: 8px; flex-wrap: wrap;
+  display: flex; gap: 7px; align-items: center; flex-wrap: wrap;
 }
+.kanban-card-link { color: var(--accent); font-weight: 700; }
+.kanban-card-edit {
+  flex: 0 0 auto; background: none; border: none; cursor: pointer;
+  color: var(--muted); font-size: 13px; padding: 3px 4px; border-radius: 5px;
+  opacity: 0; transition: opacity .12s; align-self: flex-start;
+}
+.kanban-card:hover .kanban-card-edit { opacity: 1; }
+.kanban-card-edit:hover { background: var(--surface-2); color: var(--text); }
 .kanban-card-meta .money { color: var(--green); font-weight: 600; }
 .kanban-card-meta .risk  { color: var(--red);   font-weight: 600; }
 .kanban-empty {

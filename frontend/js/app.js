@@ -4610,6 +4610,10 @@
       const [cols, leads] = await Promise.all([API.kanbanColumns(), API.leadsList()]);
       if (Array.isArray(cols) && cols.length) _kanbanColumns = cols;
       _kanbanLeadsCache = leads;
+      // Need deals loaded for card thumbnails + click-through to the deal.
+      if (!state.deals || !state.deals.length) {
+        try { state.deals = await API.listDeals(); } catch {}
+      }
     } catch (e) {
       board.innerHTML = `<div class="muted" style="padding:20px;">Error loading kanban: ${escape(e.message)}</div>`;
       return;
@@ -4695,23 +4699,31 @@
 
   function _renderKanbanCard(lead) {
     const addr = lead.address || lead.owner_name || "(no address)";
+    const deal = lead.external_id ? (state.deals || []).find(d => d.id === lead.external_id) : null;
+    const img = lead.image || (lead.images && lead.images[0]) || deal?.image || "";
     const price = lead.asking_price ? `$${Math.round(lead.asking_price / 1000)}K` : "";
-    const arv = lead.estimated_arv ? `→ $${Math.round(lead.estimated_arv / 1000)}K` : "";
-    const grade = lead.ai_analysis?.result?.flip_grade || lead.grade;
+    const grade = lead.ai_analysis?.result?.flip_grade || lead.grade || deal?.grade;
+    const gradeCls = grade ? (/^[AB]/.test(grade) ? "money" : /^[DF]/.test(grade) ? "risk" : "") : "";
     const worthBuying = lead.ai_analysis?.result?.worth_buying;
     const nComments = (lead.comments || []).length;
+    const thumb = img
+      ? `<div class="kanban-card-thumb" style="background-image:url('${escape(img)}')"></div>`
+      : `<div class="kanban-card-thumb empty">🏡</div>`;
     return `
-      <div class="kanban-card" draggable="true" data-id="${escape(lead.id)}">
-        <div class="kanban-card-title">${escape(addr)}</div>
-        <div class="kanban-card-meta">
-          ${price ? `<span class="money">${price}</span>` : ''}
-          ${arv ? `<span>${arv}</span>` : ''}
-          ${lead.beds ? `<span>${lead.beds}b</span>` : ''}
-          ${grade ? `<span class="${grade.startsWith('A') || grade.startsWith('B') ? 'money' : grade.startsWith('D') || grade === 'F' ? 'risk' : ''}">${escape(grade)}</span>` : ''}
-          ${worthBuying === false ? '<span class="risk">⚠ skip</span>' : ''}
-          ${worthBuying === true ? '<span class="money">✓ buy</span>' : ''}
-          ${nComments ? `<span class="kanban-card-comments" title="${nComments} commentaire(s)">💬 ${nComments}</span>` : ''}
+      <div class="kanban-card" draggable="true" data-id="${escape(lead.id)}"${deal ? ` data-deal="${escape(deal.id)}"` : ""}>
+        ${thumb}
+        <div class="kanban-card-main">
+          <div class="kanban-card-title">${escape(addr)}</div>
+          <div class="kanban-card-meta">
+            ${price ? `<span class="money">${price}</span>` : ''}
+            ${grade ? `<span class="${gradeCls}">${escape(grade)}</span>` : ''}
+            ${worthBuying === false ? '<span class="risk">⚠</span>' : ''}
+            ${worthBuying === true ? '<span class="money">✓</span>' : ''}
+            ${nComments ? `<span class="kanban-card-comments" title="${nComments} commentaire(s)">💬 ${nComments}</span>` : ''}
+            ${deal ? '<span class="kanban-card-link" title="Voir le deal">↗</span>' : ''}
+          </div>
         </div>
+        <button class="kanban-card-edit" data-edit="${escape(lead.id)}" title="Notes &amp; statut">✎</button>
       </div>
     `;
   }
@@ -4729,11 +4741,18 @@
     const addColBtn = board.querySelector("#kanban-add-col");
     if (addColBtn) addColBtn.addEventListener("click", _addKanbanColumn);
 
-    // Card click → open the lead detail modal (status, notes, comments)
+    // Card click → open the linked DEAL (if any), else the lead modal.
+    // The ✎ button always opens the lead modal (status / notes / comments).
     board.querySelectorAll(".kanban-card").forEach(card => {
-      card.addEventListener("click", e => {
-        if (e.target.tagName === "BUTTON") return;
+      card.querySelector("[data-edit]")?.addEventListener("click", e => {
+        e.stopPropagation();
         openLeadModal(card.dataset.id);
+      });
+      card.addEventListener("click", e => {
+        if (e.target.closest("[data-edit]")) return;
+        const dealId = card.dataset.deal;
+        if (dealId) openDeal(dealId);
+        else openLeadModal(card.dataset.id);
       });
       // Drag start
       card.addEventListener("dragstart", e => {
@@ -4996,6 +5015,7 @@
       grade: d.grade,
       score: d.score,
       signal: d.signal,
+      image: d.image || (d.image_gallery && d.image_gallery[0]) || "",
       description: (
         `[Importé depuis le board des deals]\n\n` +
         `Deal ID: ${d.id}\n` +
