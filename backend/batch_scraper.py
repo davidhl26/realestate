@@ -110,12 +110,38 @@ def _shape_ai_listing(L: dict) -> dict:
     return shaped
 
 
+def _fallback_from_ai_listing(item, raw, analyzer, db):
+    """When scraping a listing page fails, salvage the deal from the AI search
+    summary attached to the item (address/price/beds/baths), so a real listing
+    isn't dropped just because its page was blocked or slow."""
+    L = item.get("ai_listing")
+    if not L:
+        return None
+    data = _shape_ai_listing(L)
+    if not data.get("address"):
+        return None
+    item["progress_message"] = "listing page unavailable — saving from search summary…"
+    item["result"] = {"source": "ai_search_fallback",
+                      "address": data.get("address"),
+                      "city": data.get("city"),
+                      "image_count": len(data.get("image_gallery") or [])}
+    return _save_as_deal(data, raw, analyzer, db, source_url=data.get("source_url"))
+
+
 def _expand_search_items(job: "BatchJob") -> list:
     """Pre-pass: replace each Zillow-search item with one info row plus one
     item per listing the AI found in that search area. Runs inside the worker
     thread (the AI call takes ~30-60s)."""
     from . import ai_research
     scraper = job.deps["scraper"]
+    # How many newest listings to pull, and whether to scrape each listing page
+    # (for photos + full data) vs. build the deal straight from the AI summary.
+    try:
+        max_listings = int(job.options.get("search_max") or 15)
+    except (TypeError, ValueError):
+        max_listings = 15
+    max_listings = max(1, min(max_listings, 40))
+    scrape_each = bool(job.options.get("scrape_each", True))
     out = []
     for it in job.items:
         if it["type"] != "zillow_search" or it["status"] != "pending":
@@ -123,7 +149,7 @@ def _expand_search_items(job: "BatchJob") -> list:
             continue
 
         it["status"] = "running"
-        it["progress_message"] = "finding listings in this area (AI web search)…"
+        it["progress_message"] = f"finding the {max_listings} newest listings (AI web search)…"
         it["started_at"] = _now()
         job.updated_at = _now()
 
@@ -131,7 +157,7 @@ def _expand_search_items(job: "BatchJob") -> list:
             params = scraper.parse_zillow_search_url(it["input"])
             if not params:
                 raise ValueError("Could not read the search filters from this URL")
-            res = ai_research.find_listings_in_area(params)
+            res = ai_research.find_listings_in_area(params, max_listings=max_listings)
         except Exception as e:
             log.exception("Search expansion failed")
             it["status"] = "failed"
@@ -149,11 +175,11 @@ def _expand_search_items(job: "BatchJob") -> list:
             out.append(it)
             continue
 
-        listings = res.get("listings") or []
+        listings = (res.get("listings") or [])[:max_listings]
         area = res.get("area_label") or ""
         it["status"] = "skipped"  # informational row, not a deal
         it["progress_message"] = f"{len(listings)} listings — {area}"
-        it["error"] = (f"Expanded into {len(listings)} listings · {area}"
+        it["error"] = (f"Expanded into {len(listings)} newest listings · {area}"
                        if listings else (res.get("notes") or "No listings found in area"))
         it["result"] = {"area_label": area, "count": len(listings),
                         "notes": res.get("notes"), "web_searches": res.get("web_searches_used")}
@@ -162,11 +188,22 @@ def _expand_search_items(job: "BatchJob") -> list:
         out.append(it)
 
         for L in listings:
-            has_url = bool((L.get("url") or "").strip())
+            url = (L.get("url") or "").strip()
+            if url:
+                # Scrape the individual listing page → full data + photos.
+                kind, item_input, prefetched = "url", url, None
+            elif scrape_each:
+                # No URL: resolve the address to a listing and scrape it (photos).
+                kind, item_input, prefetched = "address", _full_address(L), None
+            else:
+                # Fast path: build the deal straight from the AI summary (no photos).
+                kind, item_input, prefetched = "prefetched", _full_address(L), L
             out.append({
-                "input": (L.get("url") or "").strip() or _full_address(L),
-                "type": "url" if has_url else "prefetched",
-                "prefetched": None if has_url else L,
+                "input": item_input,
+                "type": kind,
+                "prefetched": prefetched,
+                # carry the AI summary so a failed scrape can still fall back to it
+                "ai_listing": L,
                 "status": "pending",
                 "progress_message": "",
                 "result": None,
@@ -175,7 +212,8 @@ def _expand_search_items(job: "BatchJob") -> list:
                 "started_at": None,
                 "finished_at": None,
             })
-        log.info("Batch %s expanded search → %d listings (%s)", job.id, len(listings), area)
+        log.info("Batch %s expanded search → %d listings (%s), scrape_each=%s",
+                 job.id, len(listings), area, scrape_each)
     return out
 
 
@@ -467,10 +505,15 @@ def _process_one(item: dict, scraper, analyzer, db) -> Optional[str]:
     kind = item["type"]
 
     if kind == "url":
-        item["progress_message"] = "fetching URL…"
+        item["progress_message"] = "fetching listing page…"
         data = scraper.scrape(raw)
-        if not data or data.get("scrape_error"):
-            item["error"] = data.get("scrape_error") if data else "scrape failed"
+        if not data or data.get("scrape_error") or not data.get("address"):
+            # Scrape blocked/failed — fall back to the AI summary if we have one
+            # (so a real listing isn't lost just because the page didn't load).
+            fb = _fallback_from_ai_listing(item, raw, analyzer, db)
+            if fb:
+                return fb
+            item["error"] = (data.get("scrape_error") if data else None) or "scrape failed"
             return None
         item["progress_message"] = "parsing data…"
         item["result"] = {"source": data.get("source"),
@@ -480,13 +523,16 @@ def _process_one(item: dict, scraper, analyzer, db) -> Optional[str]:
         item["progress_message"] = "saving deal…"
         return _save_as_deal(data, raw, analyzer, db, source_url=raw)
     elif kind == "address":
-        item["progress_message"] = "searching Zillow…"
+        item["progress_message"] = "finding listing…"
         out = scraper.find_by_address(raw)
-        if not out.get("found"):
+        data = out.get("data") or {}
+        if not out.get("found") or not data.get("address"):
+            fb = _fallback_from_ai_listing(item, raw, analyzer, db)
+            if fb:
+                return fb
             item["error"] = out.get("error") or "not found"
             return None
         item["progress_message"] = f"found via {out.get('source', '?')} — saving…"
-        data = out.get("data") or {}
         item["result"] = {"source": out.get("source"),
                            "url": out.get("url"),
                            "address": data.get("address"),

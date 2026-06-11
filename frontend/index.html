@@ -869,6 +869,36 @@
         </div>
       </header>
 
+      <div class="card hero-card" id="zsearch-card">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg>
+          Import newest listings from a Zillow search
+        </h3>
+        <p class="muted" style="margin:-2px 0 14px;">Paste a Zillow <strong>search</strong> URL, pick how many of the <strong>newest</strong> listings to pull, and each one is scraped individually — full data + photos — and added as a deal.</p>
+        <label style="display:block; margin-bottom:12px;">Zillow search URL
+          <input id="zsearch-url" type="text"
+            placeholder="https://www.zillow.com/homes/for_sale/?searchQueryState=..."
+            style="width:100%; padding:11px 13px; border:1px solid var(--border-2); border-radius:10px; background:var(--card); color:var(--text); font-family:'JetBrains Mono', monospace; font-size:12.5px;">
+        </label>
+        <label class="muted" style="display:block; margin-bottom:6px; font-size:11.5px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">
+          How many newest listings?
+        </label>
+        <div id="zsearch-counts" style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px;">
+          <button type="button" class="method-chip" data-count="5">5</button>
+          <button type="button" class="method-chip active" data-count="10">10</button>
+          <button type="button" class="method-chip" data-count="20">20</button>
+          <button type="button" class="method-chip" data-count="30">30</button>
+          <button type="button" class="method-chip" data-count="40">40</button>
+        </div>
+        <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+          <button id="zsearch-import" class="btn primary">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Import newest <span id="zsearch-count-label">10</span> deals
+          </button>
+          <span id="zsearch-status" class="status-line"></span>
+        </div>
+      </div>
+
       <div class="card hero-card">
         <h3>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke-linejoin="round"/></svg>

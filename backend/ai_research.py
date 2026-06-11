@@ -261,25 +261,26 @@ def research_arv(deal: dict) -> dict:
 # using Claude + web search (free alternative to a premium scraping proxy).
 # ============================================================================
 
-LISTING_SEARCH_SYSTEM = """You are a real-estate research assistant for a fix-and-flip investor. Given a geographic area and filters, you find residential properties that are CURRENTLY FOR SALE and return their listing URLs.
+LISTING_SEARCH_SYSTEM = """You are a real-estate research assistant for a fix-and-flip investor. Given a geographic area and filters, you find the NEWEST residential properties currently for sale and return their exact Zillow listing URLs.
 
 Method:
-1. Use the web_search tool aggressively (run many searches). Search variations like "homes for sale <city> under $<price>", "<neighborhood> houses for sale zillow", "<zip> single family homes for sale", and per-suburb queries to maximize coverage.
-2. For every property you find in the area that matches the price/type filters, capture its full street address and — when the search result gives you one — its Zillow listing URL: https://www.zillow.com/homedetails/<street-city-state-zip-slug>/<zpid>_zpid/  (a Redfin listing URL is also accepted).
-3. Capture whatever price / beds / baths / sqft the search snippet shows.
+1. Use the web_search tool aggressively (run many searches). Favor queries that surface the most recently listed homes: "newest homes for sale <city> under $<price>", "<city> new listings zillow", "<zip> houses just listed for sale", plus per-suburb/per-zip variations to widen coverage.
+2. For EACH matching property, find its exact Zillow listing URL: https://www.zillow.com/homedetails/<street-city-state-zip-slug>/<zpid>_zpid/ . If a search snippet shows the address but not the URL, run a follow-up search like "<full address> zillow" to retrieve the exact listing URL. A Redfin listing URL (https://www.redfin.com/.../home/<id>) is also accepted.
+3. Capture whatever price / beds / baths / sqft / days-on-market the result shows.
 
 RULES:
-- Return every CANDIDATE property you found in the area, even if you cannot confirm it is still active for sale right now. The system fetches each listing's live page afterward and discards any that have already sold — so it is fine (and expected) to include candidates whose status is uncertain. Breadth matters more than certainty here.
-- Do NOT fabricate. Only return addresses and URLs that actually appeared in your search results. Never invent a zpid or guess a URL — if you have a real address but no reliable URL, return the address with "url": null (the system resolves it).
+- Return the MOST RECENTLY LISTED properties first (newest on market). The caller wants the freshest listings, then scrapes each individual listing page (for photos and full data).
+- Strongly prefer providing a real listing URL for every property — that is what lets the system open and scrape the listing. Only set "url": null when you genuinely could not find the URL after searching for that address.
+- Do NOT fabricate. Only return addresses and URLs that actually appeared in your search results. Never invent a zpid or guess a URL.
+- Include candidates even if you cannot confirm they are still active — the system fetches each live page afterward and discards any that have already sold. Breadth + freshness matter more than certainty.
 - Respect the price ceiling/floor and the property-type exclusions exactly (single-family houses only when condos/townhouses/land/etc. are excluded).
-- Aim for as many matching properties as you can find (target 15-40+). Keep searching different sub-areas/zips until you stop surfacing new addresses.
 
 CRITICAL: End your response with a SINGLE JSON code block in exactly this schema and NO text after it:
 ```json
 {
   "area_label": "<human name of the area, e.g. 'Cleveland, OH — East Side & inner-ring suburbs'>",
   "listings": [
-    {"url": "<full zillow/redfin listing url, or null>", "address": "<full street address>", "city": "<city>", "state": "<2-letter>", "zip": "<zip>", "price": <integer or null>, "beds": <integer or null>, "baths": <number or null>, "sqft": <integer or null>}
+    {"url": "<full zillow/redfin listing url, or null>", "address": "<full street address>", "city": "<city>", "state": "<2-letter>", "zip": "<zip>", "price": <integer or null>, "beds": <integer or null>, "baths": <number or null>, "sqft": <integer or null>, "days_on_market": <integer or null>}
   ],
   "notes": "<1-2 sentences: how many found, coverage caveats>"
 }
@@ -336,9 +337,10 @@ def _salvage_listings(text: str) -> list:
     return out
 
 
-def _build_listing_search_prompt(params: dict) -> str:
+def _build_listing_search_prompt(params: dict, max_listings: int = 60) -> str:
     p = params or {}
-    lines = ["Find residential properties CURRENTLY FOR SALE in this area.\n"]
+    lines = [f"Find the {max_listings} NEWEST residential properties currently FOR SALE in this area "
+             "(most recently listed first).\n"]
     clat, clng = p.get("center_lat"), p.get("center_lng")
     mb = p.get("map_bounds") or {}
     if p.get("search_term"):
@@ -364,8 +366,9 @@ def _build_listing_search_prompt(params: dict) -> str:
         lines.append(f"- EXCLUDE these property types: {', '.join(p['excluded_type_labels'])} "
                      "(i.e. single-family houses only).")
     lines.append("")
-    lines.append("Return every matching, currently-for-sale listing you can find, with its real "
-                 "Zillow URL, in the JSON schema specified.")
+    lines.append(f"Return the {max_listings} most recently listed matching properties, newest first, "
+                 "EACH with its exact Zillow listing URL (search '<address> zillow' to get the URL "
+                 "when a result only shows the address), in the JSON schema specified.")
     return "\n".join(lines)
 
 
@@ -389,7 +392,7 @@ def find_listings_in_area(params: dict, max_listings: int = 60) -> dict:
             max_tokens=16000,
             system=LISTING_SEARCH_SYSTEM,
             tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 15}],
-            messages=[{"role": "user", "content": _build_listing_search_prompt(params)}],
+            messages=[{"role": "user", "content": _build_listing_search_prompt(params, max_listings)}],
         )
     except anthropic.AuthenticationError:
         return {"ok": False, "error": "Invalid API key — check Settings → AI."}

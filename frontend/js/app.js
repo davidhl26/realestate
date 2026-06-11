@@ -4133,6 +4133,60 @@
     }
   });
 
+  // ----- Zillow search → import newest N (scrapes each listing for photos) -----
+  let zsearchCount = 10;
+  $("#zsearch-counts")?.addEventListener("click", e => {
+    const chip = e.target.closest(".method-chip");
+    if (!chip) return;
+    zsearchCount = Number(chip.dataset.count) || 10;
+    $$("#zsearch-counts .method-chip").forEach(c => c.classList.toggle("active", c === chip));
+    const lbl = $("#zsearch-count-label");
+    if (lbl) lbl.textContent = zsearchCount;
+  });
+
+  $("#zsearch-import")?.addEventListener("click", async () => {
+    const url = ($("#zsearch-url").value || "").trim();
+    const status = $("#zsearch-status");
+    const isZsearch = /zillow\.com/i.test(url) &&
+      (/searchquerystate=/i.test(url) || /\/homes\//i.test(url));
+    if (!isZsearch) {
+      status.innerHTML = "Paste a Zillow <strong>search</strong> URL (the one with <code>searchQueryState=…</code>).";
+      status.className = "status-line error";
+      return;
+    }
+    const estMin = Math.max(1, Math.ceil(zsearchCount * 0.7));  // ~40s per listing
+    if (zsearchCount >= 30 &&
+        !confirm(`Import the ${zsearchCount} newest listings? Each is scraped individually for photos — this takes roughly ${estMin} minutes.`)) {
+      return;
+    }
+    const btn = $("#zsearch-import");
+    btn.disabled = true;
+    status.innerHTML = `<span class="spinner"></span> Finding the ${zsearchCount} newest listings…`;
+    status.className = "status-line";
+    try {
+      const j = await API.batchStart([url], {
+        search_max: zsearchCount,
+        scrape_each: true,
+        skip_duplicates: true,
+        delay_sec: 2.5,
+      });
+      batchCurrentJobId = j.id;
+      $("#batch-progress-card").style.display = "block";
+      $("#batch-info").innerHTML = `<span class="pill green">Started</span> Finding + scraping the ${zsearchCount} newest listings (with photos) — about ${estMin} min.`;
+      $("#batch-info").className = "status-line success";
+      status.textContent = "";
+      renderBatchJob(j);
+      pollBatchJob(j.id);
+      refreshBatchView();
+      $("#batch-progress-card").scrollIntoView({ behavior: "smooth" });
+    } catch (e) {
+      status.innerHTML = `<strong>Failed to start:</strong> ${escape(e.message)}`;
+      status.className = "status-line error";
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
   $("#batch-cancel")?.addEventListener("click", async () => {
     if (!batchCurrentJobId) return;
     if (!confirm("Cancel this batch? Items already processed will be kept.")) return;
