@@ -2159,6 +2159,30 @@
     openPdfModal();
   });
 
+  // Pre-Qualification Letter → generate the PDF (today's date + this deal's address)
+  $("#prequal-btn")?.addEventListener("click", async () => {
+    if (!state.currentDealId) return;
+    const btn = $("#prequal-btn");
+    const orig = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Génération…';
+    try {
+      const resp = await fetch(API.prequalLetterUrl(state.currentDealId));
+      if (!resp.ok) throw new Error("HTTP " + resp.status);
+      const blob = await resp.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const addr = (state.deals.find(d => d.id === state.currentDealId)?.address || "property")
+        .split(",")[0].replace(/[^\w]+/g, "-");
+      await downloadPdfBulletproof(blobUrl, `PreQualification-Letter-${addr}.pdf`);
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 4000);
+    } catch (e) {
+      toast("Échec génération lettre : " + e.message, "error");
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = orig;
+    }
+  });
+
   $("#edit-btn")?.addEventListener("click", async () => {
     if (!state.currentDealId) return;
     try {

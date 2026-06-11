@@ -189,6 +189,7 @@ const API = (() => {
     deleteCookie: (domain) => req("/api/auth-cookies/" + encodeURIComponent(domain),
       { method: "DELETE" }),
     dealPdfUrl: (id) => "/api/deals/" + encodeURIComponent(id) + "/pdf?t=" + Date.now(),
+    prequalLetterUrl: (id) => "/api/deals/" + encodeURIComponent(id) + "/prequal-letter?t=" + Date.now(),
     comparePdfUrl: () => "/api/board/comparison-pdf?t=" + Date.now(),
     generatePdf: async (id, overrides) => {
       const r = await fetch("/api/deals/" + encodeURIComponent(id) + "/pdf-with-options", {

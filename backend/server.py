@@ -270,6 +270,25 @@ def deal_pdf(deal_id: str):
                         filename=out.name)
 
 
+@app.get("/api/deals/{deal_id}/prequal-letter")
+def deal_prequal_letter(deal_id: str):
+    """Generate the fix-and-flip financing pre-qualification letter (PDF),
+    dated today, with this deal's address as the subject property."""
+    d = db.get_deal(deal_id)
+    if not d:
+        raise HTTPException(404, "Deal not found")
+    from . import prequal_letter
+    out = PDF_DIR / f"prequal-{deal_id}.pdf"
+    try:
+        prequal_letter.build_prequal_pdf(d, str(out))
+    except Exception as e:
+        log.exception("Pre-qual letter generation failed")
+        raise HTTPException(500, f"Letter generation failed: {e}")
+    slug = (d.get("address") or "property").split(",")[0].replace(" ", "-")
+    return FileResponse(out, media_type="application/pdf",
+                        filename=f"PreQualification-Letter-{slug}.pdf")
+
+
 @app.post("/api/deals/{deal_id}/pdf-with-options")
 def deal_pdf_with_options(deal_id: str, options: dict = Body(...)):
     """Generate PDF with user-specified strategy, financing, and fee overrides."""
