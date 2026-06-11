@@ -829,9 +829,33 @@ def auctions_skip_trace_bulk(payload: dict = Body(default={})):
     if not ai_research.is_configured():
         raise HTTPException(400, "AI not configured.")
     status = (payload or {}).get("status") or "queued"
+    force = bool((payload or {}).get("force"))
     items = auctions_db.list_items(status=status)
     if not items:
         return {"ok": True, "job_id": None, "message": "No items to trace", "total": 0}
+
+    # PRE-FILTER (unless force): only skip-trace ACTIONABLE auctions.
+    # Tracing canceled/sold properties (you can't buy them) or items with no
+    # extracted address just burns tokens for ~0 result. Default cut is huge:
+    # a typical 42-item list is ~27 canceled + 12 sold + 3 active → trace 3.
+    skipped_unactionable = 0
+    if not force:
+        actionable = []
+        for it in items:
+            short = (it.get("status_short") or "").lower()
+            has_addr = bool((it.get("address") or "").strip())
+            # Active (or unknown status, to be safe) AND has an address.
+            if has_addr and short not in ("canceled", "cancelled", "sold",
+                                           "withdrawn", "postponed"):
+                actionable.append(it)
+            else:
+                skipped_unactionable += 1
+        items = actionable
+        if not items:
+            return {"ok": True, "job_id": None,
+                    "message": f"No actionable items (filtered out {skipped_unactionable} "
+                               f"canceled/sold/no-address). Pass force=true to trace anyway.",
+                    "total": 0, "skipped_unactionable": skipped_unactionable}
 
     job_id = str(_uuid.uuid4())[:8]
     job = {
@@ -876,7 +900,8 @@ def auctions_skip_trace_bulk(payload: dict = Body(default={})):
             _SKIP_JOBS[job_id]["current"] = None
 
     _threading.Thread(target=_worker, daemon=True).start()
-    return {"ok": True, "job_id": job_id, "total": len(items)}
+    return {"ok": True, "job_id": job_id, "total": len(items),
+            "skipped_unactionable": skipped_unactionable}
 
 
 @app.get("/api/auctions/skip-trace-bulk/{job_id}")
@@ -1396,6 +1421,92 @@ def ai_task_run(payload: dict = Body(...)):
             d["ai_insights"] = insights
             db.upsert_deal(d)
     return out
+
+
+@app.post("/api/ai/run-all")
+def ai_run_all(payload: dict = Body(...)):
+    """Run the full research tier IN PARALLEL, then the verdict.
+
+    Body: {deal_id: <id>}  (a saved deal is required to persist insights)
+
+    This is the real "multi-agent" path: the 7 independent research tasks
+    (arv, rehab, rent_comps, neighborhood, taxes_insurance, history, risks)
+    plus photos + red_flags run concurrently instead of one-at-a-time, then
+    the verdict runs once with all insights available. ~8 s instead of 30 s+.
+    """
+    import concurrent.futures as _cf
+
+    if not ai_research.is_configured():
+        raise HTTPException(400, "AI not configured. Add an Anthropic API key in Settings → AI.")
+    deal_id = payload.get("deal_id")
+    if not deal_id:
+        raise HTTPException(400, "deal_id is required for run-all")
+    deal = db.get_deal(deal_id)
+    if not deal:
+        raise HTTPException(404, "Deal not found")
+
+    # Independent tasks that can run concurrently (verdict excluded — it depends).
+    INDEPENDENT = ["arv", "rehab", "rent_comps", "neighborhood",
+                   "taxes_insurance", "history", "risks", "photos", "red_flags"]
+
+    results = {}
+    full_outputs = {}
+    web_searches = 0
+
+    def _run_one(name):
+        return name, ai_tasks.run_task(name, deal)
+
+    # Cap concurrency to stay within Anthropic rate limits.
+    with _cf.ThreadPoolExecutor(max_workers=5) as ex:
+        futures = [ex.submit(_run_one, n) for n in INDEPENDENT]
+        for fut in _cf.as_completed(futures):
+            try:
+                name, out = fut.result()
+            except Exception:
+                continue
+            full_outputs[name] = out
+            results[name] = {"ok": out.get("ok"), "error": out.get("error")}
+            if out.get("ok"):
+                web_searches += out.get("web_searches_used") or 0
+
+    # Persist every successful insight ONCE, single-threaded (no JSON race).
+    d = db.get_deal(deal_id)
+    insights = d.get("ai_insights") or {}
+    for name, out in full_outputs.items():
+        if out.get("ok"):
+            insights[name] = {
+                "result": out.get("result"),
+                "model": out.get("model"),
+                "usage": out.get("usage"),
+                "web_searches_used": out.get("web_searches_used"),
+                "ran_at": _dt.utcnow().isoformat() + "Z",
+            }
+    d["ai_insights"] = insights
+    db.upsert_deal(d)
+
+    # Verdict LAST, with the enriched deal context (it reads ai_insights).
+    verdict_out = ai_tasks.run_task("verdict", db.get_deal(deal_id))
+    if verdict_out.get("ok"):
+        web_searches += verdict_out.get("web_searches_used") or 0
+        d = db.get_deal(deal_id)
+        insights = d.get("ai_insights") or {}
+        insights["verdict"] = {
+            "result": verdict_out.get("result"),
+            "model": verdict_out.get("model"),
+            "usage": verdict_out.get("usage"),
+            "web_searches_used": verdict_out.get("web_searches_used"),
+            "ran_at": _dt.utcnow().isoformat() + "Z",
+        }
+        d["ai_insights"] = insights
+        db.upsert_deal(d)
+
+    return {
+        "ok": True,
+        "ran": INDEPENDENT + ["verdict"],
+        "results": results,
+        "verdict": verdict_out,
+        "total_web_searches": web_searches,
+    }
 
 
 # ---- LEADS endpoints ----

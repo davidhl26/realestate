@@ -92,6 +92,8 @@ const API = (() => {
     aiTasks: () => req("/api/ai/tasks"),
     aiRun: (task, dealId, deal) => req("/api/ai/run",
       { method: "POST", body: JSON.stringify(deal ? { task, deal } : { task, deal_id: dealId }) }),
+    aiRunAll: (dealId) => req("/api/ai/run-all",
+      { method: "POST", body: JSON.stringify({ deal_id: dealId }) }),
     aiClearInsight: (dealId, task) => req(
       `/api/ai/insight/${encodeURIComponent(dealId)}/${encodeURIComponent(task)}`,
       { method: "DELETE" }),

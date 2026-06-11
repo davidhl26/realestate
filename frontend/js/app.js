@@ -2100,20 +2100,26 @@
     </div>`;
   }
 
-  // Run full analysis = run 5 key tasks sequentially
+  // Run full analysis = parallel research tier + verdict (one backend call)
   $("#ai-run-research")?.addEventListener("click", async () => {
     if (!state.currentDealId) return;
-    const sequence = ["arv", "rehab", "neighborhood", "risks", "verdict"];
-    if (!confirm(`Run ${sequence.length} AI tasks in sequence?\nThis will take ~3-5 minutes and cost roughly $1.50-$2.50 (Opus 4.7).`)) return;
+    if (!confirm(`Run the full AI analysis (9 research tasks in parallel + verdict)?\nTakes ~10-20 s. Cost ~$1.50-$2.50 (Opus 4.7).`)) return;
     const btn = $("#ai-run-research");
     btn.disabled = true;
-    for (const t of sequence) {
-      btn.innerHTML = `<span class="spinner"></span> ${aiTaskRegistry.find(x => x.name === t)?.label || t}...`;
-      try { await runAiTask(t); }
-      catch (e) { toast("Stopped: " + e.message, "error"); break; }
+    btn.innerHTML = `<span class="spinner"></span> Analyse parallèle en cours…`;
+    try {
+      const r = await API.aiRunAll(state.currentDealId);
+      const ok = Object.values(r.results || {}).filter(x => x.ok).length;
+      const tot = Object.keys(r.results || {}).length;
+      toast(`✓ Analyse complète : ${ok}/${tot} recherches + verdict · ${r.total_web_searches || 0} web searches`, "success");
+      // Refresh the deal detail so all new insights + verdict show.
+      if (typeof openDeal === "function") await openDeal(state.currentDealId);
+    } catch (e) {
+      toast("Échec analyse : " + e.message, "error");
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke-linejoin="round"/></svg> Run full analysis`;
     }
-    btn.disabled = false;
-    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke-linejoin="round"/></svg> Run full analysis`;
   });
 
   $("#ai-clear-all")?.addEventListener("click", async () => {

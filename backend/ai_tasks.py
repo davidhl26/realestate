@@ -153,33 +153,32 @@ def _wrap(text_result: dict, parsed: Any) -> dict:
 # TASK 1 — ARV RESEARCH (also in ai_research.py; re-implemented for uniformity)
 # ============================================================================
 
-ARV_SYSTEM = """You are a real-estate analyst specializing in residential property valuation for fix-and-flip investors.
-
-Use web_search aggressively. Find 3-6 recently-sold comparable properties (last 6-12 months) within ~0.5 miles. Match on bedroom count (±1), bathroom count (±0.5), square footage (±20%), property type, condition (renovated). Adjust for size differences via local $/sqft.
-
-Output a single JSON code block matching this schema EXACTLY (no text after):
-{
-  "arv_low": <int>,
-  "arv_base": <int>,
-  "arv_high": <int>,
-  "confidence": "Low"|"Medium"|"High",
-  "reasoning": "<2-3 sentences>",
-  "comparables": [
-    {"address": "...", "beds": <int>, "baths": <float>, "sqft": <int>, "price": <int>, "date": "<YYYY-MM>", "notes": "..."},
-    ...
-  ],
-  "market_notes": "<1-2 sentences>",
-  "warnings": ["..."]
-}"""
-
-
 def task_arv(deal: dict) -> dict:
-    user = (f"Estimate ARV for this property after a mid-grade renovation.\n\n"
-             f"{_summary(deal)}\n\nFind real comparable sales and produce ARV low/base/high.")
-    r = _run_claude(ARV_SYSTEM, user, max_tokens=2500)
+    """ARV research. Single source of truth: delegates to
+    ai_research.research_arv() (web_search + comps) so there is ONE ARV prompt
+    to maintain. Adapts the flat research output into the task envelope shape
+    {ok, result:{...}, model, usage, web_searches_used} the UI expects."""
+    from . import ai_research
+    r = ai_research.research_arv(deal)
     if not r.get("ok"):
         return r
-    return _wrap(r, _extract_json(r["text"]) or {"error": "parse failed", "raw": r["text"][:1500]})
+    result = {
+        "arv_low": r.get("arv_low"),
+        "arv_base": r.get("arv_base"),
+        "arv_high": r.get("arv_high"),
+        "confidence": r.get("confidence", "Medium"),
+        "reasoning": r.get("reasoning", ""),
+        "comparables": r.get("comparables", []),
+        "market_notes": r.get("market_notes", ""),
+        "warnings": r.get("warnings", []),
+    }
+    return {
+        "ok": True,
+        "result": result,
+        "model": r.get("model"),
+        "usage": r.get("usage", {}),
+        "web_searches_used": r.get("web_searches_used", 0),
+    }
 
 
 # ============================================================================
@@ -464,7 +463,10 @@ Output JSON only:
 def task_photos(deal: dict) -> dict:
     images = deal.get("image_gallery") or ([deal["image"]] if deal.get("image") else [])
     if not images:
-        return {"ok": False, "error": "No photos available for this deal."}
+        # Graceful skip — a deal without photos must NOT block the verdict.
+        return {"ok": True, "result": {"skipped": True, "reason": "no_images",
+                                        "note": "No photos available — visual rehab scope not assessed."},
+                "model": None, "usage": {}, "web_searches_used": 0}
     user = (f"Analyze these {len(images[:6])} photos of the property and report scope:\n\n"
              f"{_summary(deal, include_anchors=False)}")
     r = _run_claude(PHOTO_SYSTEM, user, max_tokens=3000, use_web=False, vision_images=images)

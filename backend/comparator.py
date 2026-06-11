@@ -180,22 +180,6 @@ def compute_deal_metrics(deal: dict, brrrr_rate: float = 7.5,
 # Flip Score (skill methodology — 7 weighted dimensions, 100 pts total)
 # ============================================================================
 
-def _grade_letter(score: int) -> str:
-    if score >= 85: return "A+"
-    if score >= 70: return "A"
-    if score >= 55: return "B"
-    if score >= 40: return "C"
-    if score >= 25: return "D"
-    return "F"
-
-
-def _signal(score: int) -> str:
-    if score >= 70: return "GOOD FLIP"
-    if score >= 55: return "POSSIBLE"
-    if score >= 40: return "MARGINAL"
-    return "AVOID"
-
-
 def compute_flip_score(m: dict) -> dict:
     """Score a deal across the 7 dimensions. Returns the breakdown + total."""
     breakdown = {}
@@ -252,24 +236,29 @@ def compute_flip_score(m: dict) -> dict:
     breakdown["neighborhood"] = {"pts": pts, "max": 10,
                                    "label": f"Crime {m.get('crime_rating', 'C')}"}
 
-    # 7. Exit Optionality (5 pts)
-    exits = 0
-    if m["roi"] > 0.05: exits += 1
-    if m["cap_rate"] >= 0.07: exits += 1
-    if m["monthly_cf_brrrr"] >= 100: exits += 1
-    if m["rule_status"] == "PASS" or m["rule_overage"] < 15000: exits += 1
-    if exits >= 4: pts = 5
-    elif exits >= 2: pts = 3
-    elif exits >= 1: pts = 1
-    else: pts = 0
+    # 7. Exit Optionality (5 pts) — uses the CANONICAL shared scorer so the
+    # compare view grades exits exactly like the detail view.
+    from . import analyzer
+    pts = analyzer.score_exit_optionality(
+        roi_pct=m["roi"] * 100,
+        cap_rate_pct=m["cap_rate"] * 100,
+        brrrr_cf=m["monthly_cf_brrrr"],
+        rule_70_pass=(m["rule_status"] == "PASS"),
+        rule_70_overage=m["rule_overage"],
+    )
+    # Recover the viable-exit count for the label
+    _ev = sum([m["roi"] * 100 > 5, m["cap_rate"] * 100 >= 7,
+               m["monthly_cf_brrrr"] >= 100,
+               (m["rule_status"] == "PASS" or m["rule_overage"] < 15000)])
     breakdown["exit_optionality"] = {"pts": pts, "max": 5,
-                                       "label": f"{exits}/4 viable exits"}
+                                       "label": f"{_ev}/4 viable exits"}
 
     total = sum(b["pts"] for b in breakdown.values())
+    grade, signal = analyzer.grade_and_signal(total)
     return {
         "score": total,
-        "grade": _grade_letter(total),
-        "signal": _signal(total),
+        "grade": grade,
+        "signal": signal,
         "breakdown": breakdown,
     }
 

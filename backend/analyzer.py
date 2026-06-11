@@ -226,11 +226,49 @@ def compute_metrics(deal: dict) -> dict:
     return m
 
 
+def grade_and_signal(score: int) -> tuple:
+    """CANONICAL score→(grade, signal) mapping. Single source of truth used by
+    BOTH the per-deal scorer (compute_score) and the comparison engine
+    (comparator.compute_flip_score) so a deal NEVER shows a different signal in
+    the detail view vs the compare view."""
+    score = max(0, min(100, int(round(score))))
+    if score >= 85:
+        return "A+", "SLAM DUNK"
+    if score >= 70:
+        return "A", "GOOD FLIP"
+    if score >= 55:
+        return "B", "POSSIBLE"
+    if score >= 40:
+        return "C", "RISKY"
+    if score >= 25:
+        return "D", "MARGINAL"
+    return "F", "NO DEAL"
+
+
+def score_exit_optionality(roi_pct: float, cap_rate_pct: float,
+                            brrrr_cf: float, rule_70_pass: bool,
+                            rule_70_overage: float) -> int:
+    """CANONICAL exit-optionality score (0-5 pts). Counts how many of the four
+    exit strategies are genuinely viable. Shared by compute_score and the
+    comparator so both grade exits identically."""
+    exits = 0
+    if roi_pct > 5:               exits += 1   # flip works
+    if cap_rate_pct >= 7:         exits += 1   # rental cap acceptable
+    if brrrr_cf >= 100:           exits += 1   # BRRRR cash-flows
+    if rule_70_pass or rule_70_overage < 15000:  exits += 1  # acquisition headroom
+    if exits >= 4:   return 5
+    if exits >= 2:   return 3
+    if exits >= 1:   return 1
+    return 0
+
+
 def compute_score(deal: dict, m: dict) -> tuple:
-    """Returns (score 0-100, grade A+ to F, signal)."""
+    """Returns (score 0-100, grade A+ to F, signal). ROI here is in PERCENT
+    (m['roi']). Exit-optionality and the grade/signal mapping are shared with
+    the comparator to guarantee identical results everywhere."""
     score = 0
 
-    # Margin & ROI (30 pts)
+    # Margin & ROI (30 pts)  — m["roi"] is a percent
     roi = m["roi"]
     if roi >= 25:
         score += 30
@@ -266,6 +304,8 @@ def compute_score(deal: dict, m: dict) -> tuple:
     scope = (deal.get("rehab_scope") or "Mid-level").lower()
     if "cosmetic" in scope or "light" in scope:
         score += 10
+    elif "gut" in scope or "full" in scope or "heavy" in scope:
+        score += 4
     elif "mid" in scope:
         score += 7
     else:
@@ -274,30 +314,17 @@ def compute_score(deal: dict, m: dict) -> tuple:
     crime = (deal.get("crime_rating") or "C").upper()
     crime_score = {"A": 10, "B": 8, "C": 5, "D": 2, "F": 0}
     score += crime_score.get(crime[0] if crime else "C", 5)
-    # Exit optionality (5 pts)
-    score += min(5, len(m["recommended_strategy"]) * 2)
+    # Exit optionality (5 pts) — rigorous 4-strategy check (shared w/ comparator)
+    score += score_exit_optionality(
+        roi_pct=roi,
+        cap_rate_pct=m["rent"]["cap_rate"],
+        brrrr_cf=m["brrrr"]["monthly_cash_flow"],
+        rule_70_pass=m["rule_70_pass"],
+        rule_70_overage=m["rule_70_overage"],
+    )
 
     score = max(0, min(100, int(round(score))))
-
-    if score >= 85:
-        grade = "A+"
-        signal = "SLAM DUNK"
-    elif score >= 70:
-        grade = "A"
-        signal = "GOOD FLIP"
-    elif score >= 55:
-        grade = "B"
-        signal = "POSSIBLE"
-    elif score >= 40:
-        grade = "C"
-        signal = "RISKY"
-    elif score >= 25:
-        grade = "D"
-        signal = "MARGINAL"
-    else:
-        grade = "F"
-        signal = "NO DEAL"
-
+    grade, signal = grade_and_signal(score)
     return score, grade, signal
 
 
