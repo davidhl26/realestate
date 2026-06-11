@@ -1249,7 +1249,7 @@
   ];
   const METHOD_DEFAULTS = {
     cash:         { ltv_pct: 0,  interest_rate_pct: 0,    origination_pct: 0,   term_months: 0,  rehab_financed: false },
-    hard_money:   { ltv_pct: 85, interest_rate_pct: 11.5, origination_pct: 2.5, term_months: 6,  rehab_financed: true  },
+    hard_money:   { ltv_pct: 75, interest_rate_pct: 9.0,  origination_pct: 1.0, term_months: 6,  rehab_financed: true  },
     private:      { ltv_pct: 80, interest_rate_pct: 9.0,  origination_pct: 1.0, term_months: 12, rehab_financed: true  },
     conventional: { ltv_pct: 80, interest_rate_pct: 7.5,  origination_pct: 1.0, term_months: 360, rehab_financed: false },
     heloc:        { ltv_pct: 100, interest_rate_pct: 9.5, origination_pct: 0.0, term_months: 12, rehab_financed: true  },
