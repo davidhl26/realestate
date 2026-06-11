@@ -1313,8 +1313,25 @@ https://app.ispeedtolead.com/deal-speed/property/...
         <div id="ai-status" class="status-line"></div>
 
         <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--divider);">
+          <label style="display:block; font-weight:600; margin-bottom:4px;">📸 ScraperAPI key
+            <span style="font-weight:400; color:var(--muted); font-size:12px;">— pour les photos Zillow automatiques</span>
+          </label>
+          <p class="muted" style="font-size:12px; margin:0 0 8px;">
+            Zillow bloque le scraping direct (anti-bot). Avec une clé <strong>ScraperAPI</strong>
+            (gratuite, 1000 req/mois), chaque URL Zillow charge <strong>toutes les photos automatiquement</strong>.
+            Inscription 2 min : <a href="https://www.scraperapi.com/signup" target="_blank" style="color:var(--accent); font-weight:600;">scraperapi.com/signup</a>
+            → copie ta clé du dashboard.
+          </p>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <input type="password" id="proxy-key-input" placeholder="clé ScraperAPI…" style="flex:1;">
+            <button type="button" id="proxy-key-save" class="btn primary">Save</button>
+          </div>
+          <div id="proxy-status" class="status-line"></div>
+        </div>
+
+        <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--divider);">
           <label style="display:block; font-weight:600; margin-bottom:4px;">Google Maps key
-            <span style="font-weight:400; color:var(--muted); font-size:12px;">— optionnel</span>
+            <span style="font-weight:400; color:var(--muted); font-size:12px;">— optionnel (photo extérieure de secours)</span>
           </label>
           <p class="muted" style="font-size:12px; margin:0 0 8px;">
             Quand un site (Zillow…) bloque le scraping, on attache une <strong>photo Street View</strong>

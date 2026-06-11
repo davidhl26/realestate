@@ -1315,6 +1315,7 @@ def ai_config_get():
     key = os.environ.get("ANTHROPIC_API_KEY") or cfg.get("anthropic_api_key", "")
     source = "env" if os.environ.get("ANTHROPIC_API_KEY") else "file"
     maps_key = ai_research.get_maps_key()
+    proxy_key = ai_research.get_scraper_proxy_key()
     return {
         "configured": bool(key),
         "key_preview": (key[:8] + "..." + key[-4:]) if key else "",
@@ -1322,6 +1323,8 @@ def ai_config_get():
         "source": source,
         "maps_configured": bool(maps_key),
         "maps_key_preview": (maps_key[:6] + "..." + maps_key[-4:]) if maps_key else "",
+        "proxy_configured": bool(proxy_key),
+        "proxy_key_preview": (proxy_key[:6] + "..." + proxy_key[-4:]) if proxy_key else "",
     }
 
 
@@ -1334,6 +1337,8 @@ def ai_config_set(payload: dict = Body(...)):
         cfg["model"] = (payload["model"] or "claude-opus-4-7").strip()
     if "google_maps_key" in payload:
         cfg["google_maps_key"] = (payload["google_maps_key"] or "").strip()
+    if "scraper_api_key" in payload:
+        cfg["scraper_api_key"] = (payload["scraper_api_key"] or "").strip()
     ai_research.write_config(cfg)
     return {"ok": True}
 

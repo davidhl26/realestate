@@ -2892,6 +2892,18 @@
         ? `✓ Configured with ${cfg.model || 'claude-opus-4-7'}`
         : "Not configured — AI ARV research is disabled.";
       $("#ai-status").className = cfg.configured ? "status-line success" : "status-line";
+      // ScraperAPI proxy status (Zillow photos)
+      const pk = $("#proxy-key-input");
+      const ps = $("#proxy-status");
+      if (pk) pk.placeholder = cfg.proxy_configured
+        ? `Configured (${cfg.proxy_key_preview}) — re-enter to update`
+        : "clé ScraperAPI…";
+      if (ps) {
+        ps.textContent = cfg.proxy_configured
+          ? "✓ Photos Zillow automatiques activées — colle une URL, toutes les photos arrivent."
+          : "Sans clé : Zillow bloque, seule l'adresse est récupérée (+ Street View si clé Maps).";
+        ps.className = cfg.proxy_configured ? "status-line success" : "status-line";
+      }
       // Maps key status
       const mk = $("#maps-key-input");
       const ms = $("#maps-status");
@@ -2906,6 +2918,16 @@
       }
     } catch {}
   }
+  $("#proxy-key-save")?.addEventListener("click", async () => {
+    const key = ($("#proxy-key-input")?.value || "").trim();
+    if (!key) { toast("Colle ta clé ScraperAPI", "warn"); return; }
+    try {
+      await API.saveAiConfig({ scraper_api_key: key });
+      toast("Clé ScraperAPI enregistrée — photos Zillow automatiques activées", "success");
+      $("#proxy-key-input").value = "";
+      refreshAiConfig();
+    } catch (err) { toast(err.message, "error"); }
+  });
   $("#maps-key-save")?.addEventListener("click", async () => {
     const key = ($("#maps-key-input")?.value || "").trim();
     if (!key) { toast("Colle une clé Google Maps", "warn"); return; }

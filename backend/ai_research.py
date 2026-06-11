@@ -64,6 +64,14 @@ def get_maps_key() -> Optional[str]:
             or read_config().get("google_maps_key") or None)
 
 
+def get_scraper_proxy_key() -> Optional[str]:
+    """ScraperAPI key (optional). When set, Zillow/Redfin fetches route through
+    a residential-IP proxy that solves PerimeterX, returning the full listing
+    page WITH all photos. Free tier ~1000 requests/month."""
+    return (os.environ.get("SCRAPER_API_KEY")
+            or read_config().get("scraper_api_key") or None)
+
+
 def is_configured() -> bool:
     return bool(get_api_key())
 

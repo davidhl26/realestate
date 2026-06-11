@@ -84,11 +84,33 @@ def detect_site(url: str) -> str:
     return "unknown"
 
 
-def _fetch(url: str, extra_headers: Optional[dict] = None) -> str:
-    """Fetch HTML with realistic headers. Raises on non-200."""
+def _fetch(url: str, extra_headers: Optional[dict] = None,
+           allow_proxy: bool = False) -> str:
+    """Fetch HTML with realistic headers. Raises on non-200.
+
+    If allow_proxy=True AND a scraping-proxy API key is configured, the request
+    is routed through ScraperAPI (residential IPs + anti-bot solving) so sites
+    like Zillow/Redfin that block direct datacenter requests with PerimeterX
+    return the full page — including all listing photos."""
     headers = dict(HEADERS)
     if extra_headers:
         headers.update(extra_headers)
+
+    if allow_proxy:
+        try:
+            from . import ai_research
+            pkey = ai_research.get_scraper_proxy_key()
+        except Exception:
+            pkey = None
+        if pkey:
+            from urllib.parse import quote
+            proxy_url = (f"http://api.scraperapi.com/?api_key={pkey}"
+                          f"&render=true&country_code=us&url={quote(url, safe='')}")
+            with httpx.Client(follow_redirects=True, timeout=70) as c:
+                r = c.get(proxy_url)
+                r.raise_for_status()
+                return r.text
+
     with httpx.Client(follow_redirects=True, timeout=30) as c:
         r = c.get(url, headers=headers)
         r.raise_for_status()
@@ -1341,8 +1363,11 @@ def scrape(url: str) -> dict:
     else:
         html = None
         fetch_error = None
+        # Zillow/Redfin block datacenter IPs → route through the scraping proxy
+        # if a key is configured (gets the full page + all photos).
+        use_proxy = site in ("zillow", "redfin")
         try:
-            html = _fetch(url)
+            html = _fetch(url, allow_proxy=use_proxy)
         except httpx.HTTPStatusError as e:
             fetch_error = f"HTTP {e.response.status_code} from {site}"
         except httpx.RequestError as e:
