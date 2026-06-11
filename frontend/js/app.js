@@ -2892,8 +2892,30 @@
         ? `✓ Configured with ${cfg.model || 'claude-opus-4-7'}`
         : "Not configured — AI ARV research is disabled.";
       $("#ai-status").className = cfg.configured ? "status-line success" : "status-line";
+      // Maps key status
+      const mk = $("#maps-key-input");
+      const ms = $("#maps-status");
+      if (mk) mk.placeholder = cfg.maps_configured
+        ? `Configured (${cfg.maps_key_preview}) — re-enter to update`
+        : "AIzaSy…";
+      if (ms) {
+        ms.textContent = cfg.maps_configured
+          ? "✓ Street View activé — photo extérieure quand un listing est bloqué."
+          : "Optionnel — sans clé, pas de photo de secours.";
+        ms.className = cfg.maps_configured ? "status-line success" : "status-line";
+      }
     } catch {}
   }
+  $("#maps-key-save")?.addEventListener("click", async () => {
+    const key = ($("#maps-key-input")?.value || "").trim();
+    if (!key) { toast("Colle une clé Google Maps", "warn"); return; }
+    try {
+      await API.saveAiConfig({ google_maps_key: key });
+      toast("Clé Google Maps enregistrée — Street View activé", "success");
+      $("#maps-key-input").value = "";
+      refreshAiConfig();
+    } catch (err) { toast(err.message, "error"); }
+  });
   $("#ai-config-form")?.addEventListener("submit", async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);

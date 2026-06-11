@@ -1314,11 +1314,14 @@ def ai_config_get():
     # Prefer env var if present (production), fall back to file (local dev)
     key = os.environ.get("ANTHROPIC_API_KEY") or cfg.get("anthropic_api_key", "")
     source = "env" if os.environ.get("ANTHROPIC_API_KEY") else "file"
+    maps_key = ai_research.get_maps_key()
     return {
         "configured": bool(key),
         "key_preview": (key[:8] + "..." + key[-4:]) if key else "",
         "model": cfg.get("model", "claude-opus-4-7"),
         "source": source,
+        "maps_configured": bool(maps_key),
+        "maps_key_preview": (maps_key[:6] + "..." + maps_key[-4:]) if maps_key else "",
     }
 
 
@@ -1329,6 +1332,8 @@ def ai_config_set(payload: dict = Body(...)):
         cfg["anthropic_api_key"] = (payload["anthropic_api_key"] or "").strip()
     if "model" in payload:
         cfg["model"] = (payload["model"] or "claude-opus-4-7").strip()
+    if "google_maps_key" in payload:
+        cfg["google_maps_key"] = (payload["google_maps_key"] or "").strip()
     ai_research.write_config(cfg)
     return {"ok": True}
 

@@ -1311,6 +1311,23 @@ https://app.ispeedtolead.com/deal-speed/property/...
           <label>&nbsp;<button type="submit" class="btn primary">Save</button></label>
         </form>
         <div id="ai-status" class="status-line"></div>
+
+        <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--divider);">
+          <label style="display:block; font-weight:600; margin-bottom:4px;">Google Maps key
+            <span style="font-weight:400; color:var(--muted); font-size:12px;">— optionnel</span>
+          </label>
+          <p class="muted" style="font-size:12px; margin:0 0 8px;">
+            Quand un site (Zillow…) bloque le scraping, on attache une <strong>photo Street View</strong>
+            de la maison à partir de l'adresse. Clé gratuite (tier généreux) :
+            <a href="https://console.cloud.google.com/google/maps-apis/credentials" target="_blank" style="color:var(--accent); font-weight:600;">console.cloud.google.com</a>
+            — active <em>Street View Static API</em>.
+          </p>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <input type="password" id="maps-key-input" placeholder="AIzaSy…" style="flex:1;">
+            <button type="button" id="maps-key-save" class="btn primary">Save</button>
+          </div>
+          <div id="maps-status" class="status-line"></div>
+        </div>
       </div>
 
       <div class="card">

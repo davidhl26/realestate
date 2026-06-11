@@ -168,6 +168,14 @@ _STREET_SUFFIXES = {
 }
 
 
+def street_view_image_url(address: str, key: str, size: str = "800x600") -> str:
+    """Build a Google Street View Static image URL for an address. Gives an
+    exterior photo of the property when the listing site blocks scraping."""
+    from urllib.parse import quote_plus
+    return (f"https://maps.googleapis.com/maps/api/streetview?size={size}"
+            f"&location={quote_plus(address)}&fov=80&pitch=0&key={key}")
+
+
 def parse_zillow_url_slug(url: str) -> dict:
     """Extract address/city/state/zip directly from a Zillow homedetails URL —
     works even when Zillow returns 403/captcha (PerimeterX), because the full
@@ -1452,4 +1460,21 @@ def scrape(url: str) -> dict:
         deal_seed["external_link"] = data["external_link"]
     if data.get("property_id"):
         deal_seed["external_id"] = data["property_id"]
+
+    # Photo fallback: if the listing blocked us (no photos) but we have an
+    # address and a Google Maps key, attach a Street View exterior photo so the
+    # deal/lead is never photoless.
+    if not deal_seed.get("image") and not deal_seed.get("image_gallery"):
+        addr = deal_seed.get("address")
+        if addr:
+            try:
+                from . import ai_research
+                gkey = ai_research.get_maps_key()
+                if gkey:
+                    sv = street_view_image_url(addr, gkey)
+                    deal_seed["image"] = sv
+                    deal_seed["image_gallery"] = [sv]
+                    deal_seed["image_source"] = "street_view"
+            except Exception:
+                pass
     return deal_seed

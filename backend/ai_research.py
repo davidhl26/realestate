@@ -57,6 +57,13 @@ def get_model() -> str:
     return read_config().get("model") or "claude-opus-4-7"
 
 
+def get_maps_key() -> Optional[str]:
+    """Google Maps Static / Street View API key (optional). Used to fetch an
+    exterior property photo when a listing site (e.g. Zillow) blocks scraping."""
+    return (os.environ.get("GOOGLE_MAPS_KEY")
+            or read_config().get("google_maps_key") or None)
+
+
 def is_configured() -> bool:
     return bool(get_api_key())
 
