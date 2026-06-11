@@ -159,6 +159,64 @@ def _safe_get(d, *path, default=None):
     return cur if cur is not None else default
 
 
+_STREET_SUFFIXES = {
+    "st", "street", "ave", "avenue", "rd", "road", "dr", "drive", "ln", "lane",
+    "ct", "court", "pl", "place", "way", "blvd", "boulevard", "cir", "circle",
+    "ter", "terrace", "hwy", "highway", "pkwy", "parkway", "trl", "trail",
+    "pt", "point", "sq", "square", "run", "path", "loop", "xing", "crossing",
+    "cv", "cove", "pike", "row", "walk", "bnd", "bend", "psge", "pass",
+}
+
+
+def parse_zillow_url_slug(url: str) -> dict:
+    """Extract address/city/state/zip directly from a Zillow homedetails URL —
+    works even when Zillow returns 403/captcha (PerimeterX), because the full
+    address lives in the URL path itself, e.g.:
+      /homedetails/889-E-128th-St-Cleveland-OH-44108/33392655_zpid/
+    Returns {street, city, state, zip, address, property_id} or {} if not a
+    parseable homedetails URL."""
+    import re as _re
+    m = _re.search(r"/homedetails/([^/]+)/(\d+)_zpid", url, _re.I)
+    if not m:
+        return {}
+    slug, zpid = m.group(1), m.group(2)
+    tokens = [t for t in slug.split("-") if t]
+    if len(tokens) < 4:
+        return {}
+
+    out = {"property_id": zpid, "source": "zillow"}
+    # ZIP = last token if 5 digits
+    zipc = ""
+    if _re.fullmatch(r"\d{5}", tokens[-1]):
+        zipc = tokens[-1]
+        tokens = tokens[:-1]
+    # STATE = last token if 2 letters
+    state = ""
+    if tokens and _re.fullmatch(r"[A-Za-z]{2}", tokens[-1]):
+        state = tokens[-1].upper()
+        tokens = tokens[:-1]
+    # Remaining = street + city. Split on the LAST street suffix.
+    suffix_idx = -1
+    for i, t in enumerate(tokens):
+        if t.lower() in _STREET_SUFFIXES:
+            suffix_idx = i
+    if suffix_idx >= 0:
+        street = " ".join(tokens[: suffix_idx + 1])
+        city = " ".join(tokens[suffix_idx + 1:])
+    else:
+        # No recognizable suffix — assume last token is the city.
+        street = " ".join(tokens[:-1]) if len(tokens) > 1 else " ".join(tokens)
+        city = tokens[-1] if len(tokens) > 1 else ""
+
+    out["street"] = street
+    out["city"] = city
+    out["state"] = state
+    out["zip"] = zipc
+    parts = [street, city, f"{state} {zipc}".strip()]
+    out["address"] = ", ".join(p for p in parts if p)
+    return out
+
+
 def parse_zillow(html: str) -> dict:
     """Parse a Zillow detail page."""
     soup = BeautifulSoup(html, "lxml")
@@ -1273,18 +1331,42 @@ def scrape(url: str) -> dict:
                     logging.getLogger("flip-board.scraper").exception(
                         "Browser scraper fallback failed")
     else:
+        html = None
+        fetch_error = None
         try:
             html = _fetch(url)
         except httpx.HTTPStatusError as e:
-            return {"error": f"HTTP {e.response.status_code} from {site}",
-                    "url": url, "requires_manual_entry": True}
+            fetch_error = f"HTTP {e.response.status_code} from {site}"
         except httpx.RequestError as e:
-            return {"error": f"Request failed: {e}",
-                    "url": url, "requires_manual_entry": True}
-        if site == "zillow":
-            data = parse_zillow(html)
-        else:
-            data = parse_redfin(html)
+            fetch_error = f"Request failed: {e}"
+
+        if fetch_error:
+            # Zillow/Redfin blocked us (403/PerimeterX). Salvage the address
+            # from the URL slug so the user can STILL create the lead/deal.
+            slug = parse_zillow_url_slug(url) if site == "zillow" else {}
+            if slug.get("address"):
+                slug["url"] = url
+                slug["scrape_error"] = (
+                    f"{fetch_error} — listing blocked, address recovered from URL. "
+                    "Fill price/ARV manually or use AI ARV research.")
+                slug["requires_manual_entry"] = True
+                slug["external_link"] = url
+                data = slug
+                html = None  # skip parse below
+            else:
+                return {"error": fetch_error, "url": url,
+                        "requires_manual_entry": True, "external_link": url}
+        if html is not None:
+            if site == "zillow":
+                data = parse_zillow(html)
+            else:
+                data = parse_redfin(html)
+            # Even on a 200 that yielded a captcha page, backfill from URL slug.
+            if site == "zillow" and data.get("requires_manual_entry") and not data.get("street"):
+                slug = parse_zillow_url_slug(url)
+                for k, v in slug.items():
+                    if v and not data.get(k):
+                        data[k] = v
 
     data["url"] = url
 
@@ -1356,7 +1438,13 @@ def scrape(url: str) -> dict:
             deal_seed[k] = data[k]
     if data.get("requires_manual_entry"):
         deal_seed["requires_manual_entry"] = True
-        if not data.get("error"):
+        if data.get("scrape_error"):
+            deal_seed["scrape_error"] = data["scrape_error"]
+        elif data.get("address"):
+            deal_seed["scrape_error"] = (
+                "Listing blocked by anti-bot — address recovered from the URL. "
+                "Fill price/ARV manually or run AI ARV research.")
+        elif not data.get("error"):
             deal_seed["scrape_error"] = "Captcha or anti-bot challenge detected"
     if data.get("error"):
         deal_seed["scrape_error"] = data["error"]
