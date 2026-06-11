@@ -1119,6 +1119,10 @@ https://app.ispeedtolead.com/deal-speed/property/...
           </div>
           <div style="display:flex; gap:8px; flex-wrap:wrap;">
             <input type="search" id="kanban-search" placeholder="Filter leads…" class="input" style="font-size:12px; padding:6px 10px; max-width:200px;">
+            <button class="btn" id="kanban-add-col-btn" title="Ajouter une colonne">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><rect x="3" y="4" width="6" height="16" rx="1"/><path d="M15 9v6M18 12h-6" stroke-linecap="round"/></svg>
+              + Colonne
+            </button>
             <button class="btn" id="kanban-add-from-deal">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M3 9h18M3 15h18M9 3v18M15 3v18" stroke-linecap="round"/></svg>
               + Depuis un deal
@@ -1150,6 +1154,43 @@ https://app.ispeedtolead.com/deal-speed/property/...
             </div>
           </div>
           <div id="kanban-picker-list" style="max-height:500px; overflow-y:auto;"></div>
+        </div>
+      </div>
+
+      <!-- ============ LEAD DETAIL MODAL (status + notes + comments) ============ -->
+      <div id="lead-modal" class="modal" style="display:none;">
+        <div class="modal-backdrop" id="lead-modal-backdrop"></div>
+        <div class="modal-content" style="max-width:560px;">
+          <header style="display:flex; align-items:flex-start; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--divider);">
+            <div>
+              <h3 id="lead-modal-title" style="margin:0; font-size:16px;">Lead</h3>
+              <p class="muted" id="lead-modal-sub" style="margin:4px 0 0; font-size:12px;"></p>
+            </div>
+            <button class="btn ghost" id="lead-modal-close" style="font-size:18px;">×</button>
+          </header>
+          <div style="padding:16px 20px; max-height:68vh; overflow-y:auto;">
+            <div class="form-grid" style="grid-template-columns:1fr auto; gap:12px; align-items:end;">
+              <label>Colonne / statut
+                <select id="lead-modal-status"></select>
+              </label>
+              <a id="lead-modal-opendeal" class="btn" style="display:none;">Ouvrir le deal →</a>
+            </div>
+            <label style="display:block; margin-top:12px;">Notes
+              <textarea id="lead-modal-notes" rows="3" style="width:100%; resize:vertical;"></textarea>
+            </label>
+            <div style="margin-top:16px; border-top:1px solid var(--divider); padding-top:12px;">
+              <h4 style="margin:0 0 10px; font-size:13px;">💬 Commentaires</h4>
+              <div id="lead-comments-list"></div>
+              <div style="display:flex; gap:8px; margin-top:10px;">
+                <input id="lead-comment-input" placeholder="Ajouter un commentaire…" autocomplete="off" style="flex:1;">
+                <button class="btn primary" id="lead-comment-add-btn">Ajouter</button>
+              </div>
+            </div>
+          </div>
+          <footer style="display:flex; justify-content:space-between; gap:10px; padding:14px 20px; border-top:1px solid var(--divider);">
+            <button class="btn danger" id="lead-modal-delete">Supprimer le lead</button>
+            <button class="btn primary" id="lead-modal-save">Enregistrer</button>
+          </footer>
         </div>
       </div>
     </section>

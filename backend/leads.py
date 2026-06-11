@@ -51,6 +51,29 @@ def _now():
     return datetime.utcnow().isoformat() + "Z"
 
 
+# Default kanban columns (used until the user customizes them).
+DEFAULT_COLUMNS = [
+    {"key": "new",         "label": "🆕 New",         "color": "#6b7280"},
+    {"key": "contacted",   "label": "📞 Contacted",   "color": "#3b82f6"},
+    {"key": "appointment", "label": "📅 Appointment", "color": "#f59e0b"},
+    {"key": "offer",       "label": "💰 Offer",       "color": "#8b5cf6"},
+    {"key": "closed",      "label": "✅ Closed",      "color": "#22c55e"},
+    {"key": "passed",      "label": "⏭ Passed",      "color": "#ef4444"},
+]
+_COLOR_PALETTE = ["#6b7280", "#3b82f6", "#f59e0b", "#8b5cf6", "#22c55e",
+                  "#ef4444", "#ec4899", "#14b8a6", "#eab308", "#0ea5e9"]
+
+
+def _col_key(label: str, taken: set) -> str:
+    """Make a unique slug key from a column label."""
+    base = re.sub(r"[^a-z0-9]+", "-", (label or "col").lower()).strip("-")[:30] or "col"
+    key, n = base, 1
+    while key in taken:
+        key = f"{base}-{n}"
+        n += 1
+    return key
+
+
 class LeadsDB:
     def __init__(self, path: Path):
         self.path = Path(path)
@@ -109,6 +132,65 @@ class LeadsDB:
             self._write(data)
             return True
         return False
+
+    # ---- Kanban columns (customizable) ----
+    def get_columns(self) -> list:
+        cols = self._read().get("columns")
+        return cols if cols else [dict(c) for c in DEFAULT_COLUMNS]
+
+    def set_columns(self, columns: list) -> list:
+        """Persist the column list. Sanitizes keys/colors and reassigns any
+        lead whose status no longer matches a column to the first column."""
+        clean, taken = [], set()
+        for i, c in enumerate(columns or []):
+            if not isinstance(c, dict):
+                continue
+            label = (c.get("label") or "").strip()
+            if not label:
+                continue
+            key = (c.get("key") or "").strip() or _col_key(label, taken)
+            if key in taken:
+                key = _col_key(label, taken)
+            taken.add(key)
+            color = c.get("color") or _COLOR_PALETTE[i % len(_COLOR_PALETTE)]
+            clean.append({"key": key, "label": label, "color": color})
+        if not clean:
+            clean = [dict(c) for c in DEFAULT_COLUMNS]
+        data = self._read()
+        data["columns"] = clean
+        valid = {c["key"] for c in clean}
+        fallback = clean[0]["key"]
+        for l in data["leads"]:
+            if l.get("status") not in valid:
+                l["status"] = fallback
+        data["updated"] = _now()
+        self._write(data)
+        return clean
+
+    # ---- Comments on a lead ----
+    def add_comment(self, lead_id: str, text: str) -> Optional[dict]:
+        data = self._read()
+        lead = next((l for l in data["leads"] if l["id"] == lead_id), None)
+        if not lead:
+            return None
+        lead.setdefault("comments", []).append({
+            "id": str(uuid.uuid4())[:8], "text": text, "created_at": _now(),
+        })
+        lead["updated_at"] = _now()
+        data["updated"] = _now()
+        self._write(data)
+        return lead
+
+    def delete_comment(self, lead_id: str, comment_id: str) -> Optional[dict]:
+        data = self._read()
+        lead = next((l for l in data["leads"] if l["id"] == lead_id), None)
+        if not lead:
+            return None
+        lead["comments"] = [c for c in lead.get("comments", []) if c.get("id") != comment_id]
+        lead["updated_at"] = _now()
+        data["updated"] = _now()
+        self._write(data)
+        return lead
 
     def aggregates(self) -> dict:
         leads = self._read().get("leads", [])

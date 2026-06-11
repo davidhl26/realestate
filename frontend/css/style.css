@@ -3670,12 +3670,13 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
 
 /* ============== LEADS KANBAN ============== */
 .kanban-board {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(220px, 1fr));
+  display: flex;
+  align-items: stretch;
   gap: 10px;
   overflow-x: auto;
   padding-bottom: 8px;
 }
+.kanban-col { flex: 0 0 240px; }
 .kanban-col {
   background: var(--surface-2);
   border-radius: 10px;
@@ -3700,6 +3701,39 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
   background: var(--card); color: var(--muted);
   padding: 1px 7px; border-radius: 10px; font-size: 10px;
 }
+.kanban-col-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kanban-col-tools { display: inline-flex; gap: 2px; opacity: 0; transition: opacity .12s; }
+.kanban-col:hover .kanban-col-tools { opacity: 1; }
+.kanban-col-btn {
+  background: none; border: none; cursor: pointer; color: var(--muted);
+  font-size: 13px; line-height: 1; padding: 2px 4px; border-radius: 5px;
+}
+.kanban-col-btn:hover { background: var(--card); color: var(--text); }
+/* "+ Colonne" tile at the end of the board */
+.kanban-add-col {
+  flex: 0 0 140px; min-height: 440px; border: 2px dashed var(--border);
+  background: transparent; border-radius: 10px; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 6px; color: var(--muted); font-weight: 600; transition: all .15s;
+}
+.kanban-add-col:hover { border-color: var(--accent); color: var(--accent); background: rgba(139,92,246,0.06); }
+.kanban-add-col span:first-child { font-size: 24px; line-height: 1; }
+.kanban-add-col-label { font-size: 12px; }
+.kanban-card-comments { background: var(--surface-2); color: var(--muted); border-radius: 8px; padding: 0 6px; }
+/* Lead comments in the detail modal */
+.lead-comment {
+  background: var(--surface-2); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px;
+}
+.lead-comment-text { font-size: 13px; line-height: 1.5; color: var(--text); white-space: pre-wrap; word-break: break-word; }
+.lead-comment-foot {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-top: 5px; font-size: 10.5px; color: var(--muted);
+}
+.lead-comment-del {
+  background: none; border: none; cursor: pointer; color: var(--muted);
+  font-size: 14px; line-height: 1; padding: 0 4px; border-radius: 4px;
+}
+.lead-comment-del:hover { background: var(--red); color: #fff; }
 .kanban-col[data-status="new"]         { border-top-color: #6b7280; }
 .kanban-col[data-status="contacted"]   { border-top-color: #3b82f6; }
 .kanban-col[data-status="appointment"] { border-top-color: #f59e0b; }

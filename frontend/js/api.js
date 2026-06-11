@@ -131,6 +131,14 @@ const API = (() => {
     leadPatch: (id, u) => req("/api/leads/" + encodeURIComponent(id),
       { method: "PATCH", body: JSON.stringify(u) }),
     leadDelete: (id) => req("/api/leads/" + encodeURIComponent(id), { method: "DELETE" }),
+    // ---- Kanban columns + comments ----
+    kanbanColumns: () => req("/api/kanban/columns"),
+    kanbanSetColumns: (columns) => req("/api/kanban/columns",
+      { method: "PUT", body: JSON.stringify({ columns }) }),
+    leadAddComment: (id, text) => req("/api/leads/" + encodeURIComponent(id) + "/comments",
+      { method: "POST", body: JSON.stringify({ text }) }),
+    leadDelComment: (id, cid) => req("/api/leads/" + encodeURIComponent(id) +
+      "/comments/" + encodeURIComponent(cid), { method: "DELETE" }),
     leadScrape: (url) => req("/api/leads/scrape",
       { method: "POST", body: JSON.stringify({ url }) }),
     leadAnalyze: (id) => req("/api/leads/" + encodeURIComponent(id) + "/analyze",

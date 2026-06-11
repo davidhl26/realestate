@@ -1560,6 +1560,40 @@ def leads_delete(lead_id: str):
     raise HTTPException(404, "Lead not found")
 
 
+# ---- Kanban columns (customizable) ----
+@app.get("/api/kanban/columns")
+def kanban_columns_get():
+    return leads_db.get_columns()
+
+
+@app.put("/api/kanban/columns")
+def kanban_columns_set(payload: dict = Body(...)):
+    cols = payload.get("columns")
+    if not isinstance(cols, list):
+        raise HTTPException(400, "columns (list) required")
+    return leads_db.set_columns(cols)
+
+
+# ---- Comments on a lead ----
+@app.post("/api/leads/{lead_id}/comments")
+def lead_add_comment(lead_id: str, payload: dict = Body(...)):
+    text = (payload.get("text") or "").strip()
+    if not text:
+        raise HTTPException(400, "text required")
+    l = leads_db.add_comment(lead_id, text[:2000])
+    if not l:
+        raise HTTPException(404, "Lead not found")
+    return l
+
+
+@app.delete("/api/leads/{lead_id}/comments/{comment_id}")
+def lead_delete_comment(lead_id: str, comment_id: str):
+    l = leads_db.delete_comment(lead_id, comment_id)
+    if not l:
+        raise HTTPException(404, "Lead not found")
+    return l
+
+
 @app.post("/api/leads/scrape")
 def leads_scrape(payload: dict = Body(...)):
     """Attempt to scrape an ispeedtolead lead URL via Playwright + cookies.

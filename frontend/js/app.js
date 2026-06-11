@@ -4591,13 +4591,14 @@
   }
 
   // ============== LEADS KANBAN ==============
-  const KANBAN_STATUSES = [
-    { key: "new",         label: "🆕 New",        desc: "Just imported" },
-    { key: "contacted",   label: "📞 Contacted",  desc: "Reached out" },
-    { key: "appointment", label: "📅 Appointment", desc: "Meeting set" },
-    { key: "offer",       label: "💰 Offer",      desc: "Offer sent" },
-    { key: "closed",      label: "✅ Closed",     desc: "Under contract" },
-    { key: "passed",      label: "⏭ Passed",     desc: "Skipped" },
+  // Columns are customizable and persisted server-side (/api/kanban/columns).
+  let _kanbanColumns = [
+    { key: "new",         label: "🆕 New",         color: "#6b7280" },
+    { key: "contacted",   label: "📞 Contacted",   color: "#3b82f6" },
+    { key: "appointment", label: "📅 Appointment", color: "#f59e0b" },
+    { key: "offer",       label: "💰 Offer",       color: "#8b5cf6" },
+    { key: "closed",      label: "✅ Closed",      color: "#22c55e" },
+    { key: "passed",      label: "⏭ Passed",      color: "#ef4444" },
   ];
   let _kanbanLeadsCache = [];
   let _kanbanSearchFilter = "";
@@ -4606,12 +4607,47 @@
     const board = $("#leads-kanban");
     if (!board) return;
     try {
-      _kanbanLeadsCache = await API.leadsList();
+      const [cols, leads] = await Promise.all([API.kanbanColumns(), API.leadsList()]);
+      if (Array.isArray(cols) && cols.length) _kanbanColumns = cols;
+      _kanbanLeadsCache = leads;
     } catch (e) {
-      board.innerHTML = `<div class="muted" style="padding:20px;">Error loading leads: ${escape(e.message)}</div>`;
+      board.innerHTML = `<div class="muted" style="padding:20px;">Error loading kanban: ${escape(e.message)}</div>`;
       return;
     }
     _renderKanbanColumns();
+  }
+
+  async function _saveKanbanColumns() {
+    try {
+      _kanbanColumns = await API.kanbanSetColumns(_kanbanColumns);
+      renderLeadsKanban();
+    } catch (e) { toast("Échec sauvegarde colonnes: " + e.message, "error"); }
+  }
+
+  function _addKanbanColumn() {
+    const label = prompt("Nom de la nouvelle colonne :", "");
+    if (!label || !label.trim()) return;
+    _kanbanColumns = [..._kanbanColumns, { label: label.trim() }];
+    _saveKanbanColumns();
+  }
+  function _renameKanbanColumn(key) {
+    const col = _kanbanColumns.find(c => c.key === key);
+    if (!col) return;
+    const label = prompt("Renommer la colonne :", col.label);
+    if (!label || !label.trim()) return;
+    col.label = label.trim();
+    _saveKanbanColumns();
+  }
+  function _deleteKanbanColumn(key) {
+    if (_kanbanColumns.length <= 1) { toast("Garde au moins une colonne.", "warn"); return; }
+    const col = _kanbanColumns.find(c => c.key === key);
+    const n = _kanbanLeadsCache.filter(l => (l.status || "new") === key).length;
+    const msg = n > 0
+      ? `Supprimer "${col.label}" ? Ses ${n} lead(s) iront dans la 1ʳᵉ colonne.`
+      : `Supprimer la colonne "${col.label}" ?`;
+    if (!confirm(msg)) return;
+    _kanbanColumns = _kanbanColumns.filter(c => c.key !== key);
+    _saveKanbanColumns();
   }
 
   function _renderKanbanColumns() {
@@ -4624,23 +4660,36 @@
             .toLowerCase().includes(filter))
       : _kanbanLeadsCache;
 
-    board.innerHTML = KANBAN_STATUSES.map(s => {
-      const leads = filtered.filter(l => (l.status || "new") === s.key);
+    const cols = _kanbanColumns;
+    const firstKey = cols[0]?.key || "new";
+    board.innerHTML = cols.map(s => {
+      // Leads whose status doesn't match any column fall into the first column.
+      const leads = filtered.filter(l => {
+        const st = l.status || "new";
+        return st === s.key || (s.key === firstKey && !cols.some(c => c.key === st));
+      });
       return `
-        <div class="kanban-col" data-status="${s.key}">
+        <div class="kanban-col" data-status="${escape(s.key)}" style="border-top-color:${escape(s.color || '#6b7280')};">
           <div class="kanban-col-header">
-            <span>${s.label}</span>
+            <span class="kanban-col-title" title="${escape(s.label)}">${escape(s.label)}</span>
             <span class="col-count">${leads.length}</span>
+            <span class="kanban-col-tools">
+              <button class="kanban-col-btn" data-col-rename="${escape(s.key)}" title="Renommer">✎</button>
+              <button class="kanban-col-btn" data-col-delete="${escape(s.key)}" title="Supprimer la colonne">×</button>
+            </span>
           </div>
           <div class="kanban-col-body">
             ${leads.length === 0
-              ? `<div class="kanban-empty">${s.desc}</div>`
+              ? `<div class="kanban-empty">Glisse un lead ici</div>`
               : leads.map(l => _renderKanbanCard(l)).join("")}
           </div>
-          <button class="kanban-add-btn" data-add-status="${s.key}">+ Add lead here</button>
+          <button class="kanban-add-btn" data-add-status="${escape(s.key)}">+ Add lead here</button>
         </div>
       `;
-    }).join("");
+    }).join("")
+    + `<button class="kanban-add-col" id="kanban-add-col" title="Ajouter une colonne">
+         <span>＋</span><span class="kanban-add-col-label">Colonne</span>
+       </button>`;
     _wireKanbanEvents();
   }
 
@@ -4650,6 +4699,7 @@
     const arv = lead.estimated_arv ? `→ $${Math.round(lead.estimated_arv / 1000)}K` : "";
     const grade = lead.ai_analysis?.result?.flip_grade || lead.grade;
     const worthBuying = lead.ai_analysis?.result?.worth_buying;
+    const nComments = (lead.comments || []).length;
     return `
       <div class="kanban-card" draggable="true" data-id="${escape(lead.id)}">
         <div class="kanban-card-title">${escape(addr)}</div>
@@ -4660,6 +4710,7 @@
           ${grade ? `<span class="${grade.startsWith('A') || grade.startsWith('B') ? 'money' : grade.startsWith('D') || grade === 'F' ? 'risk' : ''}">${escape(grade)}</span>` : ''}
           ${worthBuying === false ? '<span class="risk">⚠ skip</span>' : ''}
           ${worthBuying === true ? '<span class="money">✓ buy</span>' : ''}
+          ${nComments ? `<span class="kanban-card-comments" title="${nComments} commentaire(s)">💬 ${nComments}</span>` : ''}
         </div>
       </div>
     `;
@@ -4670,27 +4721,19 @@
     const board = $("#leads-kanban");
     if (!board) return;
 
-    // Card click → open lead in Leads view (auto-focus)
+    // Column tools: rename / delete / add
+    board.querySelectorAll("[data-col-rename]").forEach(b =>
+      b.addEventListener("click", e => { e.stopPropagation(); _renameKanbanColumn(b.dataset.colRename); }));
+    board.querySelectorAll("[data-col-delete]").forEach(b =>
+      b.addEventListener("click", e => { e.stopPropagation(); _deleteKanbanColumn(b.dataset.colDelete); }));
+    const addColBtn = board.querySelector("#kanban-add-col");
+    if (addColBtn) addColBtn.addEventListener("click", _addKanbanColumn);
+
+    // Card click → open the lead detail modal (status, notes, comments)
     board.querySelectorAll(".kanban-card").forEach(card => {
       card.addEventListener("click", e => {
         if (e.target.tagName === "BUTTON") return;
-        const id = card.dataset.id;
-        // Leads view is gone — if this card came from a deal, jump to that deal
-        const lead = _kanbanLeadsCache.find(l => l.id === id);
-        if (lead?.external_id) {
-          const deal = (state.deals || []).find(d => d.id === lead.external_id);
-          if (deal) { openDeal(deal.id); return; }
-        }
-        // Otherwise: edit inline (open a quick prompt to change status/notes)
-        const newStatus = prompt(
-          `Lead "${lead?.address || id}"\nChange status to (new/contacted/appointment/offer/closed/passed):`,
-          lead?.status || "new"
-        );
-        if (newStatus && KANBAN_STATUSES.some(s => s.key === newStatus)) {
-          API.leadPatch(id, { status: newStatus })
-             .then(() => { toast(`Status updated to "${newStatus}"`, "success"); renderLeadsKanban(); })
-             .catch(e => toast(e.message, "error"));
-        }
+        openLeadModal(card.dataset.id);
       });
       // Drag start
       card.addEventListener("dragstart", e => {
@@ -4759,6 +4802,104 @@
   $("#kanban-add-lead")?.addEventListener("click", () => {
     _newLeadInitialStatus = "new";
     openKanbanDealPicker();
+  });
+  // "+ Colonne" toolbar button
+  $("#kanban-add-col-btn")?.addEventListener("click", _addKanbanColumn);
+
+  // ---- Lead detail modal (status, notes, comments) ----
+  let _leadModalId = null;
+  function _patchLeadCache(updated) {
+    const i = _kanbanLeadsCache.findIndex(l => l.id === updated.id);
+    if (i >= 0) _kanbanLeadsCache[i] = updated;
+  }
+  function _fmtCommentDate(iso) {
+    try {
+      return new Date(iso).toLocaleString("fr-FR",
+        { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+    } catch { return ""; }
+  }
+  function openLeadModal(id) {
+    const lead = _kanbanLeadsCache.find(l => l.id === id);
+    const modal = $("#lead-modal");
+    if (!lead || !modal) return;
+    _leadModalId = id;
+    $("#lead-modal-title").textContent = lead.address || lead.owner_name || "Lead";
+    $("#lead-modal-sub").textContent = [lead.city, lead.state,
+      lead.asking_price ? `$${Math.round(lead.asking_price / 1000)}K` : ""].filter(Boolean).join(" · ");
+    const sel = $("#lead-modal-status");
+    sel.innerHTML = _kanbanColumns.map(c =>
+      `<option value="${escape(c.key)}">${escape(c.label)}</option>`).join("");
+    sel.value = lead.status || (_kanbanColumns[0]?.key || "new");
+    $("#lead-modal-notes").value = lead.notes || "";
+    const od = $("#lead-modal-opendeal");
+    if (lead.external_id && (state.deals || []).some(d => d.id === lead.external_id)) {
+      od.style.display = "";
+      od.onclick = e => { e.preventDefault(); closeLeadModal(); openDeal(lead.external_id); };
+    } else { od.style.display = "none"; od.onclick = null; }
+    _renderLeadComments(lead);
+    $("#lead-comment-input").value = "";
+    modal.style.display = "flex";
+    setTimeout(() => $("#lead-comment-input")?.focus(), 50);
+  }
+  function closeLeadModal() { const m = $("#lead-modal"); if (m) m.style.display = "none"; _leadModalId = null; }
+  function _renderLeadComments(lead) {
+    const list = $("#lead-comments-list");
+    if (!list) return;
+    const cs = (lead.comments || []).slice().reverse();
+    list.innerHTML = cs.length
+      ? cs.map(c => `
+          <div class="lead-comment">
+            <div class="lead-comment-text">${escape(c.text)}</div>
+            <div class="lead-comment-foot">
+              <span>${_fmtCommentDate(c.created_at)}</span>
+              <button class="lead-comment-del" data-cid="${escape(c.id)}" title="Supprimer">×</button>
+            </div>
+          </div>`).join("")
+      : `<div class="muted" style="font-size:12px;">Aucun commentaire pour l'instant.</div>`;
+    list.querySelectorAll(".lead-comment-del").forEach(b =>
+      b.addEventListener("click", async () => {
+        try {
+          const updated = await API.leadDelComment(_leadModalId, b.dataset.cid);
+          _patchLeadCache(updated); _renderLeadComments(updated); _renderKanbanColumns();
+        } catch (e) { toast(e.message, "error"); }
+      }));
+  }
+  $("#lead-modal-close")?.addEventListener("click", closeLeadModal);
+  $("#lead-modal-backdrop")?.addEventListener("click", closeLeadModal);
+  $("#lead-comment-add-btn")?.addEventListener("click", async () => {
+    const inp = $("#lead-comment-input");
+    const text = (inp?.value || "").trim();
+    if (!text || !_leadModalId) return;
+    try {
+      const updated = await API.leadAddComment(_leadModalId, text);
+      _patchLeadCache(updated); _renderLeadComments(updated);
+      if (inp) inp.value = "";
+      _renderKanbanColumns();  // refresh the 💬 badge on the card
+    } catch (e) { toast(e.message, "error"); }
+  });
+  $("#lead-comment-input")?.addEventListener("keydown", e => {
+    if (e.key === "Enter") { e.preventDefault(); $("#lead-comment-add-btn")?.click(); }
+  });
+  $("#lead-modal-save")?.addEventListener("click", async () => {
+    if (!_leadModalId) return;
+    try {
+      const updated = await API.leadPatch(_leadModalId, {
+        status: $("#lead-modal-status").value,
+        notes: $("#lead-modal-notes").value,
+      });
+      _patchLeadCache(updated);
+      toast("Lead enregistré", "success");
+      closeLeadModal(); renderLeadsKanban();
+    } catch (e) { toast(e.message, "error"); }
+  });
+  $("#lead-modal-delete")?.addEventListener("click", async () => {
+    if (!_leadModalId) return;
+    if (!confirm("Supprimer ce lead ?")) return;
+    try {
+      await API.leadDelete(_leadModalId);
+      toast("Lead supprimé", "success");
+      closeLeadModal(); renderLeadsKanban();
+    } catch (e) { toast(e.message, "error"); }
   });
 
   // ---- "+ Depuis un deal" → modal picker to convert a deal into a lead ----
@@ -4869,7 +5010,7 @@
     };
     try {
       const saved = await API.leadCreate(leadPayload);
-      const col = KANBAN_STATUSES.find(s => s.key === leadPayload.status);
+      const col = _kanbanColumns.find(s => s.key === leadPayload.status);
       toast(`✓ "${d.address}" ajouté à la colonne "${col?.label || leadPayload.status}"`, "success");
       closeKanbanDealPicker();
       _newLeadInitialStatus = "new";  // reset
