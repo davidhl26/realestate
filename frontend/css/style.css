@@ -4014,29 +4014,43 @@ body.deals-select-mode .deal-card.selected {
 #usamap-svg-container {
   width: 100%;
   position: relative;
+  background: var(--bg-2, #0d1526);
+  border-radius: 12px;
+  padding: 8px;
 }
-#usamap-svg-container svg {
+#usamap-svg-container svg.usa-svg {
   width: 100%;
   height: auto;
   display: block;
+  overflow: visible;
 }
 .usamap-state {
   cursor: pointer;
-  stroke: var(--card);
-  stroke-width: 1.2;
-  transition: fill 0.15s, transform 0.1s;
-  transform-origin: center;
-  transform-box: fill-box;
+  stroke: rgba(255, 255, 255, 0.55);
+  stroke-width: 0.8;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  transition: filter 0.12s, stroke 0.12s, stroke-width 0.12s;
 }
+[data-theme="light"] .usamap-state { stroke: rgba(255,255,255,0.9); }
 .usamap-state:hover {
-  stroke: var(--text);
+  stroke: #ffffff;
   stroke-width: 2;
-  filter: brightness(1.15);
+  filter: brightness(1.18) drop-shadow(0 0 4px rgba(0,0,0,0.4));
 }
 .usamap-state.active {
   stroke: var(--accent);
-  stroke-width: 2.5;
-  filter: brightness(1.2);
+  stroke-width: 2.6;
+  filter: brightness(1.22) drop-shadow(0 0 6px var(--accent-glow, rgba(0,179,116,0.5)));
+}
+.usamap-label {
+  font: 700 11px/1 "Inter Tight", system-ui, sans-serif;
+  letter-spacing: 0.3px;
+  user-select: none;
+}
+.usamap-badge-text {
+  font: 700 9px/1 system-ui, sans-serif;
+  user-select: none;
 }
 
 .usamap-legend {
