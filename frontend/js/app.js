@@ -3971,7 +3971,15 @@
         <tr>
           <td>${idx + 1}</td>
           <td class="batch-input-cell" title="${escape(it.input)}">${escape(it.input)}</td>
-          <td><span class="pill ${it.type === 'url' ? 'blue' : it.type === 'address' ? 'green' : 'gray'}">${escape(it.type)}</span></td>
+          <td>${(() => {
+              const meta = {
+                url:           { label: "listing",  cls: "blue"   },
+                address:       { label: "address",  cls: "green"  },
+                zillow_search: { label: "🔍 search", cls: "purple" },
+                prefetched:    { label: "AI find",  cls: "orange" },
+              }[it.type] || { label: it.type, cls: "gray" };
+              return `<span class="pill ${meta.cls}">${escape(meta.label)}</span>`;
+            })()}</td>
           <td><span class="batch-row-status ${escape(it.status)}">${escape(it.status)}</span></td>
           <td>${resultCell}</td>
           <td>${it.deal_id ? `<button class="btn ghost" data-open-deal="${escape(it.deal_id)}" style="padding:3px 8px; font-size:11px;">open</button>` : ''}</td>

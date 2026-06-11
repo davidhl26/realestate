@@ -247,6 +247,81 @@ def parse_zillow_url_slug(url: str) -> dict:
     return out
 
 
+# Zillow property-type filter keys → human labels (used to tell the AI which
+# property types the search EXCLUDES, so it returns only the wanted ones).
+_ZILLOW_TYPE_LABELS = {
+    "tow": "townhouses",
+    "con": "condos",
+    "land": "lots/land",
+    "apa": "apartments",
+    "manu": "manufactured/mobile homes",
+    "apco": "co-ops/apartment buildings",
+}
+
+
+def is_zillow_search_url(url: str) -> bool:
+    """True if the URL is a Zillow *search results* page (a map/area search),
+    NOT a single listing. These can't be scraped directly (PerimeterX blocks
+    search pages) — they're expanded into individual listings via AI instead."""
+    u = (url or "").lower()
+    if "zillow.com" not in u:
+        return False
+    if "/homedetails/" in u:
+        return False
+    return ("searchquerystate=" in u or "/homes/" in u or "_rb/" in u)
+
+
+def parse_zillow_search_url(url: str) -> dict:
+    """Extract the geographic bounds + filters from a Zillow search URL's
+    `searchQueryState` param. Returns {} if it has no parseable search state.
+
+    Example output:
+      {"center_lat": 41.49, "center_lng": -81.70,
+       "map_bounds": {...}, "price_min": None, "price_max": 125000,
+       "beds_min": None, "baths_min": None,
+       "excluded_type_labels": ["townhouses", "condos", ...],
+       "search_term": ""}
+    """
+    from urllib.parse import urlparse, parse_qs
+    q = parse_qs(urlparse(url).query)
+    raw = q.get("searchQueryState", [None])[0]
+    if not raw:
+        return {}
+    try:
+        sqs = json.loads(raw)
+    except Exception:
+        return {}
+
+    mb = sqs.get("mapBounds") or {}
+    fs = sqs.get("filterState") or {}
+
+    def _range(key, sub):
+        v = fs.get(key)
+        return v.get(sub) if isinstance(v, dict) else None
+
+    center_lat = center_lng = None
+    if mb.get("south") is not None and mb.get("north") is not None:
+        center_lat = (mb["south"] + mb["north"]) / 2
+    if mb.get("west") is not None and mb.get("east") is not None:
+        center_lng = (mb["west"] + mb["east"]) / 2
+
+    excluded = [_ZILLOW_TYPE_LABELS[k] for k in _ZILLOW_TYPE_LABELS
+                if isinstance(fs.get(k), dict) and fs[k].get("value") is False]
+
+    return {
+        "map_bounds": mb,
+        "center_lat": center_lat,
+        "center_lng": center_lng,
+        "price_min": _range("price", "min"),
+        "price_max": _range("price", "max"),
+        "beds_min": _range("beds", "min"),
+        "baths_min": _range("baths", "min"),
+        "sqft_min": _range("sqft", "min"),
+        "excluded_type_labels": excluded,
+        "search_term": sqs.get("usersSearchTerm") or "",
+    }
+
+
 def parse_zillow(html: str) -> dict:
     """Parse a Zillow detail page."""
     soup = BeautifulSoup(html, "lxml")

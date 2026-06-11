@@ -28,9 +28,20 @@ def _now():
     return datetime.utcnow().isoformat() + "Z"
 
 
+def _is_zillow_search(s: str) -> bool:
+    """A Zillow *search results* URL (map/area search), not a single listing."""
+    u = s.lower()
+    if "zillow.com" not in u or "/homedetails/" in u:
+        return False
+    return ("searchquerystate=" in u or "/homes/for_sale" in u
+            or "/homes/for_rent" in u or "searchqueryparams" in u)
+
+
 def _detect_type(s: str) -> str:
     s = s.strip()
     if s.startswith("http://") or s.startswith("https://"):
+        if _is_zillow_search(s):
+            return "zillow_search"
         return "url"
     # If 5+ chars and contains a digit, treat as address
     if len(s) >= 5 and re.search(r"\d", s):
@@ -43,6 +54,129 @@ def _slug_address(addr: str) -> str:
     s = re.sub(r"[^a-z0-9]+", "-", s)
     s = re.sub(r"-+", "-", s).strip("-")
     return s[:80]
+
+
+def _full_address(L: dict) -> str:
+    """Compose a full address string from an AI listing dict."""
+    street = (L.get("address") or "").strip()
+    city = (L.get("city") or "").strip()
+    state = (L.get("state") or "").strip()
+    zipc = str(L.get("zip") or "").strip()
+    tail = ", ".join(p for p in [city, f"{state} {zipc}".strip()] if p)
+    if tail and tail.lower() not in street.lower():
+        return f"{street}, {tail}" if street else tail
+    return street
+
+
+def _shape_ai_listing(L: dict) -> dict:
+    """Turn an AI area-search listing into a scrape-shaped dict that
+    _save_as_deal understands. No network call — uses the AI-provided data."""
+    full = _full_address(L)
+    price = L.get("price")
+    shaped = {
+        "source": "ai_search",
+        "address": full,
+        "street": (L.get("address") or "").strip(),
+        "city": (L.get("city") or "").strip(),
+        "state": (L.get("state") or "").strip(),
+        "zip": str(L.get("zip") or "").strip(),
+        "home_type": "Single Family Residence",
+        "beds": L.get("beds"),
+        "baths": L.get("baths"),
+        "sqft": L.get("sqft"),
+        "listing_price": price,
+        "price": price,
+        "zestimate": None,
+        "description": "Imported from Zillow area search via AI. "
+                       "Verify the live listing, price, and condition.",
+    }
+    # Source link: the AI URL if it had one, else a Zillow address search so the
+    # user can click through to the live listing.
+    url = (L.get("url") or "").strip()
+    if not url and full:
+        from urllib.parse import quote_plus
+        url = f"https://www.zillow.com/homes/{quote_plus(full)}_rb/"
+    shaped["source_url"] = url
+    # Optional Street View exterior photo (only if a Google Maps key is set).
+    try:
+        from . import ai_research, scraper as _sc
+        mkey = ai_research.get_maps_key()
+        if mkey and full:
+            img = _sc.street_view_image_url(full, mkey)
+            shaped["image"] = img
+            shaped["image_gallery"] = [img]
+    except Exception:
+        pass
+    return shaped
+
+
+def _expand_search_items(job: "BatchJob") -> list:
+    """Pre-pass: replace each Zillow-search item with one info row plus one
+    item per listing the AI found in that search area. Runs inside the worker
+    thread (the AI call takes ~30-60s)."""
+    from . import ai_research
+    scraper = job.deps["scraper"]
+    out = []
+    for it in job.items:
+        if it["type"] != "zillow_search" or it["status"] != "pending":
+            out.append(it)
+            continue
+
+        it["status"] = "running"
+        it["progress_message"] = "finding listings in this area (AI web search)…"
+        it["started_at"] = _now()
+        job.updated_at = _now()
+
+        try:
+            params = scraper.parse_zillow_search_url(it["input"])
+            if not params:
+                raise ValueError("Could not read the search filters from this URL")
+            res = ai_research.find_listings_in_area(params)
+        except Exception as e:
+            log.exception("Search expansion failed")
+            it["status"] = "failed"
+            it["error"] = f"Search expansion failed: {str(e)[:200]}"
+            it["finished_at"] = _now()
+            job.failed += 1
+            out.append(it)
+            continue
+
+        if not res.get("ok"):
+            it["status"] = "failed"
+            it["error"] = res.get("error") or "AI returned no result"
+            it["finished_at"] = _now()
+            job.failed += 1
+            out.append(it)
+            continue
+
+        listings = res.get("listings") or []
+        area = res.get("area_label") or ""
+        it["status"] = "skipped"  # informational row, not a deal
+        it["progress_message"] = f"{len(listings)} listings — {area}"
+        it["error"] = (f"Expanded into {len(listings)} listings · {area}"
+                       if listings else (res.get("notes") or "No listings found in area"))
+        it["result"] = {"area_label": area, "count": len(listings),
+                        "notes": res.get("notes"), "web_searches": res.get("web_searches_used")}
+        it["finished_at"] = _now()
+        job.skipped += 1
+        out.append(it)
+
+        for L in listings:
+            has_url = bool((L.get("url") or "").strip())
+            out.append({
+                "input": (L.get("url") or "").strip() or _full_address(L),
+                "type": "url" if has_url else "prefetched",
+                "prefetched": None if has_url else L,
+                "status": "pending",
+                "progress_message": "",
+                "result": None,
+                "error": None,
+                "deal_id": None,
+                "started_at": None,
+                "finished_at": None,
+            })
+        log.info("Batch %s expanded search → %d listings (%s)", job.id, len(listings), area)
+    return out
 
 
 class BatchJob:
@@ -206,6 +340,13 @@ def _run_job(job: BatchJob):
             if d.get("address"):
                 existing_addresses.add(_slug_address(d["address"]))
 
+    # Expand any Zillow search URLs into individual listings (AI web search).
+    # This can grow job.items, so do it before computing the resume index.
+    if any(it["type"] == "zillow_search" and it["status"] == "pending" for it in job.items):
+        job.items = _expand_search_items(job)
+        job.total = len(job.items)
+        job.updated_at = _now()
+
     # Find resume index: skip already-processed items (when restarting after pause)
     start_idx = 0
     for i, it in enumerate(job.items):
@@ -254,12 +395,18 @@ def _run_job(job: BatchJob):
 
         try:
             line_lower = item["input"].strip().lower()
+            pf_addr = _slug_address((item.get("prefetched") or {}).get("address", "")) \
+                if item["type"] == "prefetched" else ""
             if skip_duplicates and item["type"] == "url" and line_lower in existing_urls:
                 item["status"] = "skipped"
                 item["error"] = "Already on board"
                 job.skipped += 1
             elif (skip_duplicates and item["type"] == "address" and
                   _slug_address(item["input"]) in existing_addresses):
+                item["status"] = "skipped"
+                item["error"] = "Already on board (by address)"
+                job.skipped += 1
+            elif skip_duplicates and item["type"] == "prefetched" and pf_addr and pf_addr in existing_addresses:
                 item["status"] = "skipped"
                 item["error"] = "Already on board (by address)"
                 job.skipped += 1
@@ -272,6 +419,8 @@ def _run_job(job: BatchJob):
                     job.succeeded += 1
                     existing_addresses.add(_slug_address(
                         item.get("result", {}).get("address", "")))
+                    if pf_addr:
+                        existing_addresses.add(pf_addr)
                     if item["type"] == "url":
                         existing_urls.add(line_lower)
                 else:
@@ -287,8 +436,9 @@ def _run_job(job: BatchJob):
             item["finished_at"] = _now()
             job.updated_at = _now()
 
-        # Rate-limit (with frequent pause/cancel checks)
-        if idx < job.total - 1:
+        # Rate-limit (with frequent pause/cancel checks). Prefetched items did no
+        # network fetch, so they don't need throttling.
+        if idx < job.total - 1 and item["type"] != "prefetched":
             slept = 0.0
             while slept < rate_delay:
                 if job.cancel_requested or job.pause_requested:
@@ -342,6 +492,17 @@ def _process_one(item: dict, scraper, analyzer, db) -> Optional[str]:
                            "address": data.get("address"),
                            "image_count": len(data.get("image_gallery") or [])}
         return _save_as_deal(data, raw, analyzer, db, source_url=out.get("url"))
+    elif kind == "prefetched":
+        # Listing data already supplied by the AI area search — build the deal
+        # directly (no scrape, no proxy credits). Photos via Street View if a
+        # Google Maps key is set.
+        item["progress_message"] = "saving deal…"
+        data = _shape_ai_listing(item.get("prefetched") or {})
+        item["result"] = {"source": "ai_search",
+                           "address": data.get("address"),
+                           "city": data.get("city"),
+                           "image_count": len(data.get("image_gallery") or [])}
+        return _save_as_deal(data, raw, analyzer, db, source_url=data.get("source_url"))
     else:
         item["error"] = "Unrecognized input (not a URL and too short to be an address)"
         return None

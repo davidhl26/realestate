@@ -865,7 +865,7 @@
         <div class="page-header-text">
           <div class="page-eyebrow">Autonomous scraping</div>
           <h2>Batch Import</h2>
-          <p>Paste a list of URLs or addresses (one per line). Each line is scraped and saved as a deal automatically.</p>
+          <p>Paste listing URLs, addresses, or a whole <strong>Zillow search URL</strong> (one per line). A search URL is expanded into every matching listing via AI, then each is saved as a deal automatically.</p>
         </div>
       </header>
 
@@ -876,10 +876,11 @@
         </h3>
         <div style="margin-bottom:14px;">
           <label class="muted" style="display:block; margin-bottom:6px; font-size:11.5px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em;">
-            URLs or addresses (one per line)
+            Search URL, listing URLs, or addresses (one per line)
           </label>
           <textarea id="batch-inputs" rows="10"
-            placeholder="https://www.zillow.com/homedetails/...
+            placeholder="https://www.zillow.com/homes/for_sale/?searchQueryState=...   ← whole area search (AI-expanded)
+https://www.zillow.com/homedetails/...
 https://app.ispeedtolead.com/deal-speed/property/...
 623 E 117th St, Cleveland OH 44108
 2007 Emerson Ave, Cincinnati OH 45239

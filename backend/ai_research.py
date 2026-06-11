@@ -254,3 +254,212 @@ def research_arv(deal: dict) -> dict:
             "output_tokens": message.usage.output_tokens,
         },
     }
+
+
+# ============================================================================
+# Area listing search — expand a Zillow search URL into individual listings
+# using Claude + web search (free alternative to a premium scraping proxy).
+# ============================================================================
+
+LISTING_SEARCH_SYSTEM = """You are a real-estate research assistant for a fix-and-flip investor. Given a geographic area and filters, you find residential properties that are CURRENTLY FOR SALE and return their listing URLs.
+
+Method:
+1. Use the web_search tool aggressively (run many searches). Search variations like "homes for sale <city> under $<price>", "<neighborhood> houses for sale zillow", "<zip> single family homes for sale", and per-suburb queries to maximize coverage.
+2. For every property you find in the area that matches the price/type filters, capture its full street address and — when the search result gives you one — its Zillow listing URL: https://www.zillow.com/homedetails/<street-city-state-zip-slug>/<zpid>_zpid/  (a Redfin listing URL is also accepted).
+3. Capture whatever price / beds / baths / sqft the search snippet shows.
+
+RULES:
+- Return every CANDIDATE property you found in the area, even if you cannot confirm it is still active for sale right now. The system fetches each listing's live page afterward and discards any that have already sold — so it is fine (and expected) to include candidates whose status is uncertain. Breadth matters more than certainty here.
+- Do NOT fabricate. Only return addresses and URLs that actually appeared in your search results. Never invent a zpid or guess a URL — if you have a real address but no reliable URL, return the address with "url": null (the system resolves it).
+- Respect the price ceiling/floor and the property-type exclusions exactly (single-family houses only when condos/townhouses/land/etc. are excluded).
+- Aim for as many matching properties as you can find (target 15-40+). Keep searching different sub-areas/zips until you stop surfacing new addresses.
+
+CRITICAL: End your response with a SINGLE JSON code block in exactly this schema and NO text after it:
+```json
+{
+  "area_label": "<human name of the area, e.g. 'Cleveland, OH — East Side & inner-ring suburbs'>",
+  "listings": [
+    {"url": "<full zillow/redfin listing url, or null>", "address": "<full street address>", "city": "<city>", "state": "<2-letter>", "zip": "<zip>", "price": <integer or null>, "beds": <integer or null>, "baths": <number or null>, "sqft": <integer or null>}
+  ],
+  "notes": "<1-2 sentences: how many found, coverage caveats>"
+}
+```"""
+
+
+def _find_listings_payload(text: str) -> Optional[dict]:
+    """Pull the JSON object that holds the `listings` array. Unlike _extract_json
+    (which returns the FIRST parseable object), this prefers the block that
+    actually contains "listings" — the model often emits other small JSON
+    snippets earlier in its reasoning."""
+    candidates = []
+    for m in re.finditer(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL):
+        candidates.append(m.group(1))
+    depth, start = 0, None
+    for i, ch in enumerate(text):
+        if ch == "{":
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0 and start is not None:
+                candidates.append(text[start:i + 1])
+                start = None
+    # Prefer candidates that mention "listings", longest first.
+    candidates.sort(key=lambda c: ('"listings"' not in c, -len(c)))
+    for c in candidates:
+        if '"listings"' not in c:
+            continue
+        try:
+            return json.loads(c)
+        except json.JSONDecodeError:
+            rep = _repair_json(c)
+            if rep is not None:
+                return rep
+    return None
+
+
+def _salvage_listings(text: str) -> list:
+    """Last-resort: pull individual listing objects even if the surrounding JSON
+    array was truncated (response hit max_tokens). Listing objects are flat, so
+    a non-nested {...} containing an "address" field is a safe match."""
+    out = []
+    for m in re.finditer(r'\{[^{}]*?"address"\s*:\s*"[^"]+?"[^{}]*?\}', text, re.DOTALL):
+        snippet = m.group(0)
+        obj = None
+        try:
+            obj = json.loads(snippet)
+        except json.JSONDecodeError:
+            obj = _repair_json(snippet)
+        if isinstance(obj, dict) and obj.get("address"):
+            out.append(obj)
+    return out
+
+
+def _build_listing_search_prompt(params: dict) -> str:
+    p = params or {}
+    lines = ["Find residential properties CURRENTLY FOR SALE in this area.\n"]
+    clat, clng = p.get("center_lat"), p.get("center_lng")
+    mb = p.get("map_bounds") or {}
+    if p.get("search_term"):
+        lines.append(f"- User's search term: {p['search_term']}")
+    if clat is not None and clng is not None:
+        lines.append(f"- Map area center: latitude {clat:.4f}, longitude {clng:.4f}")
+    if mb:
+        lines.append(f"- Bounding box: lat {mb.get('south')}…{mb.get('north')}, "
+                     f"lng {mb.get('west')}…{mb.get('east')}")
+    lines.append("  → First identify which city / neighborhoods / suburbs this box covers, "
+                 "then search each of them.")
+    if p.get("price_max"):
+        lines.append(f"- Maximum price: ${int(p['price_max']):,}")
+    if p.get("price_min"):
+        lines.append(f"- Minimum price: ${int(p['price_min']):,}")
+    if p.get("beds_min"):
+        lines.append(f"- Minimum bedrooms: {p['beds_min']}")
+    if p.get("baths_min"):
+        lines.append(f"- Minimum bathrooms: {p['baths_min']}")
+    if p.get("sqft_min"):
+        lines.append(f"- Minimum square footage: {p['sqft_min']}")
+    if p.get("excluded_type_labels"):
+        lines.append(f"- EXCLUDE these property types: {', '.join(p['excluded_type_labels'])} "
+                     "(i.e. single-family houses only).")
+    lines.append("")
+    lines.append("Return every matching, currently-for-sale listing you can find, with its real "
+                 "Zillow URL, in the JSON schema specified.")
+    return "\n".join(lines)
+
+
+def find_listings_in_area(params: dict, max_listings: int = 60) -> dict:
+    """Use Claude + web search to find for-sale listings in a geographic area.
+
+    `params` comes from scraper.parse_zillow_search_url(). Returns
+    {ok, area_label, listings: [{url, address, city, state, zip, price, beds,
+    baths, sqft}], notes, web_searches_used, model} or {ok: False, error}."""
+    api_key = get_api_key()
+    if not api_key:
+        return {"ok": False, "error": "No Anthropic API key configured. Add one in Settings → AI."}
+
+    import anthropic
+    client = anthropic.Anthropic(api_key=api_key)
+    model = get_model()
+
+    try:
+        message = client.messages.create(
+            model=model,
+            max_tokens=16000,
+            system=LISTING_SEARCH_SYSTEM,
+            tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 15}],
+            messages=[{"role": "user", "content": _build_listing_search_prompt(params)}],
+        )
+    except anthropic.AuthenticationError:
+        return {"ok": False, "error": "Invalid API key — check Settings → AI."}
+    except anthropic.APIError as e:
+        return {"ok": False, "error": f"Anthropic API error: {e}"}
+    except Exception as e:
+        log.exception("Listing search failed")
+        return {"ok": False, "error": f"Listing search failed: {e}"}
+
+    text_parts, web_searches = [], 0
+    for block in message.content:
+        if hasattr(block, "text"):
+            text_parts.append(block.text)
+        if getattr(block, "type", "") == "server_tool_use":
+            web_searches += 1
+    text = "\n".join(text_parts)
+
+    data = _find_listings_payload(text)
+    raw_listings = (data or {}).get("listings") if data else None
+    area_label = (data or {}).get("area_label", "") if data else ""
+    notes = (data or {}).get("notes", "") if data else ""
+    # Fallback: salvage individual objects if the array was truncated/unparseable.
+    if not raw_listings:
+        salvaged = _salvage_listings(text)
+        if salvaged:
+            raw_listings = salvaged
+            if not notes:
+                notes = "(recovered from a truncated response)"
+    if not raw_listings:
+        return {"ok": False,
+                "error": "Could not parse listing results from AI.",
+                "stop_reason": getattr(message, "stop_reason", None),
+                "raw_text": text[-2000:]}
+
+    # Clean + de-dupe listings
+    seen, listings = set(), []
+    for it in (raw_listings or []):
+        if not isinstance(it, dict):
+            continue
+        url = (it.get("url") or "").strip()
+        addr = (it.get("address") or "").strip()
+        key = (url.lower() or addr.lower())
+        if not key or key in seen:
+            continue
+        if not (url or addr):
+            continue
+        seen.add(key)
+        listings.append({
+            "url": url,
+            "address": addr,
+            "city": (it.get("city") or "").strip(),
+            "state": (it.get("state") or "").strip(),
+            "zip": (str(it.get("zip") or "")).strip(),
+            "price": it.get("price"),
+            "beds": it.get("beds"),
+            "baths": it.get("baths"),
+            "sqft": it.get("sqft"),
+        })
+        if len(listings) >= max_listings:
+            break
+
+    return {
+        "ok": True,
+        "area_label": area_label,
+        "listings": listings,
+        "notes": notes,
+        "model": model,
+        "web_searches_used": web_searches,
+        "usage": {
+            "input_tokens": message.usage.input_tokens,
+            "output_tokens": message.usage.output_tokens,
+        },
+    }
