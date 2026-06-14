@@ -28,6 +28,11 @@
   })();
   window.fbLogout = async () => { try { await API.logout(); } catch {} location.reload(); };
 
+  // ============== MOBILE NAV DRAWER ==============
+  $("#nav-toggle")?.addEventListener("click", () => document.body.classList.toggle("nav-open"));
+  $("#nav-backdrop")?.addEventListener("click", () => document.body.classList.remove("nav-open"));
+  $$(".nav-link").forEach(a => a.addEventListener("click", () => document.body.classList.remove("nav-open")));
+
   function fmtMoney(v, signed) {
     if (v === null || v === undefined || Number.isNaN(v)) return "—";
     const sign = signed && v > 0 ? "+" : (v < 0 ? "-" : "");

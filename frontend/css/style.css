@@ -4292,3 +4292,61 @@ body.deals-select-mode .deal-card.selected {
 .grade-Cminus { background: rgba(245,101,11,0.18); color: #ea580c; }
 .grade-D  { background: rgba(239,68,68,0.18); color: var(--red); }
 .grade-F  { background: rgba(127,29,29,0.25); color: #7f1d1d; }
+
+/* ============================================================
+   MOBILE RESPONSIVE
+   ============================================================ */
+.mobile-topbar { display: none; }
+.nav-backdrop { display: none; }
+
+@media (max-width: 820px) {
+  /* Top bar with hamburger */
+  .mobile-topbar {
+    display: flex; align-items: center; gap: 12px;
+    position: fixed; top: 0; left: 0; right: 0; height: 52px; z-index: 200;
+    background: var(--ink); color: #fff; padding: 0 14px;
+  }
+  [data-theme="dark"] .mobile-topbar { background: var(--ink-2); border-bottom: 1px solid var(--border); }
+  .nav-toggle { background: none; border: none; color: #fff; cursor: pointer; padding: 6px; display: flex; }
+  .nav-toggle svg { width: 24px; height: 24px; }
+  .mobile-brand { font-family: "Inter Tight", "Inter", sans-serif; font-weight: 700; font-size: 16px; }
+
+  /* Sidebar → slide-in drawer */
+  .sidebar {
+    position: fixed; top: 0; left: 0; height: 100vh; width: 270px; max-width: 85vw;
+    z-index: 400; transform: translateX(-100%);
+    transition: transform .25s ease; overflow-y: auto;
+  }
+  body.nav-open .sidebar { transform: translateX(0); box-shadow: 0 0 40px rgba(0,0,0,.45); }
+  body.nav-open .nav-backdrop {
+    display: block; position: fixed; inset: 0; z-index: 350; background: rgba(0,0,0,.5);
+  }
+
+  /* Main content full-width, clear the fixed top bar */
+  .main { max-width: 100%; width: 100%; padding: 66px 14px 84px; }
+  img, table, iframe { max-width: 100%; }
+
+  /* Stack columns */
+  .form-grid { grid-template-columns: 1fr !important; }
+  .page-header { align-items: flex-start; }
+  .page-header h2 { font-size: 22px; }
+  .page-header .toolbar { flex-wrap: wrap; }
+  .toolbar { flex-wrap: wrap; }
+
+  /* Modals nearly full width */
+  .modal-content { max-width: 95vw !important; max-height: 88vh; }
+
+  /* Kanban: one column ≈ screen width, swipe between */
+  .kanban-col { flex: 0 0 84vw; }
+  .kanban-add-col { flex: 0 0 60vw; }
+  .kanban-bulk-bar { flex-wrap: wrap; width: 92vw; justify-content: center; bottom: 10px; }
+
+  /* FAB clear of content */
+  .fab { bottom: 18px; right: 18px; }
+}
+
+@media (max-width: 480px) {
+  .main { padding: 64px 10px 84px; }
+  .page-header h2 { font-size: 20px; }
+  .kanban-col { flex: 0 0 88vw; }
+}
