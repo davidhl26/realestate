@@ -8,6 +8,21 @@
   <script src="/js/chart.umd.min.js"></script>
 </head>
 <body>
+  <!-- Login overlay (shown only when the app is password-protected) -->
+  <div id="login-overlay" style="display:none; position:fixed; inset:0; z-index:9999;
+       background:linear-gradient(160deg,#0d3b5e,#13507e 60%,#1f7e8f);
+       align-items:center; justify-content:center;">
+    <form id="login-form" style="background:#fff; border-radius:16px; padding:32px 30px; width:340px;
+         box-shadow:0 20px 60px rgba(0,0,0,.35); text-align:center;">
+      <div style="font-family:Georgia,serif; font-size:24px; font-weight:700; color:#0d3b5e;">Flip Board</div>
+      <p style="color:#5b7384; font-size:13px; margin:6px 0 18px;">Entre le mot de passe pour accéder.</p>
+      <input id="login-password" type="password" placeholder="Mot de passe" autocomplete="current-password"
+             style="width:100%; padding:11px 13px; border:1px solid #d7e0e7; border-radius:10px; font-size:14px;">
+      <div id="login-error" style="color:#e76f51; font-size:12px; min-height:16px; margin:8px 0;"></div>
+      <button type="submit" class="btn primary" style="width:100%; justify-content:center;">Entrer</button>
+    </form>
+  </div>
+
   <aside class="sidebar">
     <div class="brand">
       <div class="brand-mark">
@@ -72,6 +87,10 @@
       <button class="theme-toggle" id="theme-toggle">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" stroke-linejoin="round"/></svg>
         <span id="theme-label">Dark mode</span>
+      </button>
+      <button class="theme-toggle" id="logout-btn" onclick="window.fbLogout&&window.fbLogout()" title="Se déconnecter">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>Déconnexion</span>
       </button>
       <small>Educational use only · not financial advice</small>
     </footer>

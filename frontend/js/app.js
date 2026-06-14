@@ -6,6 +6,28 @@
   const $ = (sel, root = document) => root.querySelector(sel);
   const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 
+  // ============== AUTH ==============
+  function _showLogin() {
+    const ov = $("#login-overlay");
+    if (ov) { ov.style.display = "flex"; setTimeout(() => $("#login-password")?.focus(), 50); }
+  }
+  window.addEventListener("fb-auth-required", _showLogin);
+  $("#login-form")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const err = $("#login-error"); err.textContent = "";
+    try {
+      await API.login($("#login-password").value);
+      location.reload();
+    } catch { err.textContent = "Mot de passe incorrect."; }
+  });
+  (async () => {
+    try {
+      const s = await API.authStatus();
+      if (s && s.required && !s.authed) _showLogin();
+    } catch {}
+  })();
+  window.fbLogout = async () => { try { await API.logout(); } catch {} location.reload(); };
+
   function fmtMoney(v, signed) {
     if (v === null || v === undefined || Number.isNaN(v)) return "—";
     const sign = signed && v > 0 ? "+" : (v < 0 ? "-" : "");

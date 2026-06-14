@@ -96,6 +96,66 @@ app.add_middleware(
 )
 
 
+# ============================================================================
+# Authentication (optional). Enabled only when APP_PASSWORD is set (env or
+# config). When unset, the app is open (local dev / desktop). Single shared
+# password → signed cookie. Static assets stay public (no secrets in them);
+# only the data API is gated.
+# ============================================================================
+import hashlib
+
+_AUTH_OPEN_PATHS = {"/api/login", "/api/logout", "/api/auth-status", "/api/healthz"}
+
+
+def _app_password():
+    from . import ai_research
+    return os.environ.get("APP_PASSWORD") or ai_research.read_config().get("app_password") or None
+
+
+def _auth_token(pw: str) -> str:
+    return hashlib.sha256(("flip-board::" + pw).encode()).hexdigest()
+
+
+@app.middleware("http")
+async def _auth_middleware(request: Request, call_next):
+    pw = _app_password()
+    if pw:
+        path = request.url.path
+        if path.startswith("/api/") and path not in _AUTH_OPEN_PATHS:
+            if request.cookies.get("fb_auth") != _auth_token(pw):
+                return JSONResponse({"error": "Authentication required"}, status_code=401)
+    return await call_next(request)
+
+
+@app.get("/api/auth-status")
+def auth_status(request: Request):
+    pw = _app_password()
+    if not pw:
+        return {"required": False, "authed": True}
+    return {"required": True, "authed": request.cookies.get("fb_auth") == _auth_token(pw)}
+
+
+@app.post("/api/login")
+def login(request: Request, payload: dict = Body(...)):
+    pw = _app_password()
+    if not pw:
+        return {"ok": True, "required": False}
+    if (payload.get("password") or "") != pw:
+        raise HTTPException(401, "Mot de passe incorrect")
+    resp = JSONResponse({"ok": True})
+    resp.set_cookie("fb_auth", _auth_token(pw), httponly=True, samesite="lax",
+                    max_age=60 * 60 * 24 * 30,
+                    secure=(request.url.scheme == "https"))
+    return resp
+
+
+@app.post("/api/logout")
+def logout():
+    resp = JSONResponse({"ok": True})
+    resp.delete_cookie("fb_auth")
+    return resp
+
+
 def _enrich(deal: dict) -> dict:
     """Compute metrics + score + signal, return augmented dict."""
     m = analyzer.compute_metrics(deal)

@@ -10,8 +10,13 @@ const API = (() => {
   async function req(path, opts = {}) {
     const r = await fetch(base + path, {
       headers: { "Content-Type": "application/json", ...(opts.headers || {}) },
+      credentials: "include",
       ...opts,
     });
+    if (r.status === 401) {
+      window.dispatchEvent(new CustomEvent("fb-auth-required"));
+      throw new Error("Authentication required");
+    }
     if (!r.ok) {
       let msg = `HTTP ${r.status}`;
       try {
@@ -24,6 +29,9 @@ const API = (() => {
     return ct.includes("application/json") ? r.json() : r.blob();
   }
   return {
+    authStatus: () => req("/api/auth-status"),
+    login: (password) => req("/api/login", { method: "POST", body: JSON.stringify({ password }) }),
+    logout: () => req("/api/logout", { method: "POST", body: "{}" }),
     listDeals: () => req("/api/deals"),
     getDeal: (id) => req("/api/deals/" + encodeURIComponent(id)),
     createDeal: (d) => req("/api/deals", { method: "POST", body: JSON.stringify(d) }),
