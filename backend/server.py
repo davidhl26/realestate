@@ -1402,15 +1402,17 @@ def ai_config_get():
     source = "env" if os.environ.get("ANTHROPIC_API_KEY") else "file"
     maps_key = ai_research.get_maps_key()
     proxy_key = ai_research.get_scraper_proxy_key()
+    # Never leak key material: only report whether a key is set, masked.
+    MASK = "••••••••••••"
     return {
         "configured": bool(key),
-        "key_preview": (key[:8] + "..." + key[-4:]) if key else "",
+        "key_preview": MASK if key else "",
         "model": cfg.get("model", "claude-opus-4-7"),
         "source": source,
         "maps_configured": bool(maps_key),
-        "maps_key_preview": (maps_key[:6] + "..." + maps_key[-4:]) if maps_key else "",
+        "maps_key_preview": MASK if maps_key else "",
         "proxy_configured": bool(proxy_key),
-        "proxy_key_preview": (proxy_key[:6] + "..." + proxy_key[-4:]) if proxy_key else "",
+        "proxy_key_preview": MASK if proxy_key else "",
     }
 
 
