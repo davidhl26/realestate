@@ -4650,6 +4650,9 @@
   let _kanbanSearchFilter = "";
   let _kanbanSort = "recent";          // recent | score | price | profit
   let _kanbanFilters = { grade: "", minScore: 0, worth: "" };  // worth: "" | "yes" | "no"
+  const _kanbanSelected = new Set();   // selected lead ids (multi-select)
+  const _COLOR_PALETTE = ["#6b7280", "#3b82f6", "#f59e0b", "#8b5cf6", "#22c55e",
+                          "#ef4444", "#ec4899", "#14b8a6", "#eab308", "#0ea5e9"];
 
   // Financials for a lead (uses the linked deal as fallback). Profit potential
   // = ARV − price − rehab − selling costs (~8% of ARV); ROI on cash invested.
@@ -4780,6 +4783,8 @@
       return `
         <div class="kanban-col" data-status="${escape(s.key)}" style="border-top-color:${escape(s.color || '#6b7280')};">
           <div class="kanban-col-header">
+            <span class="kanban-col-grip" draggable="true" data-col-grip="${escape(s.key)}" title="Glisser pour réordonner">⠿</span>
+            <button class="kanban-col-swatch" data-col-color="${escape(s.key)}" style="background:${escape(s.color || '#6b7280')}" title="Changer la couleur"></button>
             <span class="kanban-col-title" title="${escape(s.label)}">${escape(s.label)}</span>
             <span class="col-count">${leads.length}</span>
             <span class="kanban-col-tools">
@@ -4838,8 +4843,10 @@
       followTag = `<span class="kanban-card-follow ${overdue ? 'overdue' : ''}" title="Relance prévue">📅 ${escape(lead.follow_up)}</span>`;
     }
 
+    const selected = _kanbanSelected.has(lead.id);
     return `
-      <div class="kanban-card" draggable="true" data-id="${escape(lead.id)}"${deal ? ` data-deal="${escape(deal.id)}"` : ""}>
+      <div class="kanban-card${selected ? ' selected' : ''}" draggable="true" data-id="${escape(lead.id)}"${deal ? ` data-deal="${escape(deal.id)}"` : ""}>
+        <input type="checkbox" class="kanban-card-check" data-check="${escape(lead.id)}" ${selected ? "checked" : ""} title="Sélectionner">
         ${thumb}
         <div class="kanban-card-main">
           <div class="kanban-card-title">${escape(addr)}</div>
@@ -4855,7 +4862,10 @@
             ${deal ? '<span class="kanban-card-link" title="Voir le deal">↗</span>' : ''}
           </div>
         </div>
-        <button class="kanban-card-edit" data-edit="${escape(lead.id)}" title="Notes &amp; statut">✎</button>
+        <div class="kanban-card-actions">
+          <button class="kanban-card-menu" data-menu="${escape(lead.id)}" title="Actions">⋮</button>
+          <button class="kanban-card-edit" data-edit="${escape(lead.id)}" title="Notes &amp; statut">✎</button>
+        </div>
       </div>
     `;
   }
@@ -4873,6 +4883,18 @@
     const addColBtn = board.querySelector("#kanban-add-col");
     if (addColBtn) addColBtn.addEventListener("click", _addKanbanColumn);
 
+    // Column reorder (grip drag) + color swatch
+    board.querySelectorAll("[data-col-grip]").forEach(g => {
+      g.addEventListener("dragstart", e => {
+        _draggedColKey = g.dataset.colGrip;
+        e.dataTransfer.effectAllowed = "move";
+        try { e.dataTransfer.setData("text/col", _draggedColKey); } catch {}
+      });
+      g.addEventListener("dragend", () => { _draggedColKey = null; });
+    });
+    board.querySelectorAll("[data-col-color]").forEach(sw =>
+      sw.addEventListener("click", e => { e.stopPropagation(); _openColorPopover(sw.dataset.colColor, sw); }));
+
     // Card click → open the linked DEAL (if any), else the lead modal.
     // The ✎ button always opens the lead modal (status / notes / comments).
     board.querySelectorAll(".kanban-card").forEach(card => {
@@ -4880,8 +4902,21 @@
         e.stopPropagation();
         openLeadModal(card.dataset.id);
       });
+      card.querySelector("[data-menu]")?.addEventListener("click", e => {
+        e.stopPropagation();
+        _openCardMenu(card.dataset.id, e.currentTarget);
+      });
+      const chk = card.querySelector(".kanban-card-check");
+      chk?.addEventListener("click", e => e.stopPropagation());
+      chk?.addEventListener("change", e => {
+        if (e.target.checked) _kanbanSelected.add(card.dataset.id);
+        else _kanbanSelected.delete(card.dataset.id);
+        card.classList.toggle("selected", e.target.checked);
+        _updateBulkBar();
+      });
       card.addEventListener("click", e => {
-        if (e.target.closest("[data-edit]")) return;
+        if (e.target.closest("[data-edit]") || e.target.closest("[data-menu]")
+            || e.target.closest(".kanban-card-check")) return;
         const dealId = card.dataset.deal;
         if (dealId) openDeal(dealId);
         else openLeadModal(card.dataset.id);
@@ -4915,6 +4950,13 @@
       col.addEventListener("drop", async e => {
         e.preventDefault();
         col.classList.remove("drag-over");
+        // Column reorder takes priority over card move.
+        if (_draggedColKey) {
+          const fromKey = _draggedColKey; _draggedColKey = null;
+          const toKey = col.dataset.status;
+          if (fromKey && toKey && fromKey !== toKey) _reorderColumns(fromKey, toKey);
+          return;
+        }
         const newStatus = col.dataset.status;
         const leadId = _draggedLeadId
                         || e.dataTransfer.getData("text/plain");
@@ -4943,6 +4985,102 @@
     });
   }
   let _newLeadInitialStatus = "new";
+  let _draggedColKey = null;
+
+  function _reorderColumns(fromKey, toKey) {
+    const cols = [..._kanbanColumns];
+    const fi = cols.findIndex(c => c.key === fromKey);
+    const ti = cols.findIndex(c => c.key === toKey);
+    if (fi < 0 || ti < 0) return;
+    const [moved] = cols.splice(fi, 1);
+    cols.splice(ti, 0, moved);
+    _kanbanColumns = cols;
+    _saveKanbanColumns();
+  }
+
+  function _closePopovers() { $$(".kanban-popover").forEach(p => p.remove()); }
+  document.addEventListener("click", e => {
+    if (!e.target.closest(".kanban-popover") && !e.target.closest("[data-col-color]")
+        && !e.target.closest("[data-menu]")) _closePopovers();
+  });
+
+  function _openColorPopover(key, anchor) {
+    _closePopovers();
+    const col = _kanbanColumns.find(c => c.key === key); if (!col) return;
+    const pop = document.createElement("div");
+    pop.className = "kanban-popover kanban-colors";
+    pop.innerHTML = _COLOR_PALETTE.map(c =>
+      `<button class="kanban-color-dot" style="background:${c}" data-c="${c}" title="${c}"></button>`).join("");
+    document.body.appendChild(pop);
+    const r = anchor.getBoundingClientRect();
+    pop.style.left = r.left + "px";
+    pop.style.top = (r.bottom + 5) + "px";
+    pop.querySelectorAll("[data-c]").forEach(b => b.addEventListener("click", () => {
+      col.color = b.dataset.c; _closePopovers(); _saveKanbanColumns();
+    }));
+  }
+
+  function _openCardMenu(id, anchor) {
+    _closePopovers();
+    const pop = document.createElement("div");
+    pop.className = "kanban-popover kanban-menu";
+    pop.innerHTML = `<div class="kanban-menu-head">Déplacer vers</div>`
+      + _kanbanColumns.map(c => `<button class="kanban-menu-item" data-move="${escape(c.key)}">→ ${escape(c.label)}</button>`).join("")
+      + `<button class="kanban-menu-item danger" data-del="1">🗑 Supprimer</button>`;
+    document.body.appendChild(pop);
+    const r = anchor.getBoundingClientRect();
+    pop.style.left = Math.min(r.left, window.innerWidth - 210) + "px";
+    pop.style.top = (r.bottom + 4) + "px";
+    pop.querySelectorAll("[data-move]").forEach(b => b.addEventListener("click", async () => {
+      _closePopovers();
+      const st = b.dataset.move;
+      const lead = _kanbanLeadsCache.find(l => l.id === id);
+      if (!lead || lead.status === st) return;
+      lead.status = st; _renderKanbanColumns();
+      try { await API.leadPatch(id, { status: st }); }
+      catch (e) { toast(e.message, "error"); renderLeadsKanban(); }
+    }));
+    pop.querySelector("[data-del]")?.addEventListener("click", async () => {
+      _closePopovers();
+      if (!confirm("Supprimer ce lead ?")) return;
+      try { await API.leadDelete(id); _kanbanSelected.delete(id); renderLeadsKanban(); toast("Lead supprimé", "success"); }
+      catch (e) { toast(e.message, "error"); }
+    });
+  }
+
+  // Multi-select bulk action bar
+  function _clearSelection() { _kanbanSelected.clear(); _updateBulkBar(); _renderKanbanColumns(); }
+  function _updateBulkBar() {
+    let bar = $("#kanban-bulk-bar");
+    const n = _kanbanSelected.size;
+    if (!n) { if (bar) bar.remove(); return; }
+    if (!bar) {
+      bar = document.createElement("div");
+      bar.id = "kanban-bulk-bar"; bar.className = "kanban-bulk-bar";
+      document.body.appendChild(bar);
+    }
+    const opts = _kanbanColumns.map(c => `<option value="${escape(c.key)}">${escape(c.label)}</option>`).join("");
+    bar.innerHTML = `<span><b>${n}</b> sélectionné(s)</span>
+      <select id="bulk-move-sel">${opts}</select>
+      <button class="btn primary" id="bulk-move-btn">Déplacer</button>
+      <button class="btn danger" id="bulk-del-btn">Supprimer</button>
+      <button class="btn ghost" id="bulk-clear-btn">Annuler</button>`;
+    $("#bulk-move-btn").onclick = async () => {
+      const st = $("#bulk-move-sel").value, ids = [..._kanbanSelected];
+      ids.forEach(id => { const l = _kanbanLeadsCache.find(x => x.id === id); if (l) l.status = st; });
+      _kanbanSelected.clear(); _updateBulkBar(); _renderKanbanColumns();
+      for (const id of ids) { try { await API.leadPatch(id, { status: st }); } catch {} }
+      toast(`${ids.length} lead(s) déplacé(s)`, "success");
+    };
+    $("#bulk-del-btn").onclick = async () => {
+      const ids = [..._kanbanSelected];
+      if (!confirm(`Supprimer ${ids.length} lead(s) ?`)) return;
+      for (const id of ids) { try { await API.leadDelete(id); } catch {} }
+      _kanbanSelected.clear(); _updateBulkBar(); renderLeadsKanban();
+      toast(`${ids.length} lead(s) supprimé(s)`, "success");
+    };
+    $("#bulk-clear-btn").onclick = () => _clearSelection();
+  }
 
   // Wire the kanban search + "New lead" button (once)
   $("#kanban-search")?.addEventListener("input", e => {
