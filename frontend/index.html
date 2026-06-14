@@ -440,7 +440,7 @@
             <label>Purchase price ($) <input name="purchase_price" type="number" required></label>
             <label>ARV — Base ($)
               <div style="display:flex; gap:6px;">
-                <input name="arv_base" type="number" required style="flex:1;">
+                <input name="arv_base" type="number" placeholder="optionnel" style="flex:1;">
                 <button type="button" id="arv-research-btn" class="btn ai-pill-btn" title="Research ARV with Claude">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" stroke-linejoin="round"/></svg>
                   AI
@@ -454,7 +454,7 @@
                 <option>Low</option><option selected>Medium</option><option>High</option>
               </select>
             </label>
-            <label>Rehab budget ($) <input name="rehab_base" type="number" required></label>
+            <label>Rehab budget ($) <input name="rehab_base" type="number" placeholder="optionnel"></label>
             <label>Rehab — Low ($) <input name="rehab_low" type="number"></label>
             <label>Rehab — High ($) <input name="rehab_high" type="number"></label>
             <label>Rehab scope
