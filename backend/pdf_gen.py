@@ -1,29 +1,33 @@
 """Thin wrapper around the flip-board PDF generator.
 
-Loads the existing PDF generation logic from the user's skill folder
-(or a vendored copy) and exposes simple build_deal_pdf / build_comparison_pdf.
+Uses the VENDORED generator (backend/flip_pdf_gen.py) so PDF generation works
+everywhere, including the Render server. Falls back to the user's skill-folder
+copy only if the vendored module is somehow unavailable (local dev).
 """
 
 import importlib.util
-import os
 import sys
 from pathlib import Path
 
-# Locate the canonical PDF generator from the user's skill.
+# Skill-folder copy (local dev only) — used as a last-resort fallback.
 _SKILL_PDF = Path.home() / ".claude" / "skills" / "flip-board" / "scripts" / "generate_flip_board_pdf.py"
 
 
 def _load():
-    if not _SKILL_PDF.exists():
-        raise RuntimeError(
-            f"PDF generator not found at {_SKILL_PDF}. "
-            "Install the flip-board skill or vendor the generator."
-        )
-    spec = importlib.util.spec_from_file_location("flip_pdf_gen", _SKILL_PDF)
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules["flip_pdf_gen"] = mod
-    spec.loader.exec_module(mod)
-    return mod
+    # 1) Vendored copy shipped with the app (works on prod/Render).
+    try:
+        from . import flip_pdf_gen as mod
+        return mod
+    except Exception:
+        pass
+    # 2) Fallback: load from the skill folder if present (local dev).
+    if _SKILL_PDF.exists():
+        spec = importlib.util.spec_from_file_location("flip_pdf_gen_skill", _SKILL_PDF)
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules["flip_pdf_gen_skill"] = mod
+        spec.loader.exec_module(mod)
+        return mod
+    raise RuntimeError("PDF generator unavailable (vendored module missing).")
 
 
 _MOD = None
