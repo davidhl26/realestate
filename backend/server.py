@@ -356,6 +356,16 @@ def deal_prequal_letter(deal_id: str):
                         filename=f"PreQualification-Letter-{slug}.pdf")
 
 
+@app.post("/api/deals/{deal_id}/rehab-estimate")
+def deal_rehab_estimate(deal_id: str):
+    """AI itemized renovation budget for this deal."""
+    d = db.get_deal(deal_id)
+    if not d:
+        raise HTTPException(404, "Deal not found")
+    from . import ai_research
+    return ai_research.estimate_rehab(d)
+
+
 @app.post("/api/deals/{deal_id}/pdf-with-options")
 def deal_pdf_with_options(deal_id: str, options: dict = Body(...)):
     """Generate PDF with user-specified strategy, financing, and fee overrides."""

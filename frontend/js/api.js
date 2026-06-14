@@ -198,6 +198,7 @@ const API = (() => {
       { method: "DELETE" }),
     dealPdfUrl: (id) => "/api/deals/" + encodeURIComponent(id) + "/pdf?t=" + Date.now(),
     prequalLetterUrl: (id) => "/api/deals/" + encodeURIComponent(id) + "/prequal-letter?t=" + Date.now(),
+    rehabEstimate: (id) => req("/api/deals/" + encodeURIComponent(id) + "/rehab-estimate", { method: "POST", body: "{}" }),
     comparePdfUrl: () => "/api/board/comparison-pdf?t=" + Date.now(),
     generatePdf: async (id, overrides) => {
       const r = await fetch("/api/deals/" + encodeURIComponent(id) + "/pdf-with-options", {

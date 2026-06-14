@@ -1051,9 +1051,9 @@
             </span>
           </div>
           <div class="detail-hero-stat">
-            <span class="lbl">Rehab <span style="font-weight:500; color:var(--accent); text-transform:none; letter-spacing:0;">(editable)</span></span>
+            <span class="lbl">Rehab <span style="font-weight:500; color:var(--accent); text-transform:none; letter-spacing:0;">🛠 estimer</span></span>
             <span class="val">
-              <span class="editable" data-field="rehab_base" data-value="${d.rehab_base || 0}">${fmtMoney(d.rehab_base)}</span>
+              <button class="rehab-open-btn" data-rehab-open="${escape(d.id)}" title="Ouvrir l'estimateur de travaux">${fmtMoney(d.rehab_base)}</button>
             </span>
           </div>
           <div class="detail-hero-stat">
@@ -1090,6 +1090,9 @@
 
     // Wire inline editables
     $$(".editable", hero).forEach(el => attachInlineEdit(el));
+    // Rehab value → open the work-items estimator
+    $$("[data-rehab-open]", hero).forEach(el =>
+      el.addEventListener("click", () => openRehabModal(el.dataset.rehabOpen)));
 
     // === Flip-to-rent alert ===
     const alert = $("#flip-alert");
@@ -2254,6 +2257,100 @@
       toast("Deal deleted", "success");
       state.currentDealId = null;
       showView("deals");
+    } catch (e) { toast(e.message, "error"); }
+  });
+
+  // ============== REHAB ESTIMATOR ==============
+  const REHAB_CATALOG = [
+    ["Cuisine", 12000], ["Salle de bain", 6000], ["Sols", 4000], ["Peinture", 3500],
+    ["Toiture", 8000], ["Chauffage / Clim", 6000], ["Électricité", 4000],
+    ["Plomberie", 3500], ["Fenêtres", 5000], ["Extérieur", 3000],
+    ["Cloisons / plâtre", 3000], ["Chauffe-eau", 1500],
+  ];
+  let _rehabItems = [];   // [{label, cost}]
+  let _rehabDealId = null;
+
+  function openRehabModal(dealId) {
+    _rehabDealId = dealId;
+    const deal = (state.deals || []).find(d => d.id === dealId);
+    _rehabItems = Array.isArray(deal?.rehab_items) && deal.rehab_items.length
+      ? deal.rehab_items.map(i => ({ label: i.label, cost: Number(i.cost) || 0 }))
+      : [];
+    $("#rehab-ai-status").textContent = "";
+    $("#rehab-contingency-on").checked = deal?.rehab_contingency_pct != null ? true : true;
+    $("#rehab-contingency-pct").value = deal?.rehab_contingency_pct ?? 15;
+    // catalog chips
+    $("#rehab-catalog").innerHTML = REHAB_CATALOG.map(([l, c]) =>
+      `<button class="btn ghost rehab-chip" data-label="${escape(l)}" data-cost="${c}" style="font-size:12px; padding:5px 9px;">+ ${escape(l)}</button>`).join("");
+    $$("#rehab-catalog .rehab-chip").forEach(b => b.addEventListener("click", () => {
+      _rehabItems.push({ label: b.dataset.label, cost: Number(b.dataset.cost) || 0 });
+      _renderRehabItems();
+    }));
+    _renderRehabItems();
+    $("#rehab-modal").style.display = "flex";
+  }
+  function closeRehabModal() { $("#rehab-modal").style.display = "none"; _rehabDealId = null; }
+
+  function _rehabSubtotal() { return _rehabItems.reduce((s, i) => s + (Number(i.cost) || 0), 0); }
+  function _rehabTotal() {
+    const sub = _rehabSubtotal();
+    const on = $("#rehab-contingency-on")?.checked;
+    const pct = Number($("#rehab-contingency-pct")?.value) || 0;
+    return on ? Math.round(sub * (1 + pct / 100)) : sub;
+  }
+  function _renderRehabItems() {
+    const box = $("#rehab-items");
+    box.innerHTML = _rehabItems.length ? _rehabItems.map((it, i) => `
+      <div class="rehab-row" style="display:flex; gap:8px; align-items:center; margin-bottom:6px;">
+        <input class="rehab-label" data-i="${i}" value="${escape(it.label)}" placeholder="Poste de travaux" style="flex:1;">
+        <span style="color:var(--muted);">$</span>
+        <input class="rehab-cost" data-i="${i}" type="number" value="${it.cost}" style="width:100px;">
+        <button class="btn ghost rehab-del" data-i="${i}" title="Retirer" style="padding:4px 8px;">×</button>
+      </div>`).join("")
+      : `<div class="muted" style="font-size:12.5px; padding:6px 0;">Aucun poste. Ajoute via les boutons ci-dessus ou l'IA.</div>`;
+    box.querySelectorAll(".rehab-label").forEach(inp => inp.addEventListener("input", e => { _rehabItems[+e.target.dataset.i].label = e.target.value; }));
+    box.querySelectorAll(".rehab-cost").forEach(inp => inp.addEventListener("input", e => { _rehabItems[+e.target.dataset.i].cost = Number(e.target.value) || 0; _updateRehabTotal(); }));
+    box.querySelectorAll(".rehab-del").forEach(b => b.addEventListener("click", e => { _rehabItems.splice(+e.target.dataset.i, 1); _renderRehabItems(); }));
+    _updateRehabTotal();
+  }
+  function _updateRehabTotal() { const t = $("#rehab-total"); if (t) t.textContent = fmtMoney(_rehabTotal()); }
+
+  $("#rehab-add-line")?.addEventListener("click", () => { _rehabItems.push({ label: "", cost: 0 }); _renderRehabItems(); });
+  $("#rehab-contingency-on")?.addEventListener("change", _updateRehabTotal);
+  $("#rehab-contingency-pct")?.addEventListener("input", _updateRehabTotal);
+  $("#rehab-modal-close")?.addEventListener("click", closeRehabModal);
+  $("#rehab-modal-backdrop")?.addEventListener("click", closeRehabModal);
+  $("#rehab-cancel")?.addEventListener("click", closeRehabModal);
+
+  $("#rehab-ai-btn")?.addEventListener("click", async () => {
+    if (!_rehabDealId) return;
+    const btn = $("#rehab-ai-btn"), st = $("#rehab-ai-status");
+    btn.disabled = true; st.textContent = "Analyse en cours…";
+    try {
+      const r = await API.rehabEstimate(_rehabDealId);
+      if (!r.ok) { st.textContent = r.error || "Échec"; return; }
+      _rehabItems = (r.items || []).map(i => ({ label: i.label, cost: Number(i.cost) || 0 }));
+      _renderRehabItems();
+      st.textContent = r.summary ? `✓ ${r.summary}` : "✓ Estimation IA appliquée";
+    } catch (e) { st.textContent = e.message; }
+    finally { btn.disabled = false; }
+  });
+
+  $("#rehab-apply")?.addEventListener("click", async () => {
+    if (!_rehabDealId) return;
+    const total = _rehabTotal();
+    const items = _rehabItems.filter(i => i.label || i.cost);
+    try {
+      const updated = await API.patchDeal(_rehabDealId, {
+        rehab_base: total,
+        rehab_items: items,
+        rehab_contingency_pct: $("#rehab-contingency-on").checked ? (Number($("#rehab-contingency-pct").value) || 0) : 0,
+      });
+      const i = (state.deals || []).findIndex(d => d.id === _rehabDealId);
+      if (i >= 0) state.deals[i] = updated.deal || updated;
+      toast(`Rehab mis à jour : ${fmtMoney(total)}`, "success");
+      closeRehabModal();
+      if (state.currentDealId === _rehabDealId || true) openDeal(state.currentDealId);
     } catch (e) { toast(e.message, "error"); }
   });
 

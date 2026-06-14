@@ -187,6 +187,74 @@ def _extract_json(text: str) -> Optional[dict]:
     return None
 
 
+REHAB_SYSTEM = """You are a fix-and-flip renovation estimator. Given a property, produce a realistic, itemized renovation budget to bring it to clean mid-grade rent-ready / sellable condition.
+
+Rules:
+- Localize costs to the property's market (use web_search for local labor/material costs if useful).
+- Base the scope on the beds/baths, square footage, age, and any stated condition or photo findings.
+- Output 6-12 concrete line items (e.g., "Kitchen — cabinets, counters, appliances", "Bathroom x2 — vanity, tile, fixtures", "Flooring — LVP throughout", "Interior paint", "Roof", "HVAC", "Electrical panel & fixtures", "Plumbing updates", "Windows", "Exterior / curb appeal").
+- Do NOT include a contingency line (the app adds it separately).
+
+CRITICAL: End with a SINGLE JSON code block, no text after:
+```json
+{ "items": [ {"label": "<short work description>", "cost": <integer USD>} ], "summary": "<1-2 sentences on scope/level>" }
+```"""
+
+
+def _build_rehab_prompt(deal: dict) -> str:
+    p = ["Estimate an itemized fix-and-flip renovation budget for this property:\n"]
+    p.append(f"- Address: {deal.get('address','')}")
+    if deal.get("city"): p.append(f"- City/State: {deal.get('city')}, {deal.get('state','')} {deal.get('zip','')}")
+    if deal.get("property_type"): p.append(f"- Type: {deal['property_type']}")
+    if deal.get("beds") is not None: p.append(f"- Beds: {deal['beds']}")
+    if deal.get("baths") is not None: p.append(f"- Baths: {deal['baths']}")
+    if deal.get("sqft"): p.append(f"- Square footage: {deal['sqft']}")
+    if deal.get("year_built"): p.append(f"- Year built: {deal['year_built']}")
+    if deal.get("rehab_scope"): p.append(f"- Intended scope: {deal['rehab_scope']}")
+    if deal.get("notes"): p.append(f"- Notes / condition: {str(deal['notes'])[:1500]}")
+    # Reuse any photo-analysis rehab findings if present
+    ai = deal.get("ai_insights") or {}
+    photos = (ai.get("photos") or {}) if isinstance(ai, dict) else {}
+    if isinstance(photos, dict) and photos.get("rehab_complexity"):
+        p.append(f"- Photo analysis rehab complexity: {photos.get('rehab_complexity')}")
+    p.append("\nAssume mid-grade finishes (new kitchen, updated baths, fresh flooring/paint). "
+             "Return the JSON itemized budget.")
+    return "\n".join(p)
+
+
+def estimate_rehab(deal: dict) -> dict:
+    """Call Claude (web_search) to produce an itemized rehab budget."""
+    api_key = get_api_key()
+    if not api_key:
+        return {"ok": False, "error": "No Anthropic API key configured. Add one in Settings → AI."}
+    import anthropic
+    client = anthropic.Anthropic(api_key=api_key)
+    model = get_model()
+    try:
+        message = client.messages.create(
+            model=model, max_tokens=2000, system=REHAB_SYSTEM,
+            tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 4}],
+            messages=[{"role": "user", "content": _build_rehab_prompt(deal)}],
+        )
+    except anthropic.AuthenticationError:
+        return {"ok": False, "error": "Invalid API key — check Settings → AI."}
+    except Exception as e:
+        log.exception("Rehab estimate failed")
+        return {"ok": False, "error": f"Rehab estimate failed: {e}"}
+    text = "\n".join(b.text for b in message.content if hasattr(b, "text"))
+    data = _extract_json(text)
+    if not data or not isinstance(data.get("items"), list):
+        return {"ok": False, "error": "Could not parse rehab estimate.", "raw_text": text[:1500]}
+    items = []
+    for it in data["items"]:
+        if isinstance(it, dict) and it.get("label"):
+            try:
+                items.append({"label": str(it["label"])[:120], "cost": int(round(float(it.get("cost") or 0)))})
+            except (TypeError, ValueError):
+                items.append({"label": str(it["label"])[:120], "cost": 0})
+    return {"ok": True, "items": items, "summary": data.get("summary", ""), "model": model}
+
+
 def research_arv(deal: dict) -> dict:
     """Call Claude with web_search to estimate ARV."""
     api_key = get_api_key()

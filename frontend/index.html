@@ -1677,6 +1677,44 @@ https://app.ispeedtolead.com/deal-speed/property/...
     </div>
   </div>
 
+  <!-- Rehab estimator -->
+  <div id="rehab-modal" class="modal" style="display:none">
+    <div class="modal-backdrop" id="rehab-modal-backdrop"></div>
+    <div class="modal-content" style="max-width:600px">
+      <header class="modal-header">
+        <h2>🛠 Estimateur de travaux</h2>
+        <button class="modal-close" id="rehab-modal-close">×</button>
+      </header>
+      <div class="modal-body">
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px;">
+          <button class="btn primary" id="rehab-ai-btn">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" stroke-linejoin="round"/></svg>
+            Estimer avec l'IA
+          </button>
+          <span id="rehab-ai-status" class="muted" style="font-size:12px;"></span>
+        </div>
+        <label class="muted" style="display:block; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px;">Ajout rapide</label>
+        <div id="rehab-catalog" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px;"></div>
+        <div id="rehab-items"></div>
+        <button class="btn ghost" id="rehab-add-line" style="margin-top:8px; font-size:12px;">+ Ajouter une ligne</button>
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:16px; border-top:1px solid var(--divider); padding-top:12px;">
+          <label style="display:flex; align-items:center; gap:8px; font-size:13px; margin:0;">
+            <input type="checkbox" id="rehab-contingency-on" checked style="width:16px;height:16px;">
+            Imprévus <input type="number" id="rehab-contingency-pct" value="15" min="0" max="50" style="width:54px; padding:4px 6px;">%
+          </label>
+          <div style="text-align:right;">
+            <div class="muted" style="font-size:11px;">Total</div>
+            <div id="rehab-total" style="font-size:22px; font-weight:800; font-family:'Inter Tight',sans-serif;">$0</div>
+          </div>
+        </div>
+      </div>
+      <footer class="modal-footer">
+        <button class="btn" id="rehab-cancel">Annuler</button>
+        <button class="btn primary" id="rehab-apply">Appliquer au deal</button>
+      </footer>
+    </div>
+  </div>
+
   <!-- Command palette -->
   <div id="cmdk" class="cmdk" style="display:none">
     <div class="cmdk-backdrop"></div>
