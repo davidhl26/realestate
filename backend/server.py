@@ -109,6 +109,13 @@ def healthz():
     return {"ok": True, "deals": len(db.list_deals())}
 
 
+@app.get("/api/backups")
+def backups_list():
+    """Available point-in-time snapshots of the data files (newest first)."""
+    from . import backup
+    return backup.list_snapshots(DATA_DIR)
+
+
 @app.get("/api/deals")
 def list_deals():
     deals = db.list_deals()

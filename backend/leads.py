@@ -92,6 +92,8 @@ class LeadsDB:
             with open(tmp, "w") as f:
                 json.dump(data, f, indent=2)
             os.replace(tmp, self.path)
+        from . import backup
+        backup.snapshot(self.path)
 
     def list_leads(self, status: Optional[str] = None) -> list:
         leads = self._read().get("leads", [])

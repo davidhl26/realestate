@@ -40,6 +40,8 @@ class DealsDB:
             with open(tmp, "w") as f:
                 json.dump(data, f, indent=2)
             os.replace(tmp, self.db_path)
+        from . import backup
+        backup.snapshot(self.db_path)
 
     def list_deals(self) -> list:
         return self._read().get("deals", [])
