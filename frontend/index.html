@@ -1140,8 +1140,24 @@ https://app.ispeedtolead.com/deal-speed/property/...
             </h3>
             <p class="muted" style="margin:4px 0 0; font-size:12px;">Drag-and-drop pour changer le statut. Click un lead pour ouvrir le détail.</p>
           </div>
-          <div style="display:flex; gap:8px; flex-wrap:wrap;">
-            <input type="search" id="kanban-search" placeholder="Filter leads…" class="input" style="font-size:12px; padding:6px 10px; max-width:200px;">
+          <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+            <input type="search" id="kanban-search" placeholder="Filter leads…" class="input" style="font-size:12px; padding:6px 10px; max-width:180px;">
+            <select id="kanban-sort" class="input" title="Trier les cartes" style="font-size:12px; padding:6px 8px;">
+              <option value="recent">Tri : récence</option>
+              <option value="score">Tri : score</option>
+              <option value="price">Tri : prix ↑</option>
+              <option value="profit">Tri : profit</option>
+            </select>
+            <select id="kanban-filter-grade" class="input" title="Filtrer par grade" style="font-size:12px; padding:6px 8px;">
+              <option value="">Grade : tous</option>
+              <option value="A">A</option><option value="B">B</option>
+              <option value="C">C</option><option value="D">D</option><option value="F">F</option>
+            </select>
+            <select id="kanban-filter-worth" class="input" title="Filtrer worth buying" style="font-size:12px; padding:6px 8px;">
+              <option value="">Achat : tous</option>
+              <option value="yes">✓ à acheter</option>
+              <option value="no">⚠ à éviter</option>
+            </select>
             <button class="btn" id="kanban-add-col-btn" title="Ajouter une colonne">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><rect x="3" y="4" width="6" height="16" rx="1"/><path d="M15 9v6M18 12h-6" stroke-linecap="round"/></svg>
               + Colonne
@@ -1192,9 +1208,12 @@ https://app.ispeedtolead.com/deal-speed/property/...
             <button class="btn ghost" id="lead-modal-close" style="font-size:18px;">×</button>
           </header>
           <div style="padding:16px 20px; max-height:68vh; overflow-y:auto;">
-            <div class="form-grid" style="grid-template-columns:1fr auto; gap:12px; align-items:end;">
+            <div class="form-grid" style="grid-template-columns:1fr 1fr auto; gap:12px; align-items:end;">
               <label>Colonne / statut
                 <select id="lead-modal-status"></select>
+              </label>
+              <label>📅 Date de relance
+                <input type="date" id="lead-modal-follow" style="width:100%;">
               </label>
               <a id="lead-modal-opendeal" class="btn" style="display:none;">Ouvrir le deal →</a>
             </div>

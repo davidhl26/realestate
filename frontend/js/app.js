@@ -4648,6 +4648,31 @@
   ];
   let _kanbanLeadsCache = [];
   let _kanbanSearchFilter = "";
+  let _kanbanSort = "recent";          // recent | score | price | profit
+  let _kanbanFilters = { grade: "", minScore: 0, worth: "" };  // worth: "" | "yes" | "no"
+
+  // Financials for a lead (uses the linked deal as fallback). Profit potential
+  // = ARV − price − rehab − selling costs (~8% of ARV); ROI on cash invested.
+  function _leadFin(lead) {
+    const deal = lead.external_id ? (state.deals || []).find(d => d.id === lead.external_id) : null;
+    const num = v => (v === 0 || v) ? Number(v) : null;
+    const price = num(lead.asking_price) ?? num(deal?.purchase_price);
+    const arv = num(lead.estimated_arv) ?? num(deal?.arv_base);
+    const rehab = num(lead.estimated_rehab) ?? num(deal?.rehab_base) ?? 0;
+    const score = num(lead.score) ?? num(deal?.score);
+    let profit = null, roi = null;
+    if (arv != null && price != null) {
+      profit = arv - price - (rehab || 0) - arv * 0.08;
+      const cashIn = price + (rehab || 0);
+      roi = cashIn > 0 ? (profit / cashIn) * 100 : null;
+    }
+    return { deal, price, arv, rehab, score, profit, roi };
+  }
+  function _daysSince(iso) {
+    if (!iso) return null;
+    const ms = Date.now() - new Date(iso).getTime();
+    return ms > 0 ? Math.floor(ms / 86400000) : 0;
+  }
 
   async function renderLeadsKanban() {
     const board = $("#leads-kanban");
@@ -4700,24 +4725,58 @@
     _saveKanbanColumns();
   }
 
+  function _kanbanVisible() {
+    const f = (_kanbanSearchFilter || "").toLowerCase();
+    const { grade, minScore, worth } = _kanbanFilters;
+    return _kanbanLeadsCache.filter(l => {
+      if (f && !((l.address || "") + " " + (l.city || "") + " " + (l.owner_name || ""))
+            .toLowerCase().includes(f)) return false;
+      const fin = _leadFin(l);
+      if (grade) {
+        const g = (l.ai_analysis?.result?.flip_grade || l.grade || fin.deal?.grade || "").toUpperCase();
+        if (!g.startsWith(grade)) return false;
+      }
+      if (minScore && (fin.score == null || fin.score < minScore)) return false;
+      if (worth) {
+        const wb = l.ai_analysis?.result?.worth_buying;
+        if (worth === "yes" && wb !== true) return false;
+        if (worth === "no" && wb !== false) return false;
+      }
+      return true;
+    });
+  }
+
+  function _sortLeads(leads) {
+    const fin = l => _leadFin(l);
+    const by = {
+      recent: (a, b) => (b.status_changed_at || b.added_at || "").localeCompare(a.status_changed_at || a.added_at || ""),
+      score:  (a, b) => (fin(b).score || 0) - (fin(a).score || 0),
+      price:  (a, b) => (fin(a).price || 0) - (fin(b).price || 0),
+      profit: (a, b) => (fin(b).profit ?? -1e12) - (fin(a).profit ?? -1e12),
+    }[_kanbanSort] || null;
+    return by ? [...leads].sort(by) : leads;
+  }
+
   function _renderKanbanColumns() {
     const board = $("#leads-kanban");
     if (!board) return;
-    const filter = (_kanbanSearchFilter || "").toLowerCase();
-    const filtered = filter
-      ? _kanbanLeadsCache.filter(l =>
-          ((l.address || "") + " " + (l.city || "") + " " + (l.owner_name || ""))
-            .toLowerCase().includes(filter))
-      : _kanbanLeadsCache;
-
+    const filtered = _kanbanVisible();
     const cols = _kanbanColumns;
     const firstKey = cols[0]?.key || "new";
+    const kfmt = v => (v == null) ? "" : (Math.abs(v) >= 1000 ? `$${Math.round(v / 1000)}K` : `$${Math.round(v)}`);
+
     board.innerHTML = cols.map(s => {
       // Leads whose status doesn't match any column fall into the first column.
-      const leads = filtered.filter(l => {
+      let leads = filtered.filter(l => {
         const st = l.status || "new";
         return st === s.key || (s.key === firstKey && !cols.some(c => c.key === st));
       });
+      leads = _sortLeads(leads);
+      let sumPrice = 0, sumProfit = 0;
+      leads.forEach(l => { const f = _leadFin(l); sumPrice += f.price || 0; sumProfit += f.profit || 0; });
+      const totals = leads.length
+        ? `<div class="kanban-col-totals">${kfmt(sumPrice)}${sumProfit ? ` · <span class="${sumProfit >= 0 ? 'money' : 'risk'}">▲${kfmt(sumProfit)}</span>` : ''}</div>`
+        : "";
       return `
         <div class="kanban-col" data-status="${escape(s.key)}" style="border-top-color:${escape(s.color || '#6b7280')};">
           <div class="kanban-col-header">
@@ -4728,6 +4787,7 @@
               <button class="kanban-col-btn" data-col-delete="${escape(s.key)}" title="Supprimer la colonne">×</button>
             </span>
           </div>
+          ${totals}
           <div class="kanban-col-body">
             ${leads.length === 0
               ? `<div class="kanban-empty">Glisse un lead ici</div>`
@@ -4745,9 +4805,10 @@
 
   function _renderKanbanCard(lead) {
     const addr = lead.address || lead.owner_name || "(no address)";
-    const deal = lead.external_id ? (state.deals || []).find(d => d.id === lead.external_id) : null;
+    const fin = _leadFin(lead);
+    const deal = fin.deal;
     const img = lead.image || (lead.images && lead.images[0]) || deal?.image || "";
-    const price = lead.asking_price ? `$${Math.round(lead.asking_price / 1000)}K` : "";
+    const price = fin.price != null ? `$${Math.round(fin.price / 1000)}K` : "";
     const grade = lead.ai_analysis?.result?.flip_grade || lead.grade || deal?.grade;
     const gradeCls = grade ? (/^[AB]/.test(grade) ? "money" : /^[DF]/.test(grade) ? "risk" : "") : "";
     const worthBuying = lead.ai_analysis?.result?.worth_buying;
@@ -4755,6 +4816,28 @@
     const thumb = img
       ? `<div class="kanban-card-thumb" style="background-image:url('${escape(img)}')"></div>`
       : `<div class="kanban-card-thumb empty">🏡</div>`;
+
+    // D — profit potential (+ROI) on the card
+    let profitTag = "";
+    if (fin.profit != null) {
+      const k = Math.round(fin.profit / 1000);
+      const roi = fin.roi != null ? ` · ${Math.round(fin.roi)}%` : "";
+      profitTag = `<span class="kanban-card-profit ${fin.profit >= 0 ? 'money' : 'risk'}" title="Profit potentiel (ARV − prix − rehab − 8% frais de vente)">▲ ${k >= 0 ? '$' + k : '-$' + Math.abs(k)}K${roi}</span>`;
+    }
+
+    // B — days in stage + follow-up
+    const days = _daysSince(lead.status_changed_at || lead.added_at);
+    let ageCls = "", ageTitle = "Jours dans cette étape";
+    if (days != null && days >= 30) ageCls = "stale-hot";
+    else if (days != null && days >= 14) ageCls = "stale";
+    const ageTag = days != null ? `<span class="kanban-card-age ${ageCls}" title="${ageTitle}">${days}j</span>` : "";
+    let followTag = "";
+    if (lead.follow_up) {
+      const fd = _daysSince(lead.follow_up);
+      const overdue = fd != null && fd >= 0;  // date in the past (or today)
+      followTag = `<span class="kanban-card-follow ${overdue ? 'overdue' : ''}" title="Relance prévue">📅 ${escape(lead.follow_up)}</span>`;
+    }
+
     return `
       <div class="kanban-card" draggable="true" data-id="${escape(lead.id)}"${deal ? ` data-deal="${escape(deal.id)}"` : ""}>
         ${thumb}
@@ -4762,10 +4845,13 @@
           <div class="kanban-card-title">${escape(addr)}</div>
           <div class="kanban-card-meta">
             ${price ? `<span class="money">${price}</span>` : ''}
+            ${profitTag}
             ${grade ? `<span class="${gradeCls}">${escape(grade)}</span>` : ''}
             ${worthBuying === false ? '<span class="risk">⚠</span>' : ''}
             ${worthBuying === true ? '<span class="money">✓</span>' : ''}
             ${nComments ? `<span class="kanban-card-comments" title="${nComments} commentaire(s)">💬 ${nComments}</span>` : ''}
+            ${ageTag}
+            ${followTag}
             ${deal ? '<span class="kanban-card-link" title="Voir le deal">↗</span>' : ''}
           </div>
         </div>
@@ -4863,6 +4949,9 @@
     _kanbanSearchFilter = e.target.value;
     _renderKanbanColumns();
   });
+  $("#kanban-sort")?.addEventListener("change", e => { _kanbanSort = e.target.value; _renderKanbanColumns(); });
+  $("#kanban-filter-grade")?.addEventListener("change", e => { _kanbanFilters.grade = e.target.value; _renderKanbanColumns(); });
+  $("#kanban-filter-worth")?.addEventListener("change", e => { _kanbanFilters.worth = e.target.value; _renderKanbanColumns(); });
   // "New lead" toolbar button → opens the deal picker (any deal can become a lead)
   $("#kanban-add-lead")?.addEventListener("click", () => {
     _newLeadInitialStatus = "new";
@@ -4896,6 +4985,7 @@
       `<option value="${escape(c.key)}">${escape(c.label)}</option>`).join("");
     sel.value = lead.status || (_kanbanColumns[0]?.key || "new");
     $("#lead-modal-notes").value = lead.notes || "";
+    const fu = $("#lead-modal-follow"); if (fu) fu.value = lead.follow_up || "";
     const od = $("#lead-modal-opendeal");
     if (lead.external_id && (state.deals || []).some(d => d.id === lead.external_id)) {
       od.style.display = "";
@@ -4951,6 +5041,7 @@
       const updated = await API.leadPatch(_leadModalId, {
         status: $("#lead-modal-status").value,
         notes: $("#lead-modal-notes").value,
+        follow_up: $("#lead-modal-follow")?.value || "",
       });
       _patchLeadCache(updated);
       toast("Lead enregistré", "success");

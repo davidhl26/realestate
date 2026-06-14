@@ -3781,6 +3781,25 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
   display: flex; gap: 7px; align-items: center; flex-wrap: wrap;
 }
 .kanban-card-link { color: var(--accent); font-weight: 700; }
+/* Per-column pipeline totals */
+.kanban-col-totals {
+  font-size: 11px; color: var(--muted); padding: 0 6px 6px;
+  font-variant-numeric: tabular-nums; border-bottom: 1px solid var(--border); margin-bottom: 6px;
+}
+.kanban-col-totals .money { color: var(--green); font-weight: 600; }
+.kanban-col-totals .risk { color: var(--red); font-weight: 600; }
+/* Card: profit / aging / follow-up chips */
+.kanban-card-profit { font-weight: 700; font-variant-numeric: tabular-nums; }
+.kanban-card-profit.money { color: var(--green); }
+.kanban-card-profit.risk { color: var(--red); }
+.kanban-card-age {
+  background: var(--surface-2); color: var(--muted);
+  border-radius: 8px; padding: 0 6px; font-variant-numeric: tabular-nums;
+}
+.kanban-card-age.stale { background: #fde9c8; color: #9a6a12; }
+.kanban-card-age.stale-hot { background: #fbd5cc; color: #b4472d; font-weight: 700; }
+.kanban-card-follow { color: var(--muted); }
+.kanban-card-follow.overdue { color: #b4472d; font-weight: 700; }
 .kanban-card-edit {
   flex: 0 0 auto; background: none; border: none; cursor: pointer;
   color: var(--muted); font-size: 13px; padding: 3px 4px; border-radius: 5px;

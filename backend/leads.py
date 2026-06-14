@@ -116,10 +116,17 @@ class LeadsDB:
         idx = next((i for i, l in enumerate(data["leads"])
                      if l["id"] == lead["id"]), None)
         if idx is None:
+            lead.setdefault("status_changed_at", lead.get("added_at", lead["updated_at"]))
             data["leads"].append(lead)
         else:
+            old = data["leads"][idx]
             # preserve original add date
-            lead["added_at"] = data["leads"][idx].get("added_at", lead["updated_at"])
+            lead["added_at"] = old.get("added_at", lead["updated_at"])
+            # track when the status last changed (for "days in stage" / aging)
+            if old.get("status") != lead.get("status"):
+                lead["status_changed_at"] = lead["updated_at"]
+            else:
+                lead["status_changed_at"] = old.get("status_changed_at", lead.get("added_at"))
             data["leads"][idx] = lead
         data["updated"] = _now()
         self._write(data)
