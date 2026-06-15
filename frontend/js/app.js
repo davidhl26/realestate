@@ -2260,6 +2260,87 @@
     } catch (e) { toast(e.message, "error"); }
   });
 
+  // ============== SEARCH (sourcing) ==============
+  async function runSearch() {
+    const input = ($("#search-input")?.value || "").trim();
+    if (!input) { toast("Entre une URL de recherche Zillow ou une ville", "warn"); return; }
+    const st = $("#search-status"), btn = $("#search-run");
+    btn.disabled = true;
+    st.innerHTML = '<span class="spinner"></span> Recherche IA + web en cours… (~30-60s)';
+    $("#search-results").innerHTML = "";
+    const payload = { max_listings: Number($("#search-count").value) || 10 };
+    if (/zillow\.com/i.test(input)) payload.url = input; else payload.location = input;
+    const pm = Number($("#search-pricemax")?.value); if (pm) payload.price_max = pm;
+    try {
+      if (!state.deals || !state.deals.length) { try { state.deals = await API.listDeals(); } catch {} }
+      const res = await API.searchListings(payload);
+      if (!res.ok) { st.innerHTML = `<span style="color:var(--red)">${escape(res.error || "Échec de la recherche")}</span>`; return; }
+      st.textContent = `✓ ${(res.listings || []).length} annonce(s)${res.area_label ? " — " + res.area_label : ""}`;
+      renderSearchResults(res);
+    } catch (e) { st.innerHTML = `<span style="color:var(--red)">${escape(e.message)}</span>`; }
+    finally { btn.disabled = false; }
+  }
+
+  function _searchAddr(l) {
+    return [l.address, l.city, `${l.state || ""} ${l.zip || ""}`.trim()].filter(s => s && s.trim()).join(", ");
+  }
+  async function _insertSearchDeal(l, btn) {
+    const full = _searchAddr(l) || l.address || "";
+    const zl = l.url || ("https://www.zillow.com/homes/" + encodeURIComponent(full) + "_rb/");
+    btn.disabled = true; btn.textContent = "…";
+    try {
+      const r = await API.createDeal({
+        address: full, city: l.city || "", state: l.state || "", zip: String(l.zip || ""),
+        property_type: "Single Family Residence",
+        beds: l.beds || null, baths: l.baths || null, sqft: l.sqft || null,
+        purchase_price: l.price || 0,
+        source: "search", source_url: zl, status: "evaluating",
+        notes: `[Importé via Search]\n${zl}`,
+      });
+      (state.deals = state.deals || []).push(r.deal || r);
+      btn.textContent = "✓ Ajouté"; btn.classList.add("added"); btn.classList.remove("primary");
+    } catch (e) { btn.disabled = false; btn.textContent = "+ Ajouter"; toast(e.message, "error"); }
+  }
+  function renderSearchResults(res) {
+    const box = $("#search-results");
+    const listings = res.listings || [];
+    if (!listings.length) {
+      box.innerHTML = `<div class="card"><p class="muted">Aucune annonce trouvée.${res.notes ? " " + escape(res.notes) : ""}</p></div>`;
+      return;
+    }
+    const onBoard = a => (state.deals || []).some(d =>
+      (d.address || "").toLowerCase().split(",")[0].trim() === (a || "").toLowerCase().split(",")[0].trim());
+    box.innerHTML = `
+      <div class="card" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+        <div><b>${listings.length}</b> annonce(s)${res.area_label ? ` · <span class="muted">${escape(res.area_label)}</span>` : ""}</div>
+        <button class="btn" id="search-add-all">+ Tout ajouter</button>
+      </div>
+      <div class="deals-grid">${listings.map((l, i) => {
+        const ob = onBoard(l.address);
+        const price = l.price ? `$${Math.round(l.price / 1000)}K` : "—";
+        return `<div class="card search-result">
+          <div style="font-weight:600;">${escape(l.address || "?")}</div>
+          <div class="muted" style="font-size:12px;">${escape([l.city, l.state, l.zip].filter(Boolean).join(" "))}</div>
+          <div style="margin:8px 0; font-size:13px;"><span class="money">${price}</span> · ${l.beds || "?"}bd / ${l.baths || "?"}ba${l.sqft ? ` · ${l.sqft} sf` : ""}</div>
+          <div style="display:flex; gap:8px;">
+            <button class="btn ${ob ? "" : "primary"} search-add" data-i="${i}" ${ob ? "disabled" : ""}>${ob ? "✓ Déjà sur le board" : "+ Ajouter"}</button>
+            ${l.url ? `<a class="btn ghost" href="${escape(l.url)}" target="_blank" rel="noopener">Zillow ↗</a>` : ""}
+          </div>
+        </div>`;
+      }).join("")}</div>`;
+    box.querySelectorAll(".search-add").forEach(b => b.addEventListener("click", () => {
+      if (!b.disabled) _insertSearchDeal(listings[+b.dataset.i], b);
+    }));
+    $("#search-add-all")?.addEventListener("click", async () => {
+      for (const b of [...box.querySelectorAll(".search-add")].filter(x => !x.disabled)) {
+        await _insertSearchDeal(listings[+b.dataset.i], b);
+      }
+      toast("Annonces ajoutées au board", "success");
+    });
+  }
+  $("#search-run")?.addEventListener("click", runSearch);
+  $("#search-input")?.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); runSearch(); } });
+
   // ============== REHAB ESTIMATOR ==============
   const REHAB_CATALOG = [
     ["Cuisine", 12000], ["Salle de bain", 6000], ["Sols", 4000], ["Peinture", 3500],

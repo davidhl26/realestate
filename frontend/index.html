@@ -52,6 +52,10 @@
         Deals
         <span class="nav-badge" id="nav-deal-count"></span>
       </a>
+      <a data-view="search" class="nav-link">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg></span>
+        Search
+      </a>
       <a data-view="usamap" class="nav-link">
         <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z M9 3v15 M15 6v15" stroke-linejoin="round"/></svg></span>
         USA Map
@@ -766,6 +770,44 @@
 
     <!-- ============ COMPARE ============ -->
     
+
+    <!-- ============ SEARCH ============ -->
+    <section id="view-search" class="view">
+      <header class="page-header">
+        <div class="page-header-text">
+          <div class="page-eyebrow">Sourcing</div>
+          <h2>Search</h2>
+          <p>Trouve de nouvelles annonces via l'IA (URL de recherche Zillow ou ville), puis ajoute chaque deal d'un clic.</p>
+        </div>
+      </header>
+
+      <div class="card hero-card">
+        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+          <label style="flex:1; min-width:260px;">URL de recherche Zillow <span class="muted" style="font-weight:400;">ou ville (ex. « Cleveland, OH »)</span>
+            <input id="search-input" type="text" placeholder="https://www.zillow.com/homes/for_sale/?searchQueryState=…  ou  Cleveland, OH" style="width:100%;">
+          </label>
+          <label style="width:130px;">Prix max ($)
+            <input id="search-pricemax" type="number" placeholder="optionnel">
+          </label>
+          <label style="width:110px;">Combien
+            <select id="search-count">
+              <option value="10" selected>10</option>
+              <option value="5">5</option>
+              <option value="20">20</option>
+              <option value="30">30</option>
+              <option value="40">40</option>
+            </select>
+          </label>
+          <button class="btn primary" id="search-run">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="14" height="14"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg>
+            Rechercher
+          </button>
+        </div>
+        <div id="search-status" class="status-line" style="margin-top:10px;"></div>
+      </div>
+
+      <div id="search-results"></div>
+    </section>
 
     <!-- ============ BATCH IMPORT ============ -->
     <section id="view-batch" class="view">

@@ -418,8 +418,11 @@ def _build_listing_search_prompt(params: dict, max_listings: int = 60) -> str:
     if mb:
         lines.append(f"- Bounding box: lat {mb.get('south')}…{mb.get('north')}, "
                      f"lng {mb.get('west')}…{mb.get('east')}")
-    lines.append("  → First identify which city / neighborhoods / suburbs this box covers, "
-                 "then search each of them.")
+    if mb or (clat is not None and clng is not None):
+        lines.append("  → First identify which city / neighborhoods / suburbs this box covers, "
+                     "then search each of them.")
+    elif p.get("search_term"):
+        lines.append("  → Search this location and its neighborhoods/suburbs/zip codes.")
     if p.get("price_max"):
         lines.append(f"- Maximum price: ${int(p['price_max']):,}")
     if p.get("price_min"):

@@ -227,11 +227,12 @@ def get_deal(deal_id: str):
 
 @app.post("/api/deals")
 def create_deal(deal: dict = Body(...)):
-    # Ensure required minimal fields
+    # Only the address is strictly required; price/ARV/rehab can be filled later
+    # (e.g. quick-insert from Search, then refine).
     if not deal.get("address"):
         raise HTTPException(400, "address is required")
     if not deal.get("purchase_price"):
-        raise HTTPException(400, "purchase_price is required")
+        deal["purchase_price"] = 0
     # Auto-compute score/grade/signal so they are stored
     m = analyzer.compute_metrics(deal)
     score, grade, signal = analyzer.compute_score(deal, m)
@@ -652,6 +653,37 @@ def board_states_map():
         "total_deals": sum(s["my_deals_count"] for s in out),
         "total_profit_potential": sum(s["my_total_profit"] for s in out),
     }
+
+
+@app.post("/api/search/listings")
+def search_listings(payload: dict = Body(...)):
+    """Interactive Zillow-area search: returns matching listings (no deals
+    created) so the user can insert them one click at a time.
+
+    Body: { "url": "<zillow search url>" } OR
+          { "location": "Cleveland, OH", "price_max": 125000, "beds_min": 3 }
+          + optional "max_listings" (1-40)."""
+    from . import ai_research
+    url = (payload.get("url") or "").strip()
+    try:
+        max_listings = int(payload.get("max_listings") or 15)
+    except (TypeError, ValueError):
+        max_listings = 15
+    max_listings = max(1, min(max_listings, 40))
+
+    if url and scraper.is_zillow_search_url(url):
+        params = scraper.parse_zillow_search_url(url)
+        if not params:
+            raise HTTPException(400, "Could not read the filters from that Zillow search URL")
+    else:
+        loc = (payload.get("location") or url or "").strip()
+        if not loc:
+            raise HTTPException(400, "Provide a Zillow search URL or a location")
+        params = {"search_term": loc}
+        for k in ("price_max", "price_min", "beds_min", "baths_min"):
+            if payload.get(k):
+                params[k] = payload[k]
+    return ai_research.find_listings_in_area(params, max_listings=max_listings)
 
 
 @app.post("/api/batch/start")
