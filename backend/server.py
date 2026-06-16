@@ -687,6 +687,117 @@ def search_listings(payload: dict = Body(...)):
     return ai_research.find_listings_in_area(params, max_listings=max_listings)
 
 
+def _compute_max_bid(arv, rehab, *, target_margin_pct=20.0, holding=3000.0,
+                     selling_pct=8.0, premium_pct=5.0, closing=2500.0):
+    """Disciplined max auction bid from ARV + rehab.
+
+    All-in cost at purchase = bid*(1+premium) + closing. We solve for the bid
+    that still leaves the target profit after rehab, selling and holding costs.
+    Also returns the classic 70%-rule reference (ARV*0.70 - rehab).
+    """
+    arv = float(arv or 0)
+    rehab = float(rehab or 0)
+    selling = arv * (selling_pct / 100.0)
+    target_profit = arv * (target_margin_pct / 100.0)
+    premium = premium_pct / 100.0
+    # bid*(1+premium) = ARV - rehab - selling - holding - closing - target_profit
+    net = arv - rehab - selling - float(holding) - float(closing) - target_profit
+    max_bid = max(0.0, net / (1.0 + premium))
+    mao70 = max(0.0, arv * 0.70 - rehab)
+    all_in = max_bid * (1.0 + premium) + float(closing)
+    profit_at_max = arv - all_in - rehab - selling - float(holding)
+    return {
+        "max_bid": int(round(max_bid)),
+        "mao70": int(round(mao70)),
+        "all_in_at_max": int(round(all_in + rehab)),
+        "target_profit": int(round(target_profit)),
+        "profit_at_max": int(round(profit_at_max)),
+        "selling_costs": int(round(selling)),
+        "holding": int(round(float(holding))),
+        "closing": int(round(float(closing))),
+        "premium_pct": premium_pct,
+        "target_margin_pct": target_margin_pct,
+    }
+
+
+@app.post("/api/auction/analyze")
+def auction_analyze(payload: dict = Body(...)):
+    """Analyze an auction property and recommend a disciplined MAX BID.
+
+    Body: { address (required), opening_bid, beds, baths, sqft, year_built,
+            comments, target_margin_pct, holding,
+            arv_override, rehab_override }
+    The user still places the bid themselves — this only computes the number.
+    """
+    from . import ai_research
+    address = (payload.get("address") or "").strip()
+    if not address:
+        raise HTTPException(400, "address required (copy it from the auction listing)")
+
+    arv_override = payload.get("arv_override")
+    rehab_override = payload.get("rehab_override")
+    ai = {"ok": True, "arv": None, "rehab": None, "risks": [],
+          "condition_summary": "", "summary": "", "arv_confidence": "Low"}
+    # Skip the AI call only if BOTH numbers are supplied manually.
+    if arv_override in (None, "") or rehab_override in (None, ""):
+        ai = ai_research.analyze_auction({
+            "address": address,
+            "beds": payload.get("beds"), "baths": payload.get("baths"),
+            "sqft": payload.get("sqft"), "year_built": payload.get("year_built"),
+            "opening_bid": payload.get("opening_bid"),
+            "comments": payload.get("comments"),
+        })
+        if not ai.get("ok"):
+            return {"ok": False, "error": ai.get("error", "AI analysis failed"),
+                    "raw_text": ai.get("raw_text")}
+
+    def _num(v, fallback=None):
+        try: return float(v)
+        except (TypeError, ValueError): return fallback
+    arv = _num(arv_override) if arv_override not in (None, "") else _num(ai.get("arv"))
+    rehab = _num(rehab_override) if rehab_override not in (None, "") else _num(ai.get("rehab"))
+    if not arv:
+        return {"ok": False, "error": "Could not determine an ARV — add one manually.",
+                "ai": ai}
+
+    try:
+        margin = float(payload.get("target_margin_pct") or 20)
+    except (TypeError, ValueError):
+        margin = 20.0
+    holding = _num(payload.get("holding"), 3000.0)
+    bid = _compute_max_bid(arv, rehab or 0, target_margin_pct=margin, holding=holding)
+
+    opening = _num(payload.get("opening_bid"))
+    verdict = "go"
+    note = ""
+    if opening is not None and opening > 0:
+        if opening > bid["max_bid"]:
+            verdict, note = "pass", "L'enchère de départ dépasse déjà ton max — passe."
+        elif opening > bid["max_bid"] * 0.9:
+            verdict, note = "tight", "Marge serrée : peu de place avant ton max."
+        else:
+            verdict, note = "go", "De la marge sous ton enchère max."
+    if not arv or (rehab and rehab > arv * 0.6):
+        verdict = "caution" if verdict == "go" else verdict
+
+    return {
+        "ok": True,
+        "address": address,
+        "arv": int(round(arv)),
+        "rehab": int(round(rehab or 0)),
+        "arv_confidence": ai.get("arv_confidence", "Low"),
+        "condition_summary": ai.get("condition_summary", ""),
+        "summary": ai.get("summary", ""),
+        "risks": ai.get("risks", []),
+        "opening_bid": int(round(opening)) if opening else None,
+        "verdict": verdict,
+        "verdict_note": note,
+        "ai_used": arv_override in (None, "") or rehab_override in (None, ""),
+        "model": ai.get("model"),
+        **bid,
+    }
+
+
 @app.post("/api/batch/start")
 def batch_start(payload: dict = Body(...)):
     """Start a batch scraping job.

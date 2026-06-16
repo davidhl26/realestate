@@ -562,6 +562,17 @@ kbd {
   background: linear-gradient(135deg, var(--card) 0%, rgba(31, 203, 137, 0.04) 100%);
 }
 
+/* ============== AUCTION ASSISTANT ============== */
+.auction-disclaimer { margin-bottom: 14px; }
+.auc-stat {
+  background: var(--bg, var(--card));
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+.auc-stat-l { font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.auc-stat-v { font-size: 20px; font-weight: 700; margin-top: 3px; }
+
 /* ============== STATS GRID ============== */
 .stats-grid {
   display: grid;

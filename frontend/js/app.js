@@ -2441,6 +2441,133 @@
   });
   _renderSavedSearches();
 
+  // ============== AUCTION ASSISTANT ==============
+  let _aucLast = null;  // last analysis result
+  function _gatherAuction() {
+    const v = id => ($(id)?.value || "").trim();
+    const n = id => { const x = Number(v(id)); return x > 0 ? x : null; };
+    const p = { address: v("#auc-address") };
+    if (n("#auc-opening")) p.opening_bid = n("#auc-opening");
+    if (n("#auc-beds")) p.beds = n("#auc-beds");
+    if (n("#auc-baths")) p.baths = n("#auc-baths");
+    if (n("#auc-sqft")) p.sqft = n("#auc-sqft");
+    if (n("#auc-year")) p.year_built = n("#auc-year");
+    if (Number(v("#auc-margin")) > 0) p.target_margin_pct = Number(v("#auc-margin"));
+    if (Number(v("#auc-holding")) >= 0 && v("#auc-holding")) p.holding = Number(v("#auc-holding"));
+    if (v("#auc-comments")) p.comments = v("#auc-comments");
+    if (n("#auc-arv-override")) p.arv_override = n("#auc-arv-override");
+    if (n("#auc-rehab-override")) p.rehab_override = n("#auc-rehab-override");
+    if (v("#auc-url")) p.url = v("#auc-url");
+    return p;
+  }
+  async function runAuction() {
+    const payload = _gatherAuction();
+    if (!payload.address) { toast("Colle d'abord l'adresse du bien", "warn"); return; }
+    const st = $("#auc-status"), btn = $("#auc-run");
+    btn.disabled = true;
+    const ai = !(payload.arv_override && payload.rehab_override);
+    st.innerHTML = ai ? '<span class="spinner"></span> Analyse IA + comps en cours… (~30-60s)' : '<span class="spinner"></span> Calcul…';
+    $("#auc-result").innerHTML = "";
+    try {
+      if (!state.deals || !state.deals.length) { try { state.deals = await API.listDeals(); } catch {} }
+      const r = await API.auctionAnalyze(payload);
+      if (!r.ok) { st.innerHTML = `<span style="color:var(--red)">${escape(r.error || "Échec de l'analyse")}</span>`; return; }
+      _aucLast = r; st.textContent = "✓ Analyse terminée";
+      renderAuctionResult(r);
+    } catch (e) { st.innerHTML = `<span style="color:var(--red)">${escape(e.message)}</span>`; }
+    finally { btn.disabled = false; }
+  }
+  function renderAuctionResult(r) {
+    const K = v => v == null ? "—" : "$" + Math.round(v / 1000) + "K";
+    const D = v => v == null ? "—" : "$" + Math.round(v).toLocaleString("en-US");
+    const verdict = {
+      go: ["var(--green)", "✅ GO", "De la marge sous ton enchère max."],
+      tight: ["#e8a93b", "⚠️ SERRÉ", "Marge fine — discipline absolue."],
+      pass: ["var(--red)", "⛔ PASSE", "L'enchère de départ dépasse déjà ton max."],
+      caution: ["#e8a93b", "⚠️ PRUDENCE", "Rehab lourd vs ARV — vérifie l'état."],
+    }[r.verdict] || ["var(--muted)", "—", ""];
+    const margin = r.arv ? Math.round(r.profit_at_max / r.arv * 100) : null;
+    const openLine = r.opening_bid != null
+      ? `<div style="font-size:13px;">Enchère de départ : <strong>${D(r.opening_bid)}</strong> · ${r.opening_bid <= r.max_bid ? `<span style="color:var(--green)">marge de ${D(r.max_bid - r.opening_bid)} sous ton max</span>` : `<span style="color:var(--red)">déjà ${D(r.opening_bid - r.max_bid)} au-dessus de ton max</span>`}</div>`
+      : "";
+    const risks = (r.risks || []).length ? `<div style="margin-top:10px;"><div style="font-weight:600; font-size:13px; margin-bottom:4px;">⚠️ Risques enchère</div><ul style="margin:0; padding-left:18px; font-size:13px; line-height:1.5;">${r.risks.map(x => `<li>${escape(x)}</li>`).join("")}</ul></div>` : "";
+    $("#auc-result").innerHTML = `
+      <div class="card" style="display:grid; gap:16px;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
+          <div>
+            <div style="font-weight:700; font-size:16px;">${escape(r.address)}</div>
+            <div class="muted" style="font-size:12px;">${r.ai_used ? `Estimé par l'IA · confiance ARV : ${escape(r.arv_confidence || "—")}` : "Valeurs manuelles"}</div>
+          </div>
+          <span class="pill" style="background:${verdict[0]}1a; color:${verdict[0]}; font-weight:700; font-size:14px; padding:6px 14px;">${verdict[1]}</span>
+        </div>
+
+        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px;">
+          <div class="auc-stat"><div class="auc-stat-l">ARV estimé</div><div class="auc-stat-v">${D(r.arv)}</div></div>
+          <div class="auc-stat"><div class="auc-stat-l">Rehab estimé</div><div class="auc-stat-v">${D(r.rehab)}</div></div>
+          <div class="auc-stat" style="background:var(--green)15; border:1px solid var(--green);">
+            <div class="auc-stat-l" style="color:var(--green); font-weight:700;">🎯 ENCHÈRE MAX</div>
+            <div class="auc-stat-v" style="color:var(--green); font-size:26px;">${D(r.max_bid)}</div>
+          </div>
+          <div class="auc-stat"><div class="auc-stat-l">Profit à ce max</div><div class="auc-stat-v">${D(r.profit_at_max)}${margin != null ? ` <span class="muted" style="font-size:12px;">(${margin}%)</span>` : ""}</div></div>
+        </div>
+
+        ${openLine}
+        ${verdict[2] ? `<div style="font-size:13px; color:${verdict[0]};">${verdict[2]}${r.verdict_note && r.verdict_note !== verdict[2] ? " " + escape(r.verdict_note) : ""}</div>` : ""}
+
+        <details style="font-size:13px;">
+          <summary style="cursor:pointer; font-weight:600;">Détail du calcul</summary>
+          <div style="margin-top:8px; display:grid; grid-template-columns:1fr 1fr; gap:4px 18px; max-width:480px;">
+            <span>ARV</span><span style="text-align:right;">${D(r.arv)}</span>
+            <span>− Rehab</span><span style="text-align:right;">−${D(r.rehab)}</span>
+            <span>− Frais de vente (8%)</span><span style="text-align:right;">−${D(r.selling_costs)}</span>
+            <span>− Portage</span><span style="text-align:right;">−${D(r.holding)}</span>
+            <span>− Clôture</span><span style="text-align:right;">−${D(r.closing)}</span>
+            <span>− Marge cible (${r.target_margin_pct}%)</span><span style="text-align:right;">−${D(r.target_profit)}</span>
+            <span style="font-weight:600; border-top:1px solid var(--border); padding-top:4px;">= Enchère max (÷ ${1 + r.premium_pct / 100} prime ${r.premium_pct}%)</span><span style="text-align:right; font-weight:600; border-top:1px solid var(--border); padding-top:4px;">${D(r.max_bid)}</span>
+            <span class="muted">Réf. règle des 70% (ARV×0.70 − rehab)</span><span class="muted" style="text-align:right;">${D(r.mao70)}</span>
+            <span class="muted">Tout compris à l'achat</span><span class="muted" style="text-align:right;">${D(r.all_in_at_max)}</span>
+          </div>
+          <p class="muted" style="margin-top:8px; font-size:12px;">Prime acheteur auction.com ~${r.premium_pct}% appliquée sur l'enchère. ${r.summary ? escape(r.summary) : ""}</p>
+        </details>
+
+        ${r.condition_summary ? `<div style="font-size:13px;"><strong>État :</strong> ${escape(r.condition_summary)}</div>` : ""}
+        ${risks}
+
+        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+          <button class="btn primary" id="auc-add-board">+ Ajouter au board</button>
+          ${($("#auc-url")?.value || "").trim() ? `<a class="btn ghost" href="${escape($("#auc-url").value.trim())}" target="_blank" rel="noopener">Voir la fiche ↗</a>` : ""}
+        </div>
+      </div>`;
+    $("#auc-add-board")?.addEventListener("click", _auctionAddDeal);
+  }
+  async function _auctionAddDeal(e) {
+    const r = _aucLast; if (!r) return;
+    const btn = e.currentTarget; btn.disabled = true; btn.textContent = "…";
+    const p = _gatherAuction();
+    try {
+      const res = await API.createDeal({
+        address: r.address,
+        property_type: "Single Family Residence",
+        beds: p.beds || null, baths: p.baths || null, sqft: p.sqft || null, year_built: p.year_built || null,
+        purchase_price: r.max_bid || 0,
+        arv_base: r.arv || 0, rehab_base: r.rehab || 0,
+        arv_confidence: r.arv_confidence || "Low",
+        source: "auction", source_url: p.url || "", status: "evaluating",
+        notes: `[Auction] Enchère max recommandée: $${(r.max_bid || 0).toLocaleString("en-US")}\n`
+          + (r.opening_bid ? `Enchère de départ: $${r.opening_bid.toLocaleString("en-US")}\n` : "")
+          + `Profit estimé à max: $${(r.profit_at_max || 0).toLocaleString("en-US")}\n`
+          + (r.condition_summary ? `État: ${r.condition_summary}\n` : "")
+          + ((r.risks || []).length ? `Risques: ${r.risks.join("; ")}\n` : "")
+          + (p.comments ? `\nCommentaires fiche:\n${p.comments}` : ""),
+      });
+      const deal = res.deal || res;
+      (state.deals = state.deals || []).push(deal);
+      btn.textContent = "✓ Ajouté au board"; btn.classList.remove("primary");
+      toast("Deal ajouté", "success");
+    } catch (err) { btn.disabled = false; btn.textContent = "+ Ajouter au board"; toast(err.message, "error"); }
+  }
+  $("#auc-run")?.addEventListener("click", runAuction);
+
   // ============== REHAB ESTIMATOR ==============
   const REHAB_CATALOG = [
     ["Cuisine", 12000], ["Salle de bain", 6000], ["Sols", 4000], ["Peinture", 3500],

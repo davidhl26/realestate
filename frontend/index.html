@@ -56,6 +56,10 @@
         <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg></span>
         Search
       </a>
+      <a data-view="auction" class="nav-link">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 21h18 M6 13l5-5 M9 16l5-5 M13 4l7 7-3 3-7-7z" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        Auction
+      </a>
       <a data-view="usamap" class="nav-link">
         <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z M9 3v15 M15 6v15" stroke-linejoin="round"/></svg></span>
         USA Map
@@ -835,6 +839,56 @@
       </div>
 
       <div id="search-results"></div>
+    </section>
+
+    <!-- ============ AUCTION ASSISTANT ============ -->
+    <section id="view-auction" class="view">
+      <header class="page-header">
+        <div class="page-header-text">
+          <div class="page-eyebrow">Assistant d'enchères</div>
+          <h2>Auction</h2>
+          <p>Colle l'adresse + l'état du bien (depuis la fiche auction.com que tu vois connecté). L'IA estime l'ARV et le rehab, et je calcule ton <strong>enchère max</strong> à ne pas dépasser. Tu enchéris toi-même.</p>
+        </div>
+      </header>
+
+      <div class="auction-disclaimer card" style="border-left:3px solid var(--accent,#B68A3C); font-size:13px; line-height:1.5;">
+        ⚖️ <strong>Tu places l'enchère toi-même.</strong> Cet outil ne se connecte pas et n'enchérit pas à ta place : une enchère gagnante est un engagement d'achat ferme. Je te donne le chiffre, tu décides. <span class="muted">Estimation éducative, à valider avant d'enchérir.</span>
+      </div>
+
+      <div class="card hero-card">
+        <label style="display:block;">Adresse du bien <span class="muted" style="font-weight:400;">(copie-la depuis la fiche)</span>
+          <input id="auc-address" type="text" placeholder="123 Main St, Cleveland, OH 44102" style="width:100%;">
+        </label>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-top:10px;">
+          <label style="width:150px;">Enchère de départ ($) <input id="auc-opening" type="number" placeholder="—"></label>
+          <label style="width:80px;">Ch. <input id="auc-beds" type="number" placeholder="—"></label>
+          <label style="width:80px;">SdB <input id="auc-baths" type="number" placeholder="—"></label>
+          <label style="width:110px;">Surface (sf) <input id="auc-sqft" type="number" placeholder="—"></label>
+          <label style="width:110px;">Année constr. <input id="auc-year" type="number" placeholder="—"></label>
+          <label style="width:130px;">Marge cible (%) <input id="auc-margin" type="number" value="20"></label>
+          <label style="width:130px;">Portage ($) <input id="auc-holding" type="number" value="3000"></label>
+        </div>
+        <label style="display:block; margin-top:10px;">État / commentaires de la fiche <span class="muted" style="font-weight:400;">(colle ici la description, l'état, occupé/vacant…)</span>
+          <textarea id="auc-comments" rows="3" placeholder="Ex. « Occupied, sold as-is, no interior access. Roof appears recent. Built 1955. »" style="width:100%; resize:vertical;"></textarea>
+        </label>
+        <details style="margin-top:10px;">
+          <summary class="muted" style="cursor:pointer; font-size:13px;">Forcer ARV / rehab manuellement (sinon estimés par l'IA)</summary>
+          <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:8px;">
+            <label style="width:160px;">ARV ($) <input id="auc-arv-override" type="number" placeholder="auto (IA)"></label>
+            <label style="width:160px;">Rehab ($) <input id="auc-rehab-override" type="number" placeholder="auto (IA)"></label>
+            <label style="flex:1; min-width:220px;">Lien fiche (réf.) <input id="auc-url" type="text" placeholder="https://www.auction.com/…"></label>
+          </div>
+        </details>
+        <div style="display:flex; gap:10px; align-items:center; margin-top:12px;">
+          <button class="btn primary" id="auc-run">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="14" height="14"><path d="M3 21h18 M13 4l7 7-3 3-7-7z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Analyser &amp; calculer l'enchère max
+          </button>
+          <span id="auc-status" class="status-line"></span>
+        </div>
+      </div>
+
+      <div id="auc-result"></div>
     </section>
 
     <!-- ============ BATCH IMPORT ============ -->

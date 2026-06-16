@@ -255,6 +255,71 @@ def estimate_rehab(deal: dict) -> dict:
     return {"ok": True, "items": items, "summary": data.get("summary", ""), "model": model}
 
 
+AUCTION_SYSTEM = """You are evaluating a property listed at a foreclosure / real-estate AUCTION for a fix-and-flip investor. Given the address and any condition notes/comments from the listing, estimate two numbers and summarize.
+
+Use web_search for recently-sold comparables and local rehab costs.
+
+Return a SINGLE JSON code block, no text after:
+```json
+{
+  "arv": <integer USD — After-Repair Value, mid-grade flip>,
+  "arv_confidence": "Low"|"Medium"|"High",
+  "rehab": <integer USD — renovation budget to reach that ARV, informed by the condition notes>,
+  "condition_summary": "<1-2 sentences on likely condition / scope>",
+  "risks": ["<auction-specific risk, e.g. occupied/eviction, liens, no inspection, cash-only>", "..."],
+  "summary": "<1-2 sentence take>"
+}
+```
+Be conservative: auctions are sold as-is, often occupied, no interior inspection — lean slightly higher on rehab and add the relevant risks."""
+
+
+def analyze_auction(data: dict) -> dict:
+    """Estimate ARV + rehab for an auction property (Claude + web search)."""
+    api_key = get_api_key()
+    if not api_key:
+        return {"ok": False, "error": "No Anthropic API key configured. Add one in Settings → AI."}
+    import anthropic
+    client = anthropic.Anthropic(api_key=api_key)
+    model = get_model()
+    parts = [f"Auction property: {data.get('address','')}"]
+    for k, lbl in [("beds", "Beds"), ("baths", "Baths"), ("sqft", "Sq ft"), ("year_built", "Year built")]:
+        if data.get(k):
+            parts.append(f"- {lbl}: {data[k]}")
+    if data.get("opening_bid"):
+        parts.append(f"- Opening/current bid: ${int(data['opening_bid']):,}")
+    if data.get("comments"):
+        parts.append(f"\nListing notes / comments:\n{str(data['comments'])[:2000]}")
+    parts.append("\nEstimate ARV and rehab, then return the JSON.")
+    try:
+        msg = client.messages.create(
+            model=model, max_tokens=1800, system=AUCTION_SYSTEM,
+            tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 6}],
+            messages=[{"role": "user", "content": "\n".join(parts)}],
+        )
+    except anthropic.AuthenticationError:
+        return {"ok": False, "error": "Invalid API key — check Settings → AI."}
+    except Exception as e:
+        log.exception("Auction analysis failed")
+        return {"ok": False, "error": f"Auction analysis failed: {e}"}
+    text = "\n".join(b.text for b in msg.content if hasattr(b, "text"))
+    d = _extract_json(text)
+    if not d:
+        return {"ok": False, "error": "Could not parse auction analysis.", "raw_text": text[:1500]}
+    def _int(v):
+        try: return int(round(float(v)))
+        except (TypeError, ValueError): return None
+    return {
+        "ok": True,
+        "arv": _int(d.get("arv")),
+        "arv_confidence": d.get("arv_confidence", "Low"),
+        "rehab": _int(d.get("rehab")),
+        "condition_summary": d.get("condition_summary", ""),
+        "risks": d.get("risks", []) if isinstance(d.get("risks"), list) else [],
+        "summary": d.get("summary", ""),
+        "model": model,
+    }
+
+
 def research_arv(deal: dict) -> dict:
     """Call Claude with web_search to estimate ARV."""
     api_key = get_api_key()
