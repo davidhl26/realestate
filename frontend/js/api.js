@@ -201,6 +201,11 @@ const API = (() => {
     rehabEstimate: (id) => req("/api/deals/" + encodeURIComponent(id) + "/rehab-estimate", { method: "POST", body: "{}" }),
     searchListings: (payload) => req("/api/search/listings", { method: "POST", body: JSON.stringify(payload) }),
     auctionAnalyze: (payload) => req("/api/auction/analyze", { method: "POST", body: JSON.stringify(payload) }),
+    auctionWatchlist: () => req("/api/auction/watchlist"),
+    auctionWatch: (payload) => req("/api/auction/watch", { method: "POST", body: JSON.stringify(payload) }),
+    auctionUnwatch: (id) => req("/api/auction/watch/" + encodeURIComponent(id), { method: "DELETE" }),
+    auctionRecheck: (id) => req("/api/auction/watch/" + encodeURIComponent(id) + "/recheck", { method: "POST", body: "{}" }),
+    auctionRecheckAll: () => req("/api/auction/watchlist/recheck-all", { method: "POST", body: "{}" }),
     comparePdfUrl: () => "/api/board/comparison-pdf?t=" + Date.now(),
     generatePdf: async (id, overrides) => {
       const r = await fetch("/api/deals/" + encodeURIComponent(id) + "/pdf-with-options", {

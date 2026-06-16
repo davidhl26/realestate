@@ -865,6 +865,7 @@
           <label style="width:80px;">SdB <input id="auc-baths" type="number" placeholder="—"></label>
           <label style="width:110px;">Surface (sf) <input id="auc-sqft" type="number" placeholder="—"></label>
           <label style="width:110px;">Année constr. <input id="auc-year" type="number" placeholder="—"></label>
+          <label style="width:150px;">Date de l'enchère <input id="auc-date" type="date"></label>
           <label style="width:130px;">Marge cible (%) <input id="auc-margin" type="number" value="20"></label>
           <label style="width:130px;">Portage ($) <input id="auc-holding" type="number" value="3000"></label>
         </div>
@@ -889,6 +890,16 @@
       </div>
 
       <div id="auc-result"></div>
+
+      <!-- Watchlist : enchères suivies -->
+      <div id="auc-watchlist-wrap" style="margin-top:24px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+          <h3 style="margin:0;">⭐ Enchères suivies</h3>
+          <button class="btn ghost" id="auc-recheck-all" style="font-size:12px;">🔄 Tout ré-analyser</button>
+        </div>
+        <p class="muted" style="font-size:12px; margin:4px 0 12px;">Les enchères que tu suis, triées par date. « Tout ré-analyser » relance l'IA sur chacune (utile pour l'alerte du matin).</p>
+        <div id="auc-watchlist"></div>
+      </div>
     </section>
 
     <!-- ============ BATCH IMPORT ============ -->

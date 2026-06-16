@@ -2452,6 +2452,7 @@
     if (n("#auc-baths")) p.baths = n("#auc-baths");
     if (n("#auc-sqft")) p.sqft = n("#auc-sqft");
     if (n("#auc-year")) p.year_built = n("#auc-year");
+    if (v("#auc-date")) p.auction_date = v("#auc-date");
     if (Number(v("#auc-margin")) > 0) p.target_margin_pct = Number(v("#auc-margin"));
     if (Number(v("#auc-holding")) >= 0 && v("#auc-holding")) p.holding = Number(v("#auc-holding"));
     if (v("#auc-comments")) p.comments = v("#auc-comments");
@@ -2535,10 +2536,22 @@
 
         <div style="display:flex; gap:10px; flex-wrap:wrap;">
           <button class="btn primary" id="auc-add-board">+ Ajouter au board</button>
+          <button class="btn" id="auc-watch">⭐ Suivre cette enchère</button>
           ${($("#auc-url")?.value || "").trim() ? `<a class="btn ghost" href="${escape($("#auc-url").value.trim())}" target="_blank" rel="noopener">Voir la fiche ↗</a>` : ""}
         </div>
       </div>`;
     $("#auc-add-board")?.addEventListener("click", _auctionAddDeal);
+    $("#auc-watch")?.addEventListener("click", _auctionWatch);
+  }
+  async function _auctionWatch(e) {
+    if (!_aucLast) return;
+    const btn = e.currentTarget; btn.disabled = true; btn.textContent = "…";
+    try {
+      await API.auctionWatch({ ..._gatherAuction(), ..._aucLast });
+      btn.textContent = "⭐ Suivie"; btn.disabled = true;
+      toast("Ajoutée aux enchères suivies", "success");
+      renderWatchlist();
+    } catch (err) { btn.disabled = false; btn.textContent = "⭐ Suivre cette enchère"; toast(err.message, "error"); }
   }
   async function _auctionAddDeal(e) {
     const r = _aucLast; if (!r) return;
@@ -2567,6 +2580,65 @@
     } catch (err) { btn.disabled = false; btn.textContent = "+ Ajouter au board"; toast(err.message, "error"); }
   }
   $("#auc-run")?.addEventListener("click", runAuction);
+
+  async function renderWatchlist() {
+    const box = $("#auc-watchlist"); if (!box) return;
+    let items = [];
+    try { items = await API.auctionWatchlist(); } catch { box.innerHTML = ""; return; }
+    if (!items.length) { box.innerHTML = `<div class="card"><p class="muted" style="margin:0;">Aucune enchère suivie. Analyse un bien puis clique « ⭐ Suivre ».</p></div>`; return; }
+    const D = v => v == null ? "—" : "$" + Math.round(v).toLocaleString("en-US");
+    const vcol = { go: "var(--green)", tight: "#e8a93b", caution: "#e8a93b", pass: "var(--red)" };
+    const vlbl = { go: "GO", tight: "SERRÉ", caution: "PRUDENCE", pass: "PASSE" };
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    box.innerHTML = `<div style="display:grid; gap:10px;">${items.map(it => {
+      let dateTag = "";
+      if (it.auction_date) {
+        const d = new Date(it.auction_date + "T00:00:00");
+        const days = Math.round((d - today) / 86400000);
+        const col = days < 0 ? "var(--muted)" : days <= 7 ? "var(--red)" : days <= 14 ? "#e8a93b" : "var(--muted)";
+        dateTag = `<span style="color:${col}; font-weight:600;">📅 ${it.auction_date}${days >= 0 ? ` (J−${days})` : " (passée)"}</span>`;
+      } else dateTag = `<span class="muted">📅 date ?</span>`;
+      const col = vcol[it.verdict] || "var(--muted)";
+      return `<div class="card" style="padding:12px 14px; display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+        <div style="flex:1; min-width:180px;">
+          <div style="font-weight:600;">${escape(it.address || "?")}</div>
+          <div style="font-size:12px; margin-top:2px; display:flex; gap:12px; flex-wrap:wrap;">
+            ${dateTag}
+            <span class="muted">ARV ${D(it.arv)} · Rehab ${D(it.rehab)}</span>
+          </div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:11px; color:var(--muted); text-transform:uppercase;">Enchère max</div>
+          <div style="font-weight:700; font-size:18px; color:var(--green);">${D(it.max_bid)}</div>
+        </div>
+        <span class="pill" style="background:${col}1a; color:${col}; font-weight:700;">${vlbl[it.verdict] || "—"}</span>
+        <div style="display:flex; gap:6px;">
+          <button class="btn ghost wl-recheck" data-id="${escape(it.id)}" title="Ré-analyser" style="font-size:12px;">🔄</button>
+          <button class="btn ghost wl-remove" data-id="${escape(it.id)}" title="Retirer" style="font-size:12px;">🗑</button>
+        </div>
+      </div>`;
+    }).join("")}</div>`;
+    box.querySelectorAll(".wl-recheck").forEach(b => b.addEventListener("click", async () => {
+      b.disabled = true; b.textContent = "…";
+      try { await API.auctionRecheck(b.dataset.id); toast("Ré-analysée", "success"); renderWatchlist(); }
+      catch (e) { b.disabled = false; b.textContent = "🔄"; toast(e.message, "error"); }
+    }));
+    box.querySelectorAll(".wl-remove").forEach(b => b.addEventListener("click", async () => {
+      if (!confirm("Retirer cette enchère du suivi ?")) return;
+      try { await API.auctionUnwatch(b.dataset.id); renderWatchlist(); } catch (e) { toast(e.message, "error"); }
+    }));
+  }
+  $("#auc-recheck-all")?.addEventListener("click", async () => {
+    const btn = $("#auc-recheck-all"); btn.disabled = true; btn.textContent = "🔄 Analyse en cours…";
+    try {
+      const res = await API.auctionRecheckAll();
+      const opp = (res.opportunities || []).length, up = (res.upcoming || []).length;
+      toast(`${res.checked || 0} ré-analysée(s) · ${opp} opportunité(s) · ${up} bientôt`, "success");
+      renderWatchlist();
+    } catch (e) { toast(e.message, "error"); }
+    finally { btn.disabled = false; btn.textContent = "🔄 Tout ré-analyser"; }
+  });
+  document.querySelector('[data-view="auction"]')?.addEventListener("click", () => { setTimeout(renderWatchlist, 50); });
 
   // ============== REHAB ESTIMATOR ==============
   const REHAB_CATALOG = [

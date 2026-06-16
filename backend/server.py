@@ -69,6 +69,10 @@ from .auctions import AuctionsDB, scrape_auction_list, PIPELINE_STAGES
 auctions_db = AuctionsDB(DATA_DIR / "auctions.json")
 _auctions_mod.set_credentials_path(DATA_DIR / "realauction-credentials.json")
 
+# Auction watchlist (tracked auctions + recheck for daily alerts)
+from .watchlist import WatchlistDB
+watchlist_db = WatchlistDB(DATA_DIR / "auction-watchlist.json")
+
 # Initialize browser scraper profile dir
 try:
     from . import scraper_browser
@@ -720,19 +724,12 @@ def _compute_max_bid(arv, rehab, *, target_margin_pct=20.0, holding=3000.0,
     }
 
 
-@app.post("/api/auction/analyze")
-def auction_analyze(payload: dict = Body(...)):
-    """Analyze an auction property and recommend a disciplined MAX BID.
-
-    Body: { address (required), opening_bid, beds, baths, sqft, year_built,
-            comments, target_margin_pct, holding,
-            arv_override, rehab_override }
-    The user still places the bid themselves — this only computes the number.
-    """
+def _run_auction_analysis(payload: dict) -> dict:
+    """Core auction analysis (shared by the endpoint and watchlist recheck)."""
     from . import ai_research
     address = (payload.get("address") or "").strip()
     if not address:
-        raise HTTPException(400, "address required (copy it from the auction listing)")
+        return {"ok": False, "error": "address required"}
 
     arv_override = payload.get("arv_override")
     rehab_override = payload.get("rehab_override")
@@ -790,12 +787,90 @@ def auction_analyze(payload: dict = Body(...)):
         "summary": ai.get("summary", ""),
         "risks": ai.get("risks", []),
         "opening_bid": int(round(opening)) if opening else None,
+        "auction_date": payload.get("auction_date") or None,
         "verdict": verdict,
         "verdict_note": note,
         "ai_used": arv_override in (None, "") or rehab_override in (None, ""),
         "model": ai.get("model"),
         **bid,
     }
+
+
+@app.post("/api/auction/analyze")
+def auction_analyze(payload: dict = Body(...)):
+    """Analyze an auction property and recommend a disciplined MAX BID.
+
+    Body: { address (required), opening_bid, auction_date, beds, baths, sqft,
+            year_built, comments, target_margin_pct, holding,
+            arv_override, rehab_override }
+    The user still places the bid themselves — this only computes the number.
+    """
+    if not (payload.get("address") or "").strip():
+        raise HTTPException(400, "address required (copy it from the auction listing)")
+    return _run_auction_analysis(payload)
+
+
+# ---- Auction watchlist (track + recheck for daily alerts) ----
+@app.get("/api/auction/watchlist")
+def auction_watchlist():
+    return watchlist_db.list_items()
+
+
+@app.post("/api/auction/watch")
+def auction_watch(payload: dict = Body(...)):
+    """Add/update a tracked auction (saves the latest analysis)."""
+    if not (payload.get("address") or "").strip():
+        raise HTTPException(400, "address required")
+    return watchlist_db.upsert(payload)
+
+
+@app.delete("/api/auction/watch/{item_id}")
+def auction_unwatch(item_id: str):
+    if not watchlist_db.delete(item_id):
+        raise HTTPException(404, "Not found")
+    return {"ok": True}
+
+
+@app.post("/api/auction/watch/{item_id}/recheck")
+def auction_recheck(item_id: str):
+    """Re-run the AI analysis for one tracked auction and store the result."""
+    item = watchlist_db.get(item_id)
+    if not item:
+        raise HTTPException(404, "Not found")
+    res = _run_auction_analysis(item)
+    if not res.get("ok"):
+        return {"ok": False, "error": res.get("error")}
+    return watchlist_db.upsert({**item, **res, "id": item_id})
+
+
+@app.post("/api/auction/watchlist/recheck-all")
+def auction_recheck_all(payload: dict = Body(default={})):
+    """Re-run every tracked auction. Returns a digest for the daily alert:
+    opportunities (verdict go/tight) and auctions happening soon."""
+    from datetime import date, timedelta
+    soon_days = int(payload.get("soon_days") or 14)
+    results, opportunities, upcoming = [], [], []
+    for item in watchlist_db.list_items():
+        res = _run_auction_analysis(item)
+        if res.get("ok"):
+            saved = watchlist_db.upsert({**item, **res, "id": item["id"]})
+        else:
+            saved = item
+        results.append({"id": saved["id"], "address": saved.get("address"),
+                        "max_bid": saved.get("max_bid"), "verdict": saved.get("verdict"),
+                        "auction_date": saved.get("auction_date")})
+        if saved.get("verdict") in ("go", "tight"):
+            opportunities.append(saved)
+        ad = saved.get("auction_date")
+        if ad:
+            try:
+                d = date.fromisoformat(str(ad)[:10])
+                if date.today() <= d <= date.today() + timedelta(days=soon_days):
+                    upcoming.append(saved)
+            except ValueError:
+                pass
+    return {"ok": True, "checked": len(results), "results": results,
+            "opportunities": opportunities, "upcoming": upcoming}
 
 
 @app.post("/api/batch/start")
