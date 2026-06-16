@@ -2461,10 +2461,25 @@
     if (v("#auc-url")) p.url = v("#auc-url");
     return p;
   }
+  // A real property address needs a street number. "cleveland ohio" / a bare
+  // city must not be analyzed as if it were one house.
+  function _looksLikeAddress(a) {
+    a = (a || "").trim();
+    return /\d/.test(a) && a.replace(/[^a-zA-Z]/g, "").length >= 3;
+  }
   async function runAuction() {
     const payload = _gatherAuction();
-    if (!payload.address) { toast("Colle d'abord l'adresse du bien", "warn"); return; }
     const st = $("#auc-status"), btn = $("#auc-run");
+    if (!payload.address) { toast("Colle d'abord l'adresse du bien", "warn"); return; }
+    if (!_looksLikeAddress(payload.address) && !(payload.arv_override && payload.rehab_override)) {
+      st.innerHTML = `<span style="color:#e8a93b">⚠️ « ${escape(payload.address)} » ressemble à une ville, pas à une adresse précise.</span>`;
+      $("#auc-result").innerHTML = `<div class="card" style="border-left:3px solid #e8a93b;">
+        <p style="margin:0 0 6px;"><strong>L'outil Auction analyse UN bien précis</strong> — il lui faut une adresse complète, ex. <code>3744 W 135th St, Cleveland, OH 44111</code> (numéro + rue).</p>
+        <p style="margin:0;" class="muted">Pour explorer <strong>toute une ville</strong> et trouver des annonces, utilise plutôt le module <a href="#" id="auc-goto-search" style="font-weight:600;">🔎 Search</a>.</p>
+      </div>`;
+      $("#auc-goto-search")?.addEventListener("click", (e) => { e.preventDefault(); document.querySelector('[data-view="search"]')?.click(); const si = $("#search-input"); if (si) si.value = payload.address; });
+      return;
+    }
     btn.disabled = true;
     const ai = !(payload.arv_override && payload.rehab_override);
     st.innerHTML = ai ? '<span class="spinner"></span> Analyse IA + comps en cours… (~30-60s)' : '<span class="spinner"></span> Calcul…';

@@ -805,8 +805,18 @@ def auction_analyze(payload: dict = Body(...)):
             arv_override, rehab_override }
     The user still places the bid themselves — this only computes the number.
     """
-    if not (payload.get("address") or "").strip():
+    address = (payload.get("address") or "").strip()
+    if not address:
         raise HTTPException(400, "address required (copy it from the auction listing)")
+    # Reject a bare city/state (no street number) unless ARV+rehab are given
+    # manually — otherwise we'd estimate "a house in the whole city" and return
+    # a meaningless max bid. A real property address has a street number.
+    has_override = payload.get("arv_override") not in (None, "") and payload.get("rehab_override") not in (None, "")
+    if not has_override and not any(c.isdigit() for c in address):
+        return {"ok": False, "error": (
+            f"« {address} » ressemble à une ville, pas à une adresse précise. "
+            "Entre une adresse complète (numéro + rue), ex. « 3744 W 135th St, "
+            "Cleveland, OH 44111 ». Pour explorer une ville entière, utilise le module Search.")}
     return _run_auction_analysis(payload)
 
 
