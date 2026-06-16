@@ -680,9 +680,10 @@ def search_listings(payload: dict = Body(...)):
         if not loc:
             raise HTTPException(400, "Provide a Zillow search URL or a location")
         params = {"search_term": loc}
-        for k in ("price_max", "price_min", "beds_min", "baths_min"):
-            if payload.get(k):
-                params[k] = payload[k]
+    # Extra filters apply to both URL-based and location-based searches.
+    for k in ("price_max", "price_min", "beds_min", "baths_min", "sqft_min", "property_type"):
+        if payload.get(k):
+            params[k] = payload[k]
     return ai_research.find_listings_in_area(params, max_listings=max_listings)
 
 

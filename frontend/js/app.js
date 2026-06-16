@@ -2261,85 +2261,185 @@
   });
 
   // ============== SEARCH (sourcing) ==============
+  let _searchListings = [];
+  const _SEARCH_SEEN = "fb-seen-listings", _SEARCH_SAVED = "fb-saved-searches";
+  const _ls = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
+  const _lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+  const _seenSet = () => new Set(_ls(_SEARCH_SEEN, []));
+  const _seenKey = l => ((l.address || "") + "|" + (l.city || "")).toLowerCase().trim();
+  const _onBoard = a => (state.deals || []).some(d =>
+    (d.address || "").toLowerCase().split(",")[0].trim() === (a || "").toLowerCase().split(",")[0].trim());
+
+  function _searchFin(l) {
+    const num = v => (v === 0 || v) ? Number(v) : null;
+    const price = num(l.price), arv = num(l.arv_estimate), rehab = num(l.rehab_estimate) ?? 0;
+    let profit = null, margin = null;
+    if (arv != null && price != null) { profit = arv - price - rehab - arv * 0.08; margin = arv > 0 ? profit / arv * 100 : null; }
+    return { price, arv, rehab, profit, margin };
+  }
+  function _gatherSearch() {
+    const input = ($("#search-input").value || "").trim();
+    const p = { max_listings: Number($("#search-count").value) || 10 };
+    if (/zillow\.com/i.test(input)) p.url = input; else p.location = input;
+    const n = id => { const v = Number($(id)?.value); return v > 0 ? v : null; };
+    if (n("#search-pricemin")) p.price_min = n("#search-pricemin");
+    if (n("#search-pricemax")) p.price_max = n("#search-pricemax");
+    if (n("#search-bedsmin")) p.beds_min = n("#search-bedsmin");
+    if (n("#search-bathsmin")) p.baths_min = n("#search-bathsmin");
+    if (n("#search-sqftmin")) p.sqft_min = n("#search-sqftmin");
+    const t = $("#search-type")?.value; if (t) p.property_type = t;
+    return { input, payload: p };
+  }
+
   async function runSearch() {
-    const input = ($("#search-input")?.value || "").trim();
+    const { input, payload } = _gatherSearch();
     if (!input) { toast("Entre une URL de recherche Zillow ou une ville", "warn"); return; }
     const st = $("#search-status"), btn = $("#search-run");
     btn.disabled = true;
     st.innerHTML = '<span class="spinner"></span> Recherche IA + web en cours… (~30-60s)';
-    $("#search-results").innerHTML = "";
-    const payload = { max_listings: Number($("#search-count").value) || 10 };
-    if (/zillow\.com/i.test(input)) payload.url = input; else payload.location = input;
-    const pm = Number($("#search-pricemax")?.value); if (pm) payload.price_max = pm;
+    $("#search-results").innerHTML = ""; $("#search-controls").style.display = "none";
     try {
       if (!state.deals || !state.deals.length) { try { state.deals = await API.listDeals(); } catch {} }
       const res = await API.searchListings(payload);
       if (!res.ok) { st.innerHTML = `<span style="color:var(--red)">${escape(res.error || "Échec de la recherche")}</span>`; return; }
-      st.textContent = `✓ ${(res.listings || []).length} annonce(s)${res.area_label ? " — " + res.area_label : ""}`;
-      renderSearchResults(res);
+      _searchListings = res.listings || [];
+      _searchAreaLabel = res.area_label || "";
+      st.textContent = `✓ ${_searchListings.length} annonce(s)${res.area_label ? " — " + res.area_label : ""}`;
+      $("#search-controls").style.display = _searchListings.length ? "flex" : "none";
+      renderSearchResults();
     } catch (e) { st.innerHTML = `<span style="color:var(--red)">${escape(e.message)}</span>`; }
     finally { btn.disabled = false; }
   }
+  let _searchAreaLabel = "";
 
-  function _searchAddr(l) {
-    return [l.address, l.city, `${l.state || ""} ${l.zip || ""}`.trim()].filter(s => s && s.trim()).join(", ");
+  function renderSearchResults() {
+    const box = $("#search-results");
+    if (!_searchListings.length) { box.innerHTML = `<div class="card"><p class="muted">Aucune annonce trouvée.</p></div>`; return; }
+    const seen = _seenSet();
+    const newOnly = $("#search-newonly")?.checked, hideBoard = $("#search-hideboard")?.checked;
+    let list = _searchListings.map((l, i) => ({ l, i, fin: _searchFin(l), isNew: !seen.has(_seenKey(l)), ob: _onBoard(l.address) }));
+    if (newOnly) list = list.filter(x => x.isNew);
+    if (hideBoard) list = list.filter(x => !x.ob);
+    const sort = $("#search-sort")?.value || "profit";
+    const cmp = {
+      profit: (a, b) => (b.fin.profit ?? -1e12) - (a.fin.profit ?? -1e12),
+      price: (a, b) => (a.fin.price ?? 1e12) - (b.fin.price ?? 1e12),
+      recent: (a, b) => (a.l.days_on_market ?? 999) - (b.l.days_on_market ?? 999),
+      reno: (a, b) => (b.l.last_renovated || 0) - (a.l.last_renovated || 0),
+    }[sort];
+    if (cmp) list.sort(cmp);
+    $("#search-count-label").textContent = `${list.length} affichée(s)${_searchAreaLabel ? " · " + _searchAreaLabel : ""}`;
+    const yr = new Date().getFullYear();
+    box.innerHTML = `<div class="deals-grid">${list.map(({ l, i, fin, isNew, ob }) => {
+      const price = fin.price != null ? `$${Math.round(fin.price / 1000)}K` : "—";
+      const age = l.year_built ? `${l.year_built} (${yr - l.year_built} ans)` : "année ?";
+      const reno = l.last_renovated ? `réno ${l.last_renovated}` : "réno ?";
+      let profitTag = "";
+      if (fin.profit != null) {
+        const col = fin.margin >= 20 ? "var(--green)" : fin.margin >= 10 ? "#e8a93b" : "var(--red)";
+        profitTag = `<div style="margin-top:4px; font-weight:700; color:${col};">▲ $${Math.round(fin.profit / 1000)}K profit${fin.margin != null ? ` · ${Math.round(fin.margin)}%` : ""}</div>`;
+      }
+      const arvLine = fin.arv != null ? `<span class="muted">ARV ~$${Math.round(fin.arv / 1000)}K · Rehab ~$${Math.round((fin.rehab || 0) / 1000)}K</span>` : "";
+      return `<div class="card search-result">
+        <div style="display:flex; justify-content:space-between; gap:6px;">
+          <div style="font-weight:600;">${escape(l.address || "?")}</div>
+          ${isNew ? '<span class="pill green" style="height:fit-content;">NEW</span>' : ""}
+        </div>
+        <div class="muted" style="font-size:12px;">${escape([l.city, l.state, l.zip].filter(Boolean).join(" "))}</div>
+        <div style="margin:7px 0 2px; font-size:13px;"><span class="money">${price}</span> · ${l.beds || "?"}bd / ${l.baths || "?"}ba${l.sqft ? ` · ${l.sqft} sf` : ""}</div>
+        <div style="font-size:11.5px;" class="muted">🏗 ${age} · 🔧 ${reno}</div>
+        <div style="font-size:12px; margin-top:3px;">${arvLine}</div>
+        ${profitTag}
+        <div style="display:flex; gap:8px; margin-top:10px;">
+          <button class="btn ${ob ? "" : "primary"} search-add" data-i="${i}" ${ob ? "disabled" : ""}>${ob ? "✓ Sur le board" : "+ Ajouter"}</button>
+          ${l.url ? `<a class="btn ghost" href="${escape(l.url)}" target="_blank" rel="noopener">Zillow ↗</a>` : ""}
+        </div>
+      </div>`;
+    }).join("")}</div>`;
+    box.querySelectorAll(".search-add").forEach(b => b.addEventListener("click", () => {
+      if (!b.disabled) _insertSearchDeal(_searchListings[+b.dataset.i], b);
+    }));
   }
+
   async function _insertSearchDeal(l, btn) {
-    const full = _searchAddr(l) || l.address || "";
+    const full = [l.address, l.city, `${l.state || ""} ${l.zip || ""}`.trim()].filter(s => s && s.trim()).join(", ") || l.address || "";
     const zl = l.url || ("https://www.zillow.com/homes/" + encodeURIComponent(full) + "_rb/");
     btn.disabled = true; btn.textContent = "…";
     try {
       const r = await API.createDeal({
         address: full, city: l.city || "", state: l.state || "", zip: String(l.zip || ""),
-        property_type: "Single Family Residence",
+        property_type: l.property_type || "Single Family Residence",
         beds: l.beds || null, baths: l.baths || null, sqft: l.sqft || null,
+        year_built: l.year_built || null,
         purchase_price: l.price || 0,
+        arv_base: l.arv_estimate || 0, rehab_base: l.rehab_estimate || 0,
+        arv_confidence: "Low",
         source: "search", source_url: zl, status: "evaluating",
-        notes: `[Importé via Search]\n${zl}`,
+        notes: `[Importé via Search]${l.last_renovated ? "\nDernière rénovation: " + l.last_renovated : ""}\n${zl}`,
       });
-      (state.deals = state.deals || []).push(r.deal || r);
+      const deal = r.deal || r;
+      (state.deals = state.deals || []).push(deal);
       btn.textContent = "✓ Ajouté"; btn.classList.add("added"); btn.classList.remove("primary");
+      if ($("#search-analyze")?.checked) {
+        btn.textContent = "🤖 analyse…";
+        try {
+          const rr = await API.rehabEstimate(deal.id);
+          if (rr.ok && rr.items?.length) {
+            const total = Math.round(rr.items.reduce((s, it) => s + (Number(it.cost) || 0), 0) * 1.15);
+            await API.patchDeal(deal.id, { rehab_base: total, rehab_items: rr.items, rehab_contingency_pct: 15 });
+          }
+        } catch {}
+        btn.textContent = "✓ Ajouté + analysé";
+      }
     } catch (e) { btn.disabled = false; btn.textContent = "+ Ajouter"; toast(e.message, "error"); }
   }
-  function renderSearchResults(res) {
-    const box = $("#search-results");
-    const listings = res.listings || [];
-    if (!listings.length) {
-      box.innerHTML = `<div class="card"><p class="muted">Aucune annonce trouvée.${res.notes ? " " + escape(res.notes) : ""}</p></div>`;
-      return;
-    }
-    const onBoard = a => (state.deals || []).some(d =>
-      (d.address || "").toLowerCase().split(",")[0].trim() === (a || "").toLowerCase().split(",")[0].trim());
-    box.innerHTML = `
-      <div class="card" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
-        <div><b>${listings.length}</b> annonce(s)${res.area_label ? ` · <span class="muted">${escape(res.area_label)}</span>` : ""}</div>
-        <button class="btn" id="search-add-all">+ Tout ajouter</button>
-      </div>
-      <div class="deals-grid">${listings.map((l, i) => {
-        const ob = onBoard(l.address);
-        const price = l.price ? `$${Math.round(l.price / 1000)}K` : "—";
-        return `<div class="card search-result">
-          <div style="font-weight:600;">${escape(l.address || "?")}</div>
-          <div class="muted" style="font-size:12px;">${escape([l.city, l.state, l.zip].filter(Boolean).join(" "))}</div>
-          <div style="margin:8px 0; font-size:13px;"><span class="money">${price}</span> · ${l.beds || "?"}bd / ${l.baths || "?"}ba${l.sqft ? ` · ${l.sqft} sf` : ""}</div>
-          <div style="display:flex; gap:8px;">
-            <button class="btn ${ob ? "" : "primary"} search-add" data-i="${i}" ${ob ? "disabled" : ""}>${ob ? "✓ Déjà sur le board" : "+ Ajouter"}</button>
-            ${l.url ? `<a class="btn ghost" href="${escape(l.url)}" target="_blank" rel="noopener">Zillow ↗</a>` : ""}
-          </div>
-        </div>`;
-      }).join("")}</div>`;
-    box.querySelectorAll(".search-add").forEach(b => b.addEventListener("click", () => {
-      if (!b.disabled) _insertSearchDeal(listings[+b.dataset.i], b);
+
+  // Saved searches (localStorage)
+  function _renderSavedSearches() {
+    const box = $("#search-saved"); if (!box) return;
+    const saved = _ls(_SEARCH_SAVED, []);
+    box.innerHTML = saved.length
+      ? `<span class="muted" style="font-size:11px; align-self:center;">★ Sauvées :</span>` + saved.map((s, i) =>
+          `<span class="pill gray" style="cursor:pointer;"><span data-saved="${i}">${escape(s.label || s.input)}</span> <span data-saved-del="${i}" style="cursor:pointer; opacity:.6;">×</span></span>`).join("")
+      : "";
+    box.querySelectorAll("[data-saved]").forEach(el => el.addEventListener("click", () => {
+      const s = _ls(_SEARCH_SAVED, [])[+el.dataset.saved]; if (!s) return;
+      $("#search-input").value = s.input || ""; $("#search-pricemin").value = s.price_min || "";
+      $("#search-pricemax").value = s.price_max || ""; $("#search-bedsmin").value = s.beds_min || "";
+      $("#search-bathsmin").value = s.baths_min || ""; $("#search-sqftmin").value = s.sqft_min || "";
+      $("#search-type").value = s.property_type || ""; $("#search-count").value = s.max_listings || 10;
+      runSearch();
     }));
-    $("#search-add-all")?.addEventListener("click", async () => {
-      for (const b of [...box.querySelectorAll(".search-add")].filter(x => !x.disabled)) {
-        await _insertSearchDeal(listings[+b.dataset.i], b);
-      }
-      toast("Annonces ajoutées au board", "success");
-    });
+    box.querySelectorAll("[data-saved-del]").forEach(el => el.addEventListener("click", e => {
+      e.stopPropagation();
+      const saved = _ls(_SEARCH_SAVED, []); saved.splice(+el.dataset.savedDel, 1); _lsSet(_SEARCH_SAVED, saved); _renderSavedSearches();
+    }));
   }
+
   $("#search-run")?.addEventListener("click", runSearch);
   $("#search-input")?.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); runSearch(); } });
+  $("#search-sort")?.addEventListener("change", renderSearchResults);
+  $("#search-newonly")?.addEventListener("change", renderSearchResults);
+  $("#search-hideboard")?.addEventListener("change", renderSearchResults);
+  $("#search-mark-seen")?.addEventListener("click", () => {
+    const seen = _seenSet(); _searchListings.forEach(l => seen.add(_seenKey(l)));
+    _lsSet(_SEARCH_SEEN, [...seen].slice(-3000)); renderSearchResults(); toast("Marquées comme vues", "success");
+  });
+  $("#search-add-all")?.addEventListener("click", async () => {
+    for (const b of [...$("#search-results").querySelectorAll(".search-add")].filter(x => !x.disabled)) {
+      await _insertSearchDeal(_searchListings[+b.dataset.i], b);
+    }
+    toast("Annonces ajoutées au board", "success");
+  });
+  $("#search-save")?.addEventListener("click", () => {
+    const { input, payload } = _gatherSearch();
+    if (!input) { toast("Rien à enregistrer", "warn"); return; }
+    const label = prompt("Nom de la recherche :", input.length > 30 ? input.slice(0, 30) + "…" : input);
+    if (!label) return;
+    const saved = _ls(_SEARCH_SAVED, []); saved.push({ label, input, ...payload }); _lsSet(_SEARCH_SAVED, saved);
+    _renderSavedSearches(); toast("Recherche enregistrée", "success");
+  });
+  _renderSavedSearches();
 
   // ============== REHAB ESTIMATOR ==============
   const REHAB_CATALOG = [

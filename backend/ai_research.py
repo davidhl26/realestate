@@ -343,12 +343,18 @@ RULES:
 - Include candidates even if you cannot confirm they are still active — the system fetches each live page afterward and discards any that have already sold. Breadth + freshness matter more than certainty.
 - Respect the price ceiling/floor and the property-type exclusions exactly (single-family houses only when condos/townhouses/land/etc. are excluded).
 
+For EACH listing also estimate (best-effort, from the listing, comps, or public records):
+- year_built (integer) and last_renovated (the year of the most recent major renovation/permit, integer, or null if unknown — check the description for "updated/renovated in YYYY")
+- arv_estimate: a rough After-Repair Value for a mid-grade flip in that area (integer USD)
+- rehab_estimate: a rough renovation budget to reach that ARV (integer USD)
+These are quick estimates for triage, not appraisals.
+
 CRITICAL: End your response with a SINGLE JSON code block in exactly this schema and NO text after it:
 ```json
 {
   "area_label": "<human name of the area, e.g. 'Cleveland, OH — East Side & inner-ring suburbs'>",
   "listings": [
-    {"url": "<full zillow/redfin listing url, or null>", "address": "<full street address>", "city": "<city>", "state": "<2-letter>", "zip": "<zip>", "price": <integer or null>, "beds": <integer or null>, "baths": <number or null>, "sqft": <integer or null>, "days_on_market": <integer or null>}
+    {"url": "<full zillow/redfin listing url, or null>", "address": "<full street address>", "city": "<city>", "state": "<2-letter>", "zip": "<zip>", "price": <integer or null>, "beds": <integer or null>, "baths": <number or null>, "sqft": <integer or null>, "year_built": <integer or null>, "last_renovated": <integer year or null>, "arv_estimate": <integer or null>, "rehab_estimate": <integer or null>, "days_on_market": <integer or null>}
   ],
   "notes": "<1-2 sentences: how many found, coverage caveats>"
 }
@@ -433,6 +439,8 @@ def _build_listing_search_prompt(params: dict, max_listings: int = 60) -> str:
         lines.append(f"- Minimum bathrooms: {p['baths_min']}")
     if p.get("sqft_min"):
         lines.append(f"- Minimum square footage: {p['sqft_min']}")
+    if p.get("property_type"):
+        lines.append(f"- Property type: {p['property_type']} only")
     if p.get("excluded_type_labels"):
         lines.append(f"- EXCLUDE these property types: {', '.join(p['excluded_type_labels'])} "
                      "(i.e. single-family houses only).")
@@ -521,6 +529,11 @@ def find_listings_in_area(params: dict, max_listings: int = 60) -> dict:
             "beds": it.get("beds"),
             "baths": it.get("baths"),
             "sqft": it.get("sqft"),
+            "year_built": it.get("year_built"),
+            "last_renovated": it.get("last_renovated"),
+            "arv_estimate": it.get("arv_estimate"),
+            "rehab_estimate": it.get("rehab_estimate"),
+            "days_on_market": it.get("days_on_market"),
         })
         if len(listings) >= max_listings:
             break

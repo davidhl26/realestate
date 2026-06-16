@@ -782,28 +782,56 @@
       </header>
 
       <div class="card hero-card">
-        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
-          <label style="flex:1; min-width:260px;">URL de recherche Zillow <span class="muted" style="font-weight:400;">ou ville (ex. « Cleveland, OH »)</span>
-            <input id="search-input" type="text" placeholder="https://www.zillow.com/homes/for_sale/?searchQueryState=…  ou  Cleveland, OH" style="width:100%;">
+        <label style="display:block;">URL de recherche Zillow <span class="muted" style="font-weight:400;">ou ville (ex. « Cleveland, OH »)</span>
+          <input id="search-input" type="text" placeholder="https://www.zillow.com/homes/for_sale/?searchQueryState=…  ou  Cleveland, OH" style="width:100%;">
+        </label>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-top:10px;">
+          <label style="width:120px;">Prix min ($) <input id="search-pricemin" type="number" placeholder="—"></label>
+          <label style="width:120px;">Prix max ($) <input id="search-pricemax" type="number" placeholder="—"></label>
+          <label style="width:90px;">Ch. min <input id="search-bedsmin" type="number" placeholder="—"></label>
+          <label style="width:90px;">SdB min <input id="search-bathsmin" type="number" placeholder="—"></label>
+          <label style="width:110px;">Surf. min (sf) <input id="search-sqftmin" type="number" placeholder="—"></label>
+          <label style="width:150px;">Type
+            <select id="search-type">
+              <option value="">Tous</option>
+              <option value="Single Family Residence">Maison</option>
+              <option value="Multi-family / Duplex">Multi / Duplex</option>
+              <option value="Townhouse">Townhouse</option>
+              <option value="Condo">Condo</option>
+            </select>
           </label>
-          <label style="width:130px;">Prix max ($)
-            <input id="search-pricemax" type="number" placeholder="optionnel">
-          </label>
-          <label style="width:110px;">Combien
+          <label style="width:90px;">Combien
             <select id="search-count">
-              <option value="10" selected>10</option>
-              <option value="5">5</option>
-              <option value="20">20</option>
-              <option value="30">30</option>
-              <option value="40">40</option>
+              <option value="10" selected>10</option><option value="5">5</option>
+              <option value="20">20</option><option value="30">30</option><option value="40">40</option>
             </select>
           </label>
           <button class="btn primary" id="search-run">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="14" height="14"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg>
             Rechercher
           </button>
+          <button class="btn" id="search-save" title="Enregistrer cette recherche">★ Enregistrer</button>
         </div>
+        <div id="search-saved" style="display:flex; gap:6px; flex-wrap:wrap; margin-top:10px;"></div>
         <div id="search-status" class="status-line" style="margin-top:10px;"></div>
+      </div>
+
+      <!-- Result controls (shown once there are results) -->
+      <div id="search-controls" class="card" style="display:none; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:12px;">
+        <span id="search-count-label" style="font-weight:600;"></span>
+        <label style="display:flex; align-items:center; gap:6px; font-size:13px; margin:0;">Trier
+          <select id="search-sort" style="font-size:12px; padding:5px 8px;">
+            <option value="profit">Profit ↓</option>
+            <option value="price">Prix ↑</option>
+            <option value="recent">Récence</option>
+            <option value="reno">Rénovation récente</option>
+          </select>
+        </label>
+        <label style="display:flex; align-items:center; gap:6px; font-size:13px; margin:0;"><input type="checkbox" id="search-newonly"> Nouveautés seulement</label>
+        <label style="display:flex; align-items:center; gap:6px; font-size:13px; margin:0;"><input type="checkbox" id="search-hideboard"> Masquer ceux du board</label>
+        <label style="display:flex; align-items:center; gap:6px; font-size:13px; margin:0;"><input type="checkbox" id="search-analyze"> Analyser (IA) à l'ajout</label>
+        <button class="btn ghost" id="search-mark-seen" style="font-size:12px;">Marquer comme vues</button>
+        <button class="btn" id="search-add-all" style="margin-left:auto;">+ Tout ajouter</button>
       </div>
 
       <div id="search-results"></div>
