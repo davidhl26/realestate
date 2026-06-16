@@ -92,6 +92,8 @@
     viewMode: localStorage.getItem("flip-view-mode") || "cards",
     theme: localStorage.getItem("flip-theme") || "light",
     searchQ: "",
+    cityFilter: "",
+    dealsSort: localStorage.getItem("flip-deals-sort") || "score",
     gallery: [],
   };
 
@@ -447,18 +449,45 @@
     try {
       const deals = await API.listDeals();
       state.deals = deals;
+      _populateCityFilter();
       renderDeals();
     } catch (e) { toast(e.message, "error"); }
   }
 
   function filteredDeals() {
     const q = state.searchQ.toLowerCase().trim();
-    if (!q) return state.deals;
-    return state.deals.filter(d => {
-      const hay = (d.address + " " + d.city + " " + d.signal + " " +
+    let list = state.deals.slice();
+    if (q) list = list.filter(d => {
+      const hay = ((d.address || "") + " " + (d.city || "") + " " + (d.signal || "") + " " +
                     (d.recommended_strategy || []).join(" ") + " " + (d.status || "")).toLowerCase();
       return hay.includes(q);
     });
+    if (state.cityFilter) {
+      const cf = state.cityFilter.toLowerCase();
+      list = list.filter(d => (d.city || "").toLowerCase() === cf);
+    }
+    // Sort (applies to the cards view; the table keeps its column sort)
+    if (state.dealsSort === "newest") {
+      list.sort((a, b) => String(b.added_date || "").localeCompare(String(a.added_date || "")));
+    } else {
+      list.sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
+    }
+    return list;
+  }
+
+  // Populate the city dropdown from the deals currently loaded.
+  function _populateCityFilter() {
+    const sel = $("#deals-city");
+    if (!sel) return;
+    const cities = [...new Set((state.deals || [])
+      .map(d => (d.city || "").trim()).filter(Boolean))]
+      .sort((a, b) => a.localeCompare(b));
+    const cur = state.cityFilter;
+    sel.innerHTML = `<option value="">🏙 Toutes les villes</option>` +
+      cities.map(c => `<option value="${escape(c)}">${escape(c)}</option>`).join("");
+    // Keep the current selection if it still exists, else reset.
+    if (cur && cities.some(c => c.toLowerCase() === cur.toLowerCase())) sel.value = cur;
+    else { sel.value = ""; state.cityFilter = ""; }
   }
 
   // ============== BULK SELECTION STATE ==============
@@ -737,6 +766,17 @@
     state.searchQ = e.target.value;
     renderDeals();
   });
+  // City filter + sort
+  $("#deals-city")?.addEventListener("change", e => {
+    state.cityFilter = e.target.value;
+    renderDeals();
+  });
+  $("#deals-sort")?.addEventListener("change", e => {
+    state.dealsSort = e.target.value;
+    localStorage.setItem("flip-deals-sort", state.dealsSort);
+    renderDeals();
+  });
+  { const ds = $("#deals-sort"); if (ds) ds.value = state.dealsSort; }
 
   // ----- Bulk selection wiring -----
   $("#deals-toggle-select-mode")?.addEventListener("click", () => _toggleSelectMode());

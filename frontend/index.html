@@ -216,6 +216,13 @@
             <input type="search" id="deals-search" placeholder="Search address, city, signal…">
             <span class="kbd-hint">⌘K</span>
           </div>
+          <select id="deals-city" class="input" title="Filtrer par ville" style="font-size:13px; padding:7px 10px;">
+            <option value="">🏙 Toutes les villes</option>
+          </select>
+          <select id="deals-sort" class="input" title="Trier" style="font-size:13px; padding:7px 10px;">
+            <option value="score">⭐ Meilleur score</option>
+            <option value="newest">🆕 Plus récents</option>
+          </select>
           <div class="view-toggle" id="view-toggle">
             <button data-mode="cards" class="active">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
