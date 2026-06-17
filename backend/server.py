@@ -19,6 +19,7 @@ Static frontend served at /
 import io
 import logging
 import os
+import re
 from pathlib import Path
 from typing import Optional
 
@@ -693,6 +694,24 @@ def search_listings(payload: dict = Body(...)):
     return ai_research.find_listings_in_area(params, max_listings=max_listings)
 
 
+_STREET_WORD_RE = re.compile(
+    r"\b(st|street|ave|avenue|rd|road|dr|drive|blvd|boulevard|ln|lane|way|ct|"
+    r"court|pl|place|ter|terrace|cir|circle|hwy|highway|pkwy|parkway|trl|trail|"
+    r"loop|run|path|sq|square|pike|cove|cv|row|walk|xing|crossing|aly|alley|pt|"
+    r"point|ridge|rdg|bend|bnd|hl|hill|hts|heights|plz|plaza)\b", re.I)
+_LEADING_NUM_RE = re.compile(r"^\s*\d+\s+\S")
+_UNIT_RE = re.compile(r"#\s*\w|\b(unit|apt|ste|suite|lot)\b", re.I)
+
+
+def _looks_like_address(a: str) -> bool:
+    """A real property address has a street-type word or a leading house number
+    — not merely a digit (a bare 'Cleveland, OH 44109' would wrongly pass)."""
+    a = (a or "").strip()
+    if len(a) < 5:
+        return False
+    return bool(_STREET_WORD_RE.search(a) or _LEADING_NUM_RE.search(a) or _UNIT_RE.search(a))
+
+
 def _compute_max_bid(arv, rehab, *, target_margin_pct=20.0, holding=3000.0,
                      selling_pct=8.0, premium_pct=5.0, closing=2500.0):
     """Disciplined max auction bid from ARV + rehab.
@@ -810,15 +829,15 @@ def auction_analyze(payload: dict = Body(...)):
     address = (payload.get("address") or "").strip()
     if not address:
         raise HTTPException(400, "address required (copy it from the auction listing)")
-    # Reject a bare city/state (no street number) unless ARV+rehab are given
-    # manually — otherwise we'd estimate "a house in the whole city" and return
-    # a meaningless max bid. A real property address has a street number.
+    # Reject a bare city ("cleveland ohio") unless overridden — but ACCEPT real
+    # addresses even without a house number (auction.com often hides it), so we
+    # key off a street-type word / leading number, not merely "has a digit".
     has_override = payload.get("arv_override") not in (None, "") and payload.get("rehab_override") not in (None, "")
-    if not has_override and not any(c.isdigit() for c in address):
+    if not payload.get("force") and not has_override and not _looks_like_address(address):
         return {"ok": False, "error": (
             f"« {address} » ressemble à une ville, pas à une adresse précise. "
-            "Entre une adresse complète (numéro + rue), ex. « 3744 W 135th St, "
-            "Cleveland, OH 44111 ». Pour explorer une ville entière, utilise le module Search.")}
+            "Donne une adresse (rue), ex. « 3744 W 135th St, Cleveland, OH 44111 ». "
+            "Pour explorer une ville entière, utilise le module Search.")}
     return _run_auction_analysis(payload)
 
 
