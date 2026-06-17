@@ -201,6 +201,7 @@ const API = (() => {
     rehabEstimate: (id) => req("/api/deals/" + encodeURIComponent(id) + "/rehab-estimate", { method: "POST", body: "{}" }),
     searchListings: (payload) => req("/api/search/listings", { method: "POST", body: JSON.stringify(payload) }),
     auctionAnalyze: (payload) => req("/api/auction/analyze", { method: "POST", body: JSON.stringify(payload) }),
+    auctionFind: (payload) => req("/api/auction/find", { method: "POST", body: JSON.stringify(payload) }),
     auctionWatchlist: () => req("/api/auction/watchlist"),
     auctionWatch: (payload) => req("/api/auction/watch", { method: "POST", body: JSON.stringify(payload) }),
     auctionUnwatch: (id) => req("/api/auction/watch/" + encodeURIComponent(id), { method: "DELETE" }),

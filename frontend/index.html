@@ -862,6 +862,35 @@
         ⚖️ <strong>Tu places l'enchère toi-même.</strong> Cet outil ne se connecte pas et n'enchérit pas à ta place : une enchère gagnante est un engagement d'achat ferme. Je te donne le chiffre, tu décides. <span class="muted">Estimation éducative, à valider avant d'enchérir.</span>
       </div>
 
+      <!-- ① Recherche par zone (ville / état) -->
+      <h3 style="margin:18px 0 8px;">① Trouver des enchères par ville ou état</h3>
+      <div class="card hero-card">
+        <label style="display:block;">Ville ou état <span class="muted" style="font-weight:400;">(ex. « Cleveland, OH » ou « Ohio »)</span>
+          <input id="aucf-location" type="text" placeholder="Cleveland, OH   ·   Ohio   ·   Miami-Dade, FL" style="width:100%;">
+        </label>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-top:10px;">
+          <label style="width:130px;">Prix max ($) <input id="aucf-pricemax" type="number" placeholder="—"></label>
+          <label style="width:90px;">Ch. min <input id="aucf-bedsmin" type="number" placeholder="—"></label>
+          <label style="width:130px;">Marge cible (%) <input id="aucf-margin" type="number" value="20"></label>
+          <label style="width:110px;">Portage ($) <input id="aucf-holding" type="number" value="3000"></label>
+          <label style="width:90px;">Combien
+            <select id="aucf-count">
+              <option value="10" selected>10</option><option value="5">5</option>
+              <option value="15">15</option><option value="20">20</option><option value="30">30</option>
+            </select>
+          </label>
+          <button class="btn primary" id="aucf-run">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="14" height="14"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg>
+            Trouver &amp; analyser les enchères
+          </button>
+        </div>
+        <p class="muted" style="font-size:12px; margin:10px 0 0;">🔎 Recherche IA + web (auction.com, sheriff sales, foreclosures…). Pour chaque bien trouvé : ARV/rehab estimés + <strong>enchère max</strong> calculée. <span style="color:var(--accent);">Estimations de triage</span> — ouvre « Analyser en détail » pour un chiffre précis.</p>
+        <div id="aucf-status" class="status-line" style="margin-top:8px;"></div>
+      </div>
+      <div id="aucf-results"></div>
+
+      <!-- ② Analyse d'une adresse précise -->
+      <h3 style="margin:24px 0 8px;">② Analyser une adresse précise</h3>
       <div class="card hero-card">
         <label style="display:block;">Adresse du bien <span class="muted" style="font-weight:400;">(copie-la depuis la fiche)</span>
           <input id="auc-address" type="text" placeholder="123 Main St, Cleveland, OH 44102" style="width:100%;">

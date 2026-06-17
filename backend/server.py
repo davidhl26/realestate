@@ -841,6 +841,59 @@ def auction_analyze(payload: dict = Body(...)):
     return _run_auction_analysis(payload)
 
 
+@app.post("/api/auction/find")
+def auction_find(payload: dict = Body(...)):
+    """Discover auction/foreclosure listings in a city or state and compute a
+    max bid for each. Body: { location (required), max_listings, target_margin_pct,
+    holding, price_max, beds_min, property_type }.
+    Does NOT scrape auction.com (blocked) — uses Claude + web search."""
+    from . import ai_research
+    location = (payload.get("location") or payload.get("search_term") or "").strip()
+    if not location:
+        raise HTTPException(400, "location required (a city or state)")
+    try:
+        max_listings = int(payload.get("max_listings") or 15)
+    except (TypeError, ValueError):
+        max_listings = 15
+    max_listings = max(1, min(max_listings, 30))
+    params = {"search_term": location}
+    for k in ("price_max", "beds_min", "property_type"):
+        if payload.get(k):
+            params[k] = payload[k]
+    res = ai_research.find_auctions_in_area(params, max_listings=max_listings)
+    if not res.get("ok"):
+        return res
+    try:
+        margin = float(payload.get("target_margin_pct") or 20)
+    except (TypeError, ValueError):
+        margin = 20.0
+    try:
+        holding = float(payload.get("holding") or 3000)
+    except (TypeError, ValueError):
+        holding = 3000.0
+    # Compute a disciplined max bid per listing (cheap, no extra AI calls).
+    for l in res["listings"]:
+        arv = l.get("arv_estimate")
+        rehab = l.get("rehab_estimate") or 0
+        if not arv:
+            l["max_bid"] = None
+            l["verdict"] = "unknown"
+            continue
+        bid = _compute_max_bid(arv, rehab, target_margin_pct=margin, holding=holding)
+        l.update({k: bid[k] for k in ("max_bid", "mao70", "profit_at_max", "target_margin_pct")})
+        opening = l.get("opening_bid")
+        if opening and isinstance(opening, (int, float)) and opening > 0:
+            if opening > bid["max_bid"]:
+                l["verdict"] = "pass"
+            elif opening > bid["max_bid"] * 0.9:
+                l["verdict"] = "tight"
+            else:
+                l["verdict"] = "go"
+        else:
+            l["verdict"] = "go" if bid["max_bid"] > 0 else "pass"
+    return res
+
+
 # ---- Auction watchlist (track + recheck for daily alerts) ----
 @app.get("/api/auction/watchlist")
 def auction_watchlist():

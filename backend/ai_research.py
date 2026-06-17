@@ -615,3 +615,125 @@ def find_listings_in_area(params: dict, max_listings: int = 60) -> dict:
             "output_tokens": message.usage.output_tokens,
         },
     }
+
+
+AUCTION_SEARCH_SYSTEM = """You help a fix-and-flip investor DISCOVER residential properties going to AUCTION / foreclosure sale in a given city or state, then triage them.
+
+Use the web_search tool aggressively. Search sources like: auction.com, Hubzu, Xome, RealtyTrac, Foreclosure.com, county sheriff-sale / tax-foreclosure lists, and Zillow's "foreclosures / auctions" filter. Run many queries (per city, per county, per source).
+
+For EACH property found, capture whatever the result shows and estimate the rest (best-effort, for triage — not appraisals):
+- address (full street address if available; auction sites often hide the house number — include the street + city + zip you can see), city, state (2-letter), zip
+- opening_bid OR current_bid (integer USD, or null)
+- auction_date (ISO YYYY-MM-DD if shown, else null)
+- beds, baths, sqft, year_built
+- arv_estimate: rough After-Repair Value for a mid-grade flip in that area (integer USD)
+- rehab_estimate: rough renovation budget to reach that ARV — auctions are as-is/occupied, lean higher (integer USD)
+- property_type, source (e.g. "auction.com"), url (listing URL if available, else null)
+
+RULES:
+- Do NOT fabricate addresses. Only return properties that actually appeared in your searches. If you cannot find specific auction listings, return fewer (or zero) rather than inventing them.
+- It's fine if opening_bid / auction_date are null — discovery + an ARV/rehab estimate is the priority.
+- Prefer properties with an upcoming auction date.
+
+CRITICAL: End with a SINGLE JSON code block in exactly this schema and NO text after it:
+```json
+{
+  "area_label": "<human name of the area searched>",
+  "listings": [
+    {"address": "<street/area>", "city": "<city>", "state": "<2-letter>", "zip": "<zip or null>", "opening_bid": <integer or null>, "auction_date": "<YYYY-MM-DD or null>", "beds": <integer or null>, "baths": <number or null>, "sqft": <integer or null>, "year_built": <integer or null>, "arv_estimate": <integer or null>, "rehab_estimate": <integer or null>, "property_type": "<type or null>", "source": "<site>", "url": "<url or null>"}
+  ],
+  "notes": "<1-2 sentences: how many found, coverage caveats>"
+}
+```"""
+
+
+def _build_auction_search_prompt(params: dict, max_listings: int) -> str:
+    p = params or {}
+    loc = p.get("search_term") or p.get("location") or ""
+    lines = [f"Find up to {max_listings} residential properties going to AUCTION / foreclosure sale in: {loc}.",
+             "Search auction.com, Hubzu, county sheriff/tax sales, and Zillow foreclosures for this location "
+             "and its counties/cities/zip codes."]
+    if p.get("price_max"):
+        lines.append(f"- Target opening bid / value under: ${int(p['price_max']):,}")
+    if p.get("beds_min"):
+        lines.append(f"- Minimum bedrooms: {p['beds_min']}")
+    if p.get("property_type"):
+        lines.append(f"- Property type: {p['property_type']} only")
+    lines.append("")
+    lines.append(f"Return up to {max_listings} auction properties with ARV + rehab estimates, in the JSON schema specified.")
+    return "\n".join(lines)
+
+
+def find_auctions_in_area(params: dict, max_listings: int = 20) -> dict:
+    """Use Claude + web search to DISCOVER auction/foreclosure listings in a
+    city or state. Returns {ok, area_label, listings:[...], notes, model}."""
+    api_key = get_api_key()
+    if not api_key:
+        return {"ok": False, "error": "No Anthropic API key configured. Add one in Settings → AI."}
+    import anthropic
+    client = anthropic.Anthropic(api_key=api_key)
+    model = get_model()
+    try:
+        message = client.messages.create(
+            model=model, max_tokens=16000, system=AUCTION_SEARCH_SYSTEM,
+            tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 15}],
+            messages=[{"role": "user", "content": _build_auction_search_prompt(params, max_listings)}],
+        )
+    except anthropic.AuthenticationError:
+        return {"ok": False, "error": "Invalid API key — check Settings → AI."}
+    except anthropic.APIError as e:
+        return {"ok": False, "error": f"Anthropic API error: {e}"}
+    except Exception as e:
+        log.exception("Auction search failed")
+        return {"ok": False, "error": f"Auction search failed: {e}"}
+
+    text_parts, web_searches = [], 0
+    for block in message.content:
+        if hasattr(block, "text"):
+            text_parts.append(block.text)
+        if getattr(block, "type", "") == "server_tool_use":
+            web_searches += 1
+    text = "\n".join(text_parts)
+
+    data = _find_listings_payload(text)
+    raw = (data or {}).get("listings") if data else None
+    area_label = (data or {}).get("area_label", "") if data else ""
+    notes = (data or {}).get("notes", "") if data else ""
+    if not raw:
+        salvaged = _salvage_listings(text)
+        if salvaged:
+            raw, notes = salvaged, (notes or "(recovered from a truncated response)")
+    if not raw:
+        return {"ok": False, "error": "Could not parse auction results from AI.",
+                "stop_reason": getattr(message, "stop_reason", None),
+                "raw_text": text[-2000:]}
+
+    seen, listings = set(), []
+    for it in raw:
+        if not isinstance(it, dict):
+            continue
+        addr = (it.get("address") or "").strip()
+        url = (it.get("url") or "").strip()
+        key = (addr.lower() or url.lower())
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        listings.append({
+            "address": addr, "url": url,
+            "city": (it.get("city") or "").strip(),
+            "state": (it.get("state") or "").strip(),
+            "zip": (str(it.get("zip") or "")).strip(),
+            "opening_bid": it.get("opening_bid") or it.get("current_bid"),
+            "auction_date": it.get("auction_date"),
+            "beds": it.get("beds"), "baths": it.get("baths"), "sqft": it.get("sqft"),
+            "year_built": it.get("year_built"),
+            "arv_estimate": it.get("arv_estimate"),
+            "rehab_estimate": it.get("rehab_estimate"),
+            "property_type": it.get("property_type"),
+            "source": it.get("source"),
+        })
+        if len(listings) >= max_listings:
+            break
+
+    return {"ok": True, "area_label": area_label, "listings": listings,
+            "notes": notes, "model": model, "web_searches_used": web_searches}

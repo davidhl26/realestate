@@ -2700,6 +2700,126 @@
   }
   $("#auc-run")?.addEventListener("click", () => runAuction());
 
+  // ===== Auction discovery by city/state =====
+  let _aucFindResults = [];
+  async function runAuctionFind() {
+    const v = id => ($(id)?.value || "").trim();
+    const n = id => { const x = Number(v(id)); return x > 0 ? x : null; };
+    const location = v("#aucf-location");
+    if (!location) { toast("Entre une ville ou un état", "warn"); return; }
+    const payload = { location, max_listings: Number(v("#aucf-count")) || 10 };
+    if (n("#aucf-pricemax")) payload.price_max = n("#aucf-pricemax");
+    if (n("#aucf-bedsmin")) payload.beds_min = n("#aucf-bedsmin");
+    if (Number(v("#aucf-margin")) > 0) payload.target_margin_pct = Number(v("#aucf-margin"));
+    if (Number(v("#aucf-holding")) >= 0 && v("#aucf-holding")) payload.holding = Number(v("#aucf-holding"));
+    const st = $("#aucf-status"), btn = $("#aucf-run");
+    btn.disabled = true;
+    st.innerHTML = '<span class="spinner"></span> Recherche IA + web des enchères… (~30-60s)';
+    $("#aucf-results").innerHTML = "";
+    try {
+      if (!state.deals || !state.deals.length) { try { state.deals = await API.listDeals(); } catch {} }
+      const r = await API.auctionFind(payload);
+      if (!r.ok) { st.innerHTML = `<span style="color:var(--red)">${escape(r.error || "Échec de la recherche")}</span>`; return; }
+      _aucFindResults = r.listings || [];
+      st.innerHTML = `✓ ${_aucFindResults.length} enchère(s)${r.area_label ? " — " + escape(r.area_label) : ""}${r.notes ? `<br><span class="muted" style="font-size:11.5px;">${escape(r.notes)}</span>` : ""}`;
+      renderAuctionFindResults();
+    } catch (e) { st.innerHTML = `<span style="color:var(--red)">${escape(e.message)}</span>`; }
+    finally { btn.disabled = false; }
+  }
+  function renderAuctionFindResults() {
+    const box = $("#aucf-results");
+    if (!_aucFindResults.length) { box.innerHTML = `<div class="card"><p class="muted" style="margin:0;">Aucune enchère trouvée pour cette zone.</p></div>`; return; }
+    const D = v => (v == null || v === "") ? "—" : "$" + Math.round(v).toLocaleString("en-US");
+    const vcol = { go: "var(--green)", tight: "#e8a93b", pass: "var(--red)", unknown: "var(--muted)" };
+    const vlbl = { go: "GO", tight: "SERRÉ", pass: "PASSE", unknown: "?" };
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    box.innerHTML = `<div class="deals-grid">${_aucFindResults.map((l, i) => {
+      let dateTag = "";
+      if (l.auction_date) {
+        const d = new Date(l.auction_date + "T00:00:00");
+        const days = Math.round((d - today) / 86400000);
+        const col = isNaN(days) ? "var(--muted)" : days < 0 ? "var(--muted)" : days <= 7 ? "var(--red)" : days <= 14 ? "#e8a93b" : "var(--muted)";
+        dateTag = `<span style="color:${col}; font-weight:600;">📅 ${escape(l.auction_date)}${!isNaN(days) && days >= 0 ? ` (J−${days})` : ""}</span>`;
+      }
+      const col = vcol[l.verdict] || "var(--muted)";
+      const onBoard = _onBoard ? _onBoard(l.address) : false;
+      return `<div class="card" style="display:flex; flex-direction:column; gap:6px;">
+        <div style="display:flex; justify-content:space-between; gap:6px; align-items:flex-start;">
+          <div style="font-weight:600;">${escape(l.address || "?")}</div>
+          <span class="pill" style="background:${col}1a; color:${col}; font-weight:700; white-space:nowrap;">${vlbl[l.verdict] || "?"}</span>
+        </div>
+        <div class="muted" style="font-size:12px;">${escape([l.city, l.state, l.zip].filter(Boolean).join(" "))}${l.source ? " · " + escape(l.source) : ""}</div>
+        <div style="font-size:12.5px; display:flex; gap:12px; flex-wrap:wrap;">${dateTag}${l.opening_bid ? `<span class="muted">départ ${D(l.opening_bid)}</span>` : ""}</div>
+        <div style="font-size:12px;" class="muted">ARV ${D(l.arv_estimate)} · Rehab ${D(l.rehab_estimate)}${l.beds ? ` · ${l.beds}bd/${l.baths || "?"}ba` : ""}</div>
+        <div style="display:flex; justify-content:space-between; align-items:baseline; margin-top:2px;">
+          <span style="font-size:11px; color:var(--muted); text-transform:uppercase;">Enchère max</span>
+          <span style="font-weight:700; font-size:18px; color:${col};">${D(l.max_bid)}</span>
+        </div>
+        <div style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap;">
+          <button class="btn ghost aucf-detail" data-i="${i}" style="font-size:12px;" title="Analyse IA détaillée">🔬 Détail</button>
+          <button class="btn ghost aucf-watch" data-i="${i}" style="font-size:12px;">⭐ Suivre</button>
+          <button class="btn ${onBoard ? "" : "ghost"} aucf-add" data-i="${i}" style="font-size:12px;" ${onBoard ? "disabled" : ""}>${onBoard ? "✓ Board" : "+ Board"}</button>
+        </div>
+      </div>`;
+    }).join("")}</div>`;
+    box.querySelectorAll(".aucf-detail").forEach(b => b.addEventListener("click", () => _aucfDetail(_aucFindResults[+b.dataset.i])));
+    box.querySelectorAll(".aucf-watch").forEach(b => b.addEventListener("click", () => _aucfWatch(_aucFindResults[+b.dataset.i], b)));
+    box.querySelectorAll(".aucf-add").forEach(b => b.addEventListener("click", () => _aucfAdd(_aucFindResults[+b.dataset.i], b)));
+  }
+  // "Détail" → prefill the single-address form (section ②) and run the deep analysis
+  function _aucfDetail(l) {
+    if (!l) return;
+    const full = [l.address, l.city, `${l.state || ""} ${l.zip || ""}`.trim()].filter(s => s && s.trim()).join(", ");
+    $("#auc-address").value = full || l.address || "";
+    $("#auc-opening").value = l.opening_bid || "";
+    $("#auc-beds").value = l.beds || ""; $("#auc-baths").value = l.baths || ""; $("#auc-sqft").value = l.sqft || "";
+    $("#auc-year").value = l.year_built || ""; $("#auc-date").value = l.auction_date || "";
+    document.getElementById("auc-address").scrollIntoView({ behavior: "smooth", block: "center" });
+    runAuction();
+  }
+  async function _aucfWatch(l, btn) {
+    if (!l) return;
+    btn.disabled = true; btn.textContent = "…";
+    try {
+      await API.auctionWatch({
+        address: [l.address, l.city, `${l.state || ""} ${l.zip || ""}`.trim()].filter(s => s && s.trim()).join(", ") || l.address,
+        url: l.url || "", opening_bid: l.opening_bid, auction_date: l.auction_date,
+        beds: l.beds, baths: l.baths, sqft: l.sqft, year_built: l.year_built,
+        arv: l.arv_estimate, rehab: l.rehab_estimate, max_bid: l.max_bid,
+        mao70: l.mao70, profit_at_max: l.profit_at_max, verdict: l.verdict,
+        target_margin_pct: l.target_margin_pct,
+      });
+      btn.textContent = "⭐ Suivie";
+      toast("Ajoutée aux enchères suivies", "success");
+      renderWatchlist();
+    } catch (e) { btn.disabled = false; btn.textContent = "⭐ Suivre"; toast(e.message, "error"); }
+  }
+  async function _aucfAdd(l, btn) {
+    if (!l) return;
+    btn.disabled = true; btn.textContent = "…";
+    const full = [l.address, l.city, `${l.state || ""} ${l.zip || ""}`.trim()].filter(s => s && s.trim()).join(", ") || l.address;
+    try {
+      const res = await API.createDeal({
+        address: full, city: l.city || "", state: l.state || "", zip: String(l.zip || ""),
+        property_type: l.property_type || "Single Family Residence",
+        beds: l.beds || null, baths: l.baths || null, sqft: l.sqft || null, year_built: l.year_built || null,
+        purchase_price: l.max_bid || l.opening_bid || 0,
+        arv_base: l.arv_estimate || 0, rehab_base: l.rehab_estimate || 0, arv_confidence: "Low",
+        source: "auction", source_url: l.url || "", status: "evaluating",
+        notes: `[Auction — trouvé par zone]\nEnchère max: $${(l.max_bid || 0).toLocaleString("en-US")}`
+          + (l.opening_bid ? `\nDépart: $${Number(l.opening_bid).toLocaleString("en-US")}` : "")
+          + (l.auction_date ? `\nDate enchère: ${l.auction_date}` : "")
+          + (l.source ? `\nSource: ${l.source}` : ""),
+      });
+      const deal = res.deal || res;
+      (state.deals = state.deals || []).push(deal);
+      btn.textContent = "✓ Board"; btn.disabled = true; btn.classList.remove("primary");
+      toast("Deal ajouté", "success");
+    } catch (e) { btn.disabled = false; btn.textContent = "+ Board"; toast(e.message, "error"); }
+  }
+  $("#aucf-run")?.addEventListener("click", runAuctionFind);
+  $("#aucf-location")?.addEventListener("keydown", e => { if (e.key === "Enter") { e.preventDefault(); runAuctionFind(); } });
+
   async function renderWatchlist() {
     const box = $("#auc-watchlist"); if (!box) return;
     let items = [];
