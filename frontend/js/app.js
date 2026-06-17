@@ -1057,6 +1057,16 @@
     // === Hero ===
     const hero = $("#detail-hero");
     const sigHex = signalPillClass(data.signal);
+    // Zillow market-activity line: time on Zillow (auto) · views · saves (editable —
+    // Zillow no longer exposes view/save counts to scrapers, so the user pastes them).
+    const _since = (d.days_on_market != null && d.days_on_market !== "")
+      ? `${Number(d.days_on_market)} day${Number(d.days_on_market) > 1 ? "s" : ""} on Zillow`
+      : (d.time_on_zillow ? (/zillow/i.test(d.time_on_zillow) ? d.time_on_zillow : `${d.time_on_zillow} on Zillow`) : null);
+    const _cnt = v => (v != null && v !== "" && !isNaN(v)) ? Number(v).toLocaleString() : "—";
+    const sinceChip = _since ? `<span class="zchip">📅 ${escape(String(_since))}</span>` : "";
+    const viewsChip = `<span class="zchip" title="Vues Zillow (clique pour saisir)">👁 <span class="editable-count" data-count-field="page_view_count" data-value="${d.page_view_count ?? ""}">${_cnt(d.page_view_count)}</span> views</span>`;
+    const savesChip = `<span class="zchip" title="Saves Zillow (clique pour saisir)">♥ <span class="editable-count" data-count-field="favorite_count" data-value="${d.favorite_count ?? ""}">${_cnt(d.favorite_count)}</span> saves</span>`;
+    const zLine = `<div class="detail-hero-zillow">${sinceChip}${viewsChip}${savesChip}</div>`;
     hero.innerHTML = `
       <div class="detail-hero-img" id="hero-img"
            style="${d.image ? `background-image:url('${escape(d.image)}')` : ''}">
@@ -1077,6 +1087,7 @@
           ${d.year_built ? `• built ${d.year_built}` : ''}
           ${d.lot_size ? `• ${escape(d.lot_size)}` : ''}
         </div>
+        ${zLine}
         <div class="detail-hero-stats">
           <div class="detail-hero-stat">
             <span class="lbl">Purchase <span style="font-weight:500; color:var(--accent); text-transform:none; letter-spacing:0;">(editable)</span></span>
@@ -1130,6 +1141,7 @@
 
     // Wire inline editables
     $$(".editable", hero).forEach(el => attachInlineEdit(el));
+    $$(".editable-count", hero).forEach(el => attachCountEdit(el));
     // Rehab value → open the work-items estimator
     $$("[data-rehab-open]", hero).forEach(el =>
       el.addEventListener("click", () => openRehabModal(el.dataset.rehabOpen)));
@@ -1559,6 +1571,48 @@
         }
       };
 
+      input.addEventListener("keydown", e => {
+        if (e.key === "Enter") { e.preventDefault(); save(); }
+        else if (e.key === "Escape") { e.preventDefault(); cancel(); }
+      });
+      input.addEventListener("blur", save);
+    });
+  }
+
+  // Inline editor for plain integer counts (Zillow views / saves).
+  function attachCountEdit(el) {
+    const fmt = v => (v != null && v !== "" && !isNaN(v)) ? Number(v).toLocaleString() : "—";
+    el.addEventListener("click", e => {
+      e.stopPropagation();
+      if (el.classList.contains("editing")) return;
+      const field = el.dataset.countField;
+      const current = el.dataset.value === "" ? null : Number(el.dataset.value);
+      const input = document.createElement("input");
+      input.type = "number"; input.min = "0"; input.step = "1";
+      input.value = current ?? ""; input.className = "inline-input";
+      input.style.width = "80px";
+      el.classList.add("editing"); el.textContent = ""; el.appendChild(input);
+      input.focus(); input.select();
+      const cleanup = () => el.classList.remove("editing");
+      const cancel = () => { cleanup(); el.textContent = fmt(current); };
+      const save = async () => {
+        const raw = input.value.trim();
+        const newVal = raw === "" ? null : Number(raw);
+        if (raw !== "" && isNaN(newVal)) { cancel(); return; }
+        if (newVal === current) { cancel(); return; }
+        cleanup(); el.textContent = fmt(newVal);
+        el.dataset.value = newVal == null ? "" : newVal;
+        el.classList.add("saving");
+        try {
+          await API.patchDeal(state.currentDealId, { [field]: newVal });
+          el.classList.remove("saving"); el.classList.add("saved");
+          setTimeout(() => el.classList.remove("saved"), 700);
+        } catch (err) {
+          el.classList.remove("saving");
+          el.textContent = fmt(current); el.dataset.value = current == null ? "" : current;
+          toast("Update failed: " + err.message, "error");
+        }
+      };
       input.addEventListener("keydown", e => {
         if (e.key === "Enter") { e.preventDefault(); save(); }
         else if (e.key === "Escape") { e.preventDefault(); cancel(); }

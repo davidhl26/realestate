@@ -291,6 +291,8 @@ REFRESHABLE_FIELDS = [
     "hvac_notes", "water_heater_notes", "school_rating", "flood_risk",
     "showing_date", "strategy_hint", "listing_name", "description",
     "source", "source_url", "external_id", "external_link",
+    # Zillow market-activity stats (change over time → refreshable)
+    "days_on_market", "time_on_zillow", "page_view_count", "favorite_count",
 ]
 
 

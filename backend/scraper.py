@@ -1541,7 +1541,7 @@ def scrape(url: str) -> dict:
               "property_tax_rate_pct", "monthly_hoa", "has_garage",
               "parking_spaces", "heating", "cooling",
               "construction_materials", "time_on_zillow",
-              "favorite_count", "page_view_count"):
+              "favorite_count", "page_view_count", "days_on_market"):
         if data.get(k) is not None:
             deal_seed[k] = data[k]
     if data.get("requires_manual_entry"):

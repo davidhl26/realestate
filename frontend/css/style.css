@@ -1190,6 +1190,34 @@ kbd {
   margin-bottom: var(--s-5);
   font-weight: 500;
 }
+.detail-hero-zillow {
+  font-size: 12.5px;
+  color: var(--text);
+  font-weight: 600;
+  margin: -8px 0 var(--s-5);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+  align-items: center;
+}
+.detail-hero-zillow .zchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--accent-50, rgba(0,0,0,0.04));
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+.detail-hero-zillow .editable-count {
+  cursor: pointer;
+  border-bottom: 1px dashed var(--accent, #B68A3C);
+  min-width: 14px;
+  text-align: center;
+}
+.detail-hero-zillow .editable-count:hover { color: var(--accent, #B68A3C); }
+.detail-hero-zillow .editable-count.saved { color: var(--green); }
+.detail-hero-zillow .editable-count .inline-input { font-size: 12px; padding: 1px 4px; }
 
 /* ============== SOURCE LINKS ============== */
 .source-links {
