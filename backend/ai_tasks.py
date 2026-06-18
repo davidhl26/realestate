@@ -14,10 +14,27 @@ import re
 from typing import Any, Optional
 
 from .ai_research import (
-    get_api_key, get_model, is_configured, _extract_json,
+    get_api_key, get_model, is_configured, _extract_json, _repair_json,
 )
 
 log = logging.getLogger("flip-board.ai_tasks")
+
+
+def _parse_task_json(text: str) -> Optional[dict]:
+    """Parse the task's JSON, salvaging truncated responses.
+
+    Web-search tasks sometimes hit max_tokens mid-JSON, leaving unclosed
+    braces. _extract_json fails on those; json-repair can still recover the
+    fields emitted before the cut-off."""
+    d = _extract_json(text)
+    if d:
+        return d
+    start = text.find("{")
+    if start >= 0:
+        d = _repair_json(text[start:])
+        if isinstance(d, dict) and d:
+            return d
+    return None
 
 WEB_TOOL = {"type": "web_search_20250305", "name": "web_search", "max_uses": 8}
 
@@ -235,7 +252,7 @@ def task_rehab(deal: dict) -> dict:
     r = _run_claude(REHAB_SYSTEM, user, max_tokens=3500)
     if not r.get("ok"):
         return r
-    return _wrap(r, _extract_json(r["text"]) or {"error": "parse failed", "raw": r["text"][:1500]})
+    return _wrap(r, _parse_task_json(r["text"]) or {"error": "parse failed", "raw": r["text"][:1500]})
 
 
 # ============================================================================
@@ -269,7 +286,7 @@ def task_rent_comps(deal: dict) -> dict:
     r = _run_claude(RENT_SYSTEM, user, max_tokens=2500)
     if not r.get("ok"):
         return r
-    return _wrap(r, _extract_json(r["text"]) or {"error": "parse failed", "raw": r["text"][:1500]})
+    return _wrap(r, _parse_task_json(r["text"]) or {"error": "parse failed", "raw": r["text"][:1500]})
 
 
 # ============================================================================
@@ -317,10 +334,10 @@ Output JSON only:
 def task_neighborhood(deal: dict) -> dict:
     user = (f"Research the neighborhood quality and investment fundamentals around this address:\n\n"
              f"{_summary(deal, include_financials=False, include_anchors=False)}")
-    r = _run_claude(NBHD_SYSTEM, user, max_tokens=2500)
+    r = _run_claude(NBHD_SYSTEM, user, max_tokens=4500)
     if not r.get("ok"):
         return r
-    return _wrap(r, _extract_json(r["text"]) or {"error": "parse failed", "raw": r["text"][:1500]})
+    return _wrap(r, _parse_task_json(r["text"]) or {"error": "parse failed", "raw": r["text"][:1500]})
 
 
 # ============================================================================
@@ -364,7 +381,7 @@ def task_taxes_insurance(deal: dict) -> dict:
     r = _run_claude(TAX_SYSTEM, user, max_tokens=2000)
     if not r.get("ok"):
         return r
-    return _wrap(r, _extract_json(r["text"]) or {"error": "parse failed", "raw": r["text"][:1500]})
+    return _wrap(r, _parse_task_json(r["text"]) or {"error": "parse failed", "raw": r["text"][:1500]})
 
 
 # ============================================================================
@@ -397,7 +414,7 @@ def task_history(deal: dict) -> dict:
     r = _run_claude(HISTORY_SYSTEM, user, max_tokens=2000)
     if not r.get("ok"):
         return r
-    return _wrap(r, _extract_json(r["text"]) or {"error": "parse failed", "raw": r["text"][:1500]})
+    return _wrap(r, _parse_task_json(r["text"]) or {"error": "parse failed", "raw": r["text"][:1500]})
 
 
 # ============================================================================
@@ -428,7 +445,7 @@ def task_risks(deal: dict) -> dict:
     r = _run_claude(RISK_SYSTEM, user, max_tokens=2000)
     if not r.get("ok"):
         return r
-    return _wrap(r, _extract_json(r["text"]) or {"error": "parse failed", "raw": r["text"][:1500]})
+    return _wrap(r, _parse_task_json(r["text"]) or {"error": "parse failed", "raw": r["text"][:1500]})
 
 
 # ============================================================================
@@ -472,7 +489,7 @@ def task_photos(deal: dict) -> dict:
     r = _run_claude(PHOTO_SYSTEM, user, max_tokens=3000, use_web=False, vision_images=images)
     if not r.get("ok"):
         return r
-    return _wrap(r, _extract_json(r["text"]) or {"error": "parse failed", "raw": r["text"][:1500]})
+    return _wrap(r, _parse_task_json(r["text"]) or {"error": "parse failed", "raw": r["text"][:1500]})
 
 
 # ============================================================================
@@ -513,7 +530,7 @@ def task_verdict(deal: dict) -> dict:
     r = _run_claude(VERDICT_SYSTEM, user, max_tokens=2500, use_web=False)
     if not r.get("ok"):
         return r
-    return _wrap(r, _extract_json(r["text"]) or {"error": "parse failed", "raw": r["text"][:1500]})
+    return _wrap(r, _parse_task_json(r["text"]) or {"error": "parse failed", "raw": r["text"][:1500]})
 
 
 # ============================================================================
@@ -543,7 +560,7 @@ def task_offer(deal: dict) -> dict:
     r = _run_claude(OFFER_SYSTEM, user, max_tokens=1500, use_web=False)
     if not r.get("ok"):
         return r
-    return _wrap(r, _extract_json(r["text"]) or {"error": "parse failed", "raw": r["text"][:1500]})
+    return _wrap(r, _parse_task_json(r["text"]) or {"error": "parse failed", "raw": r["text"][:1500]})
 
 
 # ============================================================================
@@ -578,7 +595,7 @@ def task_red_flags(deal: dict) -> dict:
     r = _run_claude(REDFLAGS_SYSTEM, user, max_tokens=2000, use_web=False)
     if not r.get("ok"):
         return r
-    return _wrap(r, _extract_json(r["text"]) or {"error": "parse failed", "raw": r["text"][:1500]})
+    return _wrap(r, _parse_task_json(r["text"]) or {"error": "parse failed", "raw": r["text"][:1500]})
 
 
 # ============================================================================
@@ -608,7 +625,7 @@ def task_timing(deal: dict) -> dict:
     r = _run_claude(TIMING_SYSTEM, user, max_tokens=1800)
     if not r.get("ok"):
         return r
-    return _wrap(r, _extract_json(r["text"]) or {"error": "parse failed", "raw": r["text"][:1500]})
+    return _wrap(r, _parse_task_json(r["text"]) or {"error": "parse failed", "raw": r["text"][:1500]})
 
 
 # ============================================================================
@@ -644,7 +661,7 @@ def task_mls_listing(deal: dict) -> dict:
     r = _run_claude(MLS_SYSTEM, user, max_tokens=3500, use_web=False)
     if not r.get("ok"):
         return r
-    return _wrap(r, _extract_json(r["text"]) or {"error": "parse failed", "raw": r["text"][:1500]})
+    return _wrap(r, _parse_task_json(r["text"]) or {"error": "parse failed", "raw": r["text"][:1500]})
 
 
 # ============================================================================
@@ -669,7 +686,7 @@ def task_offer_letter(deal: dict) -> dict:
     r = _run_claude(LETTER_SYSTEM, user, max_tokens=1500, use_web=False)
     if not r.get("ok"):
         return r
-    return _wrap(r, _extract_json(r["text"]) or {"error": "parse failed", "raw": r["text"][:1500]})
+    return _wrap(r, _parse_task_json(r["text"]) or {"error": "parse failed", "raw": r["text"][:1500]})
 
 
 # ============================================================================
@@ -698,7 +715,7 @@ def task_marketing(deal: dict) -> dict:
     r = _run_claude(MARKETING_SYSTEM, user, max_tokens=2000, use_web=False)
     if not r.get("ok"):
         return r
-    return _wrap(r, _extract_json(r["text"]) or {"error": "parse failed", "raw": r["text"][:1500]})
+    return _wrap(r, _parse_task_json(r["text"]) or {"error": "parse failed", "raw": r["text"][:1500]})
 
 
 # ============================================================================

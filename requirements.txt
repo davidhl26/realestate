@@ -12,3 +12,4 @@ browser-cookie3==0.20.1
 anthropic==0.104.1
 pypdf==6.12.2
 pdfplumber==0.11.8
+json-repair==0.44.1
