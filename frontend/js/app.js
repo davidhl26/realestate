@@ -3253,7 +3253,7 @@
       beds: seed.beds, baths: seed.baths, sqft: seed.sqft,
       year_built: seed.year_built, lot_size: seed.lot_size,
       purchase_price: seed.listing_price,
-      arv_base: seed.zestimate,
+      arv_base: seed.zestimate || seed.comp_value_estimate || seed.arv_estimate,
       arv_low: seed.comp_value_low,
       arv_high: seed.comp_value_high,
       rehab_base: seed.rehab_estimate,

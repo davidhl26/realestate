@@ -1469,8 +1469,10 @@ def scrape(url: str) -> dict:
                 data = parse_zillow(html)
             else:
                 data = parse_redfin(html)
-            # Even on a 200 that yielded a captcha page, backfill from URL slug.
-            if site == "zillow" and data.get("requires_manual_entry") and not data.get("street"):
+            # Backfill address from the URL slug whenever parsing missed it —
+            # not only on captcha pages. Some 200 listings parse price/beds but
+            # not the address (page structure varies), which left address empty.
+            if site == "zillow" and not data.get("street"):
                 slug = parse_zillow_url_slug(url)
                 for k, v in slug.items():
                     if v and not data.get(k):
