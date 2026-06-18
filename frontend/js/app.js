@@ -1059,9 +1059,12 @@
     const sigHex = signalPillClass(data.signal);
     // Zillow market-activity line: time on Zillow (auto) · views · saves (editable —
     // Zillow no longer exposes view/save counts to scrapers, so the user pastes them).
-    const _since = (d.days_on_market != null && d.days_on_market !== "")
-      ? `${Number(d.days_on_market)} day${Number(d.days_on_market) > 1 ? "s" : ""} on Zillow`
-      : (d.time_on_zillow ? (/zillow/i.test(d.time_on_zillow) ? d.time_on_zillow : `${d.time_on_zillow} on Zillow`) : null);
+    const _dom = (d.days_on_market != null && d.days_on_market !== "") ? Number(d.days_on_market)
+               : (d.median_dom != null && d.median_dom !== "") ? Number(d.median_dom) : null;
+    let _since = null;
+    if (_dom != null && _dom > 0) _since = `${_dom} day${_dom > 1 ? "s" : ""} on Zillow`;
+    else if (d.time_on_zillow) _since = /zillow/i.test(d.time_on_zillow) ? d.time_on_zillow : `${d.time_on_zillow} on Zillow`;
+    else if (_dom === 0) _since = "Listed today";
     const _cnt = v => (v != null && v !== "" && !isNaN(v)) ? Number(v).toLocaleString() : "—";
     const sinceChip = _since ? `<span class="zchip">📅 ${escape(String(_since))}</span>` : "";
     const viewsChip = `<span class="zchip" title="Vues Zillow (clique pour saisir)">👁 <span class="editable-count" data-count-field="page_view_count" data-value="${d.page_view_count ?? ""}">${_cnt(d.page_view_count)}</span> views</span>`;
@@ -3266,6 +3269,10 @@
               : null),
       monthly_hoa: seed.monthly_hoa,
       median_dom: seed.median_dom,
+      days_on_market: seed.days_on_market,
+      time_on_zillow: seed.time_on_zillow,
+      page_view_count: seed.page_view_count,
+      favorite_count: seed.favorite_count,
       source_url: seed.source_url,
       image: seed.image,
       image_gallery: seed.image_gallery,

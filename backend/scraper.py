@@ -545,6 +545,31 @@ def _zillow_extract_photos(prop: dict) -> list:
     return out[:30]
 
 
+_ZILLOW_PHOTO_RE = re.compile(
+    r'https://photos\.zillowstatic\.com/fp/([0-9a-f]{16,})-([a-z0-9_]+)\.(jpg|jpeg|webp)', re.I)
+
+
+def _zillow_photos_from_html(html: str) -> list:
+    """Regex fallback: pull listing photos directly from the page HTML when the
+    structured responsivePhotos[] extraction fails. Zillow serves every photo in
+    many size/crop variants sharing one id hash (…/fp/<hash>-<size>.<ext>); we
+    dedupe by hash (keeping document order) and keep the best ~1536px variant."""
+    if not html:
+        return []
+    by_hash, order = {}, []
+    for m in _ZILLOW_PHOTO_RE.finditer(html):
+        full, h, suffix = m.group(0), m.group(1), m.group(2)
+        wm = re.search(r"(\d{3,4})", suffix)
+        w = int(wm.group(1)) if wm else 0
+        score = w if w <= 1536 else 1536 - (w - 1536)  # prefer ~1536px
+        if h not in by_hash:
+            order.append(h)
+            by_hash[h] = (score, full)
+        elif score > by_hash[h][0]:
+            by_hash[h] = (score, full)
+    return [by_hash[h][1] for h in order][:40]
+
+
 def parse_redfin(html: str) -> dict:
     """Parse a Redfin detail page."""
     soup = BeautifulSoup(html, "lxml")
@@ -1477,6 +1502,15 @@ def scrape(url: str) -> dict:
                 for k, v in slug.items():
                     if v and not data.get(k):
                         data[k] = v
+            # Photo fallback: if structured extraction found no gallery, pull
+            # listing photos straight from the HTML. Page structure varies and
+            # the responsivePhotos[] object isn't always where we expect it.
+            if site == "zillow" and not data.get("image_gallery"):
+                photos = _zillow_photos_from_html(html)
+                if photos:
+                    data["image_gallery"] = photos
+                    if not data.get("image"):
+                        data["image"] = photos[0]
 
     data["url"] = url
 
