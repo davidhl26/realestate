@@ -161,12 +161,23 @@ def logout():
     return resp
 
 
+def _apply_risk(deal: dict, m: dict) -> dict:
+    """Run the deterministic safety screen and persist its fields on the deal."""
+    risk = analyzer.assess_risk(deal, m)
+    deal["risk_grade"] = risk["risk_grade"]
+    deal["deal_breakers"] = risk["deal_breakers"]
+    deal["risk_flags"] = risk["risk_flags"]
+    deal["risk_summary"] = risk["risk_summary"]
+    return risk
+
+
 def _enrich(deal: dict) -> dict:
-    """Compute metrics + score + signal, return augmented dict."""
+    """Compute metrics + score + signal + risk, return augmented dict."""
     m = analyzer.compute_metrics(deal)
     score, grade, signal = analyzer.compute_score(deal, m)
+    risk = analyzer.assess_risk(deal, m)
     return {"deal": deal, "metrics": m, "score": score,
-            "grade": grade, "signal": signal}
+            "grade": grade, "signal": signal, "risk": risk}
 
 
 @app.get("/api/healthz")
@@ -189,9 +200,13 @@ def list_deals():
         try:
             m = analyzer.compute_metrics(d)
             score, grade, signal = analyzer.compute_score(d, m)
+            risk = analyzer.assess_risk(d, m)
             out.append({
                 "id": d["id"],
                 "address": d.get("address", ""),
+                "risk_grade": risk["risk_grade"],
+                "deal_breakers": risk["deal_breakers"],
+                "risk_flags": risk["risk_flags"],
                 "city": d.get("city", ""),
                 "state": d.get("state", ""),
                 "beds": d.get("beds"),
@@ -244,6 +259,7 @@ def create_deal(deal: dict = Body(...)):
     deal["score"] = score
     deal["grade"] = grade
     deal["signal"] = signal
+    _apply_risk(deal, m)
     saved = db.upsert_deal(deal)
     return _enrich(saved)
 
@@ -260,6 +276,7 @@ def patch_deal(deal_id: str, updates: dict = Body(...)):
     d["score"] = score
     d["grade"] = grade
     d["signal"] = signal
+    _apply_risk(d, m)
     saved = db.upsert_deal(d)
     return _enrich(saved)
 

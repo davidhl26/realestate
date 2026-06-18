@@ -54,6 +54,21 @@
     if (s >= 40) return "#F97316";
     return "#EF4444";
   }
+  // Safety risk grade A–F → color + badge
+  function riskColor(g) {
+    return { A: "#10B981", B: "#84CC16", C: "#F59E0B", D: "#F97316", F: "#EF4444" }[g] || "#9CA3AF";
+  }
+  function riskBadge(d) {
+    const g = d.risk_grade;
+    if (!g) return "";
+    const brk = (d.deal_breakers && d.deal_breakers.length) ? "⛔" : "";
+    return `<span class="risk-badge" style="background:${riskColor(g)}" title="Sécurité: note ${g}${brk ? " — deal-breaker" : ""}">${brk}🛡 ${g}</span>`;
+  }
+  function dealBreakerStrip(d) {
+    const n = (d.deal_breakers && d.deal_breakers.length) || 0;
+    if (!n) return "";
+    return `<div class="deal-card-breaker" title="${escape(d.deal_breakers.join(' · '))}">⛔ ${n} deal-breaker${n > 1 ? "s" : ""} — ${escape(d.deal_breakers[0])}</div>`;
+  }
   function signalPillClass(sig) {
     sig = (sig || "").toUpperCase();
     if (sig.includes("SLAM") || sig.includes("GOOD")) return "green";
@@ -499,6 +514,10 @@
     // Sort (applies to the cards view; the table keeps its column sort)
     if (state.dealsSort === "newest") {
       list.sort((a, b) => String(b.added_date || "").localeCompare(String(a.added_date || "")));
+    } else if (state.dealsSort === "risk") {
+      const rank = { F: 5, D: 4, C: 3, B: 2, A: 1 };
+      const rk = x => (x.deal_breakers && x.deal_breakers.length ? 100 : 0) + (rank[x.risk_grade] || 0);
+      list.sort((a, b) => rk(b) - rk(a));
     } else {
       list.sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
     }
@@ -626,9 +645,11 @@
             <div class="deal-card-badges">
               <span class="score-badge" style="background:${scoreColor(d.score)}">${d.score}</span>
               <span class="pill ${signalPillClass(d.signal)}">${escape(d.signal)}</span>
+              ${riskBadge(d)}
             </div>
           </div>
           <div class="deal-card-body">
+            ${dealBreakerStrip(d)}
             <div class="deal-card-address">${escape(d.address)}</div>
             <div class="deal-card-city">${escape(d.city || '')}, ${escape(d.state || '')}</div>
             <div class="deal-card-specs">
@@ -1067,6 +1088,44 @@
     return `<div class="source-links">${links.join("")}</div>`;
   }
 
+  function renderDetailRisk(data) {
+    const host = $("#detail-risk"); if (!host) return;
+    const risk = data.risk || {};
+    const d = data.deal || {};
+    const breakers = risk.deal_breakers || [];
+    const flags = risk.risk_flags || [];
+    // AI verdict's must-verify checklists (computed by the verdict task)
+    const v = (d.ai_insights && d.ai_insights.verdict && d.ai_insights.verdict.result) || {};
+    const mvOffer = v.must_verify_before_offer || [];
+    const mvClose = v.must_verify_before_closing || [];
+    if (!breakers.length && !flags.length && !mvOffer.length && !mvClose.length) {
+      host.innerHTML = `<div class="card risk-block"><div style="display:flex;align-items:center;gap:8px;">
+        <span class="risk-badge" style="background:${riskColor(risk.risk_grade || 'A')}">🛡 ${risk.risk_grade || 'A'}</span>
+        <span style="font-weight:600;">${escape(risk.risk_summary || 'Aucun signal de risque évident')}</span></div>
+        <p class="muted" style="margin:6px 0 0;font-size:12.5px;">Lance « Analyse complète » pour une vérif IA approfondie (titre, liens, historique).</p></div>`;
+      return;
+    }
+    const danger = breakers.length > 0;
+    const flagRows = flags.map(f =>
+      `<div class="risk-flag"><span class="risk-sev ${f.severity}">${f.severity === 'high' ? 'élevé' : f.severity === 'medium' ? 'moyen' : 'faible'}</span><span>${escape(f.label)}</span></div>`).join("");
+    const breakerRows = breakers.map(b =>
+      `<div class="risk-flag"><span class="risk-sev deal_breaker">deal-breaker</span><span><strong>${escape(b)}</strong></span></div>`).join("");
+    const checklist = (title, items) => items.length
+      ? `<div style="margin-top:12px;"><div style="font-weight:700;font-size:13px;margin-bottom:4px;">${title}</div>${items.map(i => `<label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;padding:3px 0;"><input type="checkbox" style="margin-top:3px;">${escape(i)}</label>`).join("")}</div>`
+      : "";
+    host.innerHTML = `<div class="card risk-block ${danger ? 'danger' : ''}">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span class="risk-badge" style="background:${riskColor(risk.risk_grade)};font-size:13px;padding:4px 10px;">🛡 Sécurité ${risk.risk_grade}</span>
+        <strong style="font-size:14px;">${escape(risk.risk_summary || '')}</strong>
+      </div>
+      ${danger ? `<p style="margin:8px 0 4px;color:#b91c1c;font-weight:600;">⛔ Deal-breaker(s) — à éviter sauf vérification approfondie. Le prix max est bloqué tant que ce n'est pas levé.</p>` : ""}
+      <div style="margin-top:8px;">${breakerRows}${flagRows}</div>
+      ${checklist("✅ À vérifier AVANT de faire une offre", mvOffer)}
+      ${checklist("✅ À vérifier AVANT le closing", mvClose)}
+      ${(!mvOffer.length && !mvClose.length) ? `<p class="muted" style="margin:10px 0 0;font-size:12px;">Pré-screen automatique (gratuit). Lance « Analyse complète » pour la vérif IA du titre/liens/historique + la checklist détaillée.</p>` : ""}
+    </div>`;
+  }
+
   function renderDealDetail(data) {
     const d = data.deal;
     const m = data.metrics;
@@ -1178,6 +1237,9 @@
     // Rehab value → open the work-items estimator
     $$("[data-rehab-open]", hero).forEach(el =>
       el.addEventListener("click", () => openRehabModal(el.dataset.rehabOpen)));
+
+    // === Safety / risk block ===
+    renderDetailRisk(data);
 
     // === Flip-to-rent alert ===
     const alert = $("#flip-alert");

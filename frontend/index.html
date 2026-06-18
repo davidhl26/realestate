@@ -209,6 +209,7 @@
           <select id="deals-sort" class="input" title="Trier" style="font-size:13px; padding:7px 10px;">
             <option value="score">⭐ Meilleur score</option>
             <option value="newest">🆕 Plus récents</option>
+            <option value="risk">🛡 Risque (pires d'abord)</option>
           </select>
           <div class="view-toggle" id="view-toggle">
             <button data-mode="cards" class="active">
@@ -566,6 +567,9 @@
       </div>
 
       <div class="detail-hero" id="detail-hero"></div>
+
+      <!-- Safety / risk block (auto pre-screen + AI verdict must-verify) -->
+      <div id="detail-risk"></div>
 
       <!-- Inline-editable Financing card -->
       <div class="card financing-card" id="financing-card">

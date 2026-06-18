@@ -328,6 +328,126 @@ def compute_score(deal: dict, m: dict) -> tuple:
     return score, grade, signal
 
 
+import re as _re
+
+# Description/notes keyword scan → (compiled regex, severity, label).
+# severity: "deal_breaker" | "high" | "medium" | "low"
+_RISK_KEYWORDS = [
+    (_re.compile(r"\bcondemn|uninhabitable|not? habitable\b", _re.I), "deal_breaker", "Condamné / inhabitable"),
+    (_re.compile(r"\btenant occupied|currently occupied|\boccupied\b|squatter", _re.I), "high", "Occupé — expulsion possible (délai + coûts)"),
+    (_re.compile(r"\bfoundation\b|structural", _re.I), "high", "Problème structurel / fondation possible"),
+    (_re.compile(r"\bfire[-\s]?damage|fire[-\s]?damaged\b", _re.I), "high", "Dégâts d'incendie"),
+    (_re.compile(r"\bflood|water damage\b", _re.I), "high", "Inondation / dégâts des eaux"),
+    (_re.compile(r"\btax lien|\blien\b|back taxes|delinquent tax", _re.I), "high", "Privilège / arriérés de taxes — titre à vérifier"),
+    (_re.compile(r"\bmold|mould\b", _re.I), "medium", "Moisissure"),
+    (_re.compile(r"\bas[-\s]?is\b", _re.I), "medium", "Vendu en l'état (as-is) — aucune garantie"),
+    (_re.compile(r"\bcash[-\s]?only|cash offers?\b", _re.I), "medium", "Cash uniquement"),
+    (_re.compile(r"\bno (interior )?access|drive[-\s]?by only|exterior only", _re.I), "medium", "Pas d'accès intérieur — état inconnu"),
+    (_re.compile(r"\bestate sale|probate\b", _re.I), "medium", "Succession — délais / héritiers multiples"),
+    (_re.compile(r"\bshort sale\b", _re.I), "medium", "Short sale — délai banque"),
+    (_re.compile(r"\bauction\b|sheriff sale|foreclosure auction", _re.I), "medium", "Enchère — dépôt non remboursable, pas d'inspection"),
+]
+
+
+def assess_risk(deal: dict, m: dict) -> dict:
+    """Deterministic, free (no AI) safety screen. Returns risk_grade (A–F),
+    deal_breakers (list of str), risk_flags (list of {severity,label}).
+    This runs on EVERY deal at create/update so job-2 (avoid problems) is on by
+    default, before any paid AI run."""
+    breakers, flags = [], []
+
+    def add(sev, label):
+        if sev == "deal_breaker":
+            if label not in breakers:
+                breakers.append(label)
+        else:
+            if not any(f["label"] == label for f in flags):
+                flags.append({"severity": sev, "label": label})
+
+    pp = deal.get("purchase_price", 0) or 0
+    arv = deal.get("arv_base", 0) or 0
+    rehab = deal.get("rehab_base", 0) or 0
+    arv_low = deal.get("arv_low") or 0
+    arv_high = deal.get("arv_high") or 0
+
+    # --- Financial guardrails ---
+    if arv <= 0:
+        add("high", "ARV inconnu — à établir avant toute offre (Recherche ARV IA)")
+    else:
+        if pp > arv:
+            add("deal_breaker", "Prix d'achat supérieur à l'ARV (tu paies plus que la valeur après travaux)")
+        if rehab > 0.70 * arv:
+            add("deal_breaker", "Rehab > 70% de l'ARV — capital à risque démesuré")
+        elif rehab > 0.50 * arv:
+            add("high", "Rehab lourd (>50% de l'ARV) — vérifier le chiffrage")
+        if m.get("net_profit", 0) < 0:
+            add("deal_breaker", "Profit négatif au prix actuel")
+        elif m.get("margin", 0) < 10:
+            add("high", "Marge faible (<10% de l'ARV) — peu de coussin")
+        if not m.get("rule_70_pass", True) and m.get("rule_70_overage", 0) > 15000:
+            add("medium", "Au-dessus de la règle des 70% (prix d'achat trop élevé)")
+        # ARV reliability
+        if arv_low and arv_high and (arv_high - arv_low) / arv > 0.30:
+            add("medium", "ARV incertain — fourchette large entre comps")
+        if str(deal.get("arv_confidence", "")).lower() == "low":
+            add("medium", "Confiance ARV faible — confirmer les comparables")
+    # worst-case scenario goes negative
+    try:
+        worst = next((s for s in m.get("scenarios", []) if s.get("name") == "Worst Case"), None)
+        if worst and worst.get("net", 0) < 0 and m.get("net_profit", 0) >= 0:
+            add("medium", "Scénario pessimiste négatif — fragile si ARV baisse / rehab dérape")
+    except Exception:
+        pass
+
+    # --- Property attributes ---
+    yb = deal.get("year_built")
+    try:
+        if yb and int(yb) < 1950:
+            add("medium", f"Construit en {int(yb)} — plomb / amiante / élec ancienne probables")
+    except (TypeError, ValueError):
+        pass
+    if (deal.get("source") or "") == "auction" or "auction" in (deal.get("source_url") or "").lower():
+        add("medium", "Source enchère — titre/liens, occupation et état à vérifier (pas d'inspection)")
+    dom = deal.get("days_on_market")
+    try:
+        if dom is not None and int(dom) > 150:
+            add("low", f"Sur le marché depuis {int(dom)} jours — pourquoi ne se vend-il pas ?")
+    except (TypeError, ValueError):
+        pass
+
+    # --- Keyword scan of description + notes ---
+    text = " ".join(str(deal.get(k) or "") for k in ("description", "notes", "listing_name", "strategy_hint"))
+    if text.strip():
+        for rx, sev, label in _RISK_KEYWORDS:
+            if rx.search(text):
+                add(sev, label)
+
+    # --- Grade ---
+    highs = sum(1 for f in flags if f["severity"] == "high")
+    meds = sum(1 for f in flags if f["severity"] == "medium")
+    if breakers:
+        grade = "F"
+    elif highs >= 2:
+        grade = "D"
+    elif highs == 1 or meds >= 3:
+        grade = "C"
+    elif meds >= 1:
+        grade = "B"
+    else:
+        grade = "A"
+
+    n = len(breakers) + len(flags)
+    if breakers:
+        summary = f"{len(breakers)} deal-breaker(s) — à éviter sauf vérification"
+    elif n:
+        summary = f"{n} point(s) de vigilance"
+    else:
+        summary = "Aucun signal de risque évident"
+
+    return {"risk_grade": grade, "deal_breakers": breakers,
+            "risk_flags": flags, "risk_summary": summary}
+
+
 def board_aggregates(deals_with_metrics: list) -> dict:
     """Compute board-level aggregate statistics."""
     if not deals_with_metrics:
