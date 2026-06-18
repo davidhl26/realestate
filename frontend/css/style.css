@@ -562,6 +562,34 @@ kbd {
   background: linear-gradient(135deg, var(--card) 0%, rgba(31, 203, 137, 0.04) 100%);
 }
 
+/* ============== GROUP SUB-TABS (Sourcing / Auctions) ============== */
+.group-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 0 0 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+.group-tab {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--muted);
+  cursor: pointer;
+  transition: all .12s ease;
+}
+.group-tab:hover { color: var(--text); border-color: var(--accent-100); }
+.group-tab.active {
+  background: var(--accent, #1FCB89);
+  border-color: var(--accent, #1FCB89);
+  color: #fff;
+}
+
 /* ============== AUCTION ASSISTANT ============== */
 .auction-disclaimer { margin-bottom: 14px; }
 .auc-stat {

@@ -112,11 +112,40 @@
   });
 
   // ============== NAVIGATION ==============
+  // Grouped nav: several views live under one sidebar entry, shown via a
+  // sub-tab strip (keeps the working views intact, just collapses the nav).
+  const _VIEW_GROUP = { add: "sourcing", search: "sourcing", batch: "sourcing",
+                        auction: "auctions", skiptrace: "auctions" };
+  const _GROUP_TABS = {
+    sourcing: [
+      { v: "add", label: "➕ Adresse / URL / PDF" },
+      { v: "search", label: "🔎 Recherche par zone" },
+      { v: "batch", label: "📚 Import en masse" },
+    ],
+    auctions: [
+      { v: "auction", label: "🏛 Enchères + enchère max" },
+      { v: "skiptrace", label: "📇 Skip Trace" },
+    ],
+  };
+  function _renderGroupTabs(name) {
+    const host = $("#group-tabs"); if (!host) return;
+    const g = _VIEW_GROUP[name];
+    if (!g) { host.style.display = "none"; host.innerHTML = ""; return; }
+    host.style.display = "flex";
+    host.innerHTML = _GROUP_TABS[g].map(t =>
+      `<button class="group-tab ${t.v === name ? "active" : ""}" data-gtab="${t.v}">${t.label}</button>`).join("");
+    host.querySelectorAll("[data-gtab]").forEach(b =>
+      b.addEventListener("click", () => showView(b.dataset.gtab)));
+  }
+
   function showView(name) {
     $$(".view").forEach(v => v.classList.remove("active"));
     const el = $("#view-" + name);
     if (el) el.classList.add("active");
-    $$(".nav-link").forEach(a => a.classList.toggle("active", a.dataset.view === name));
+    const grp = _VIEW_GROUP[name];
+    $$(".nav-link").forEach(a => a.classList.toggle("active",
+      a.dataset.view === name || (a.dataset.group && a.dataset.group === grp)));
+    _renderGroupTabs(name);
     if (name === "dashboard") refreshDashboard();
     if (name === "deals") refreshDeals();
     if (name === "settings") { refreshCookies(); refreshAiConfig(); refreshBrowserSessionStatus(); }
@@ -129,6 +158,7 @@
     if (name === "batch") refreshBatchView();
     if (name === "skiptrace") refreshSkipTraceView();
     if (name === "usamap") refreshUsaMapView();
+    if (name === "auction" && typeof renderWatchlist === "function") setTimeout(renderWatchlist, 50);
     if (name === "add") {
       // Entering the form defaults to a NEW deal. The edit flow re-binds
       // formDealId to the edited deal AFTER calling showView("add").
@@ -2583,7 +2613,7 @@
         <p style="margin:0 0 10px;" class="muted">Pour explorer <strong>toute une ville</strong>, utilise plutôt le module <a href="#" id="auc-goto-search" style="font-weight:600;">🔎 Search</a>.</p>
         <button class="btn" id="auc-force">Analyser quand même cette adresse →</button>
       </div>`;
-      $("#auc-goto-search")?.addEventListener("click", (e) => { e.preventDefault(); document.querySelector('[data-view="search"]')?.click(); const si = $("#search-input"); if (si) si.value = payload.address; });
+      $("#auc-goto-search")?.addEventListener("click", (e) => { e.preventDefault(); showView("search"); const si = $("#search-input"); if (si) si.value = payload.address; });
       $("#auc-force")?.addEventListener("click", () => runAuction(true));
       return;
     }
