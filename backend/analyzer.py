@@ -415,12 +415,24 @@ def assess_risk(deal: dict, m: dict) -> dict:
     except (TypeError, ValueError):
         pass
 
-    # --- Keyword scan of description + notes ---
-    text = " ".join(str(deal.get(k) or "") for k in ("description", "notes", "listing_name", "strategy_hint"))
+    # --- Keyword scan of description + notes + uploaded-document summary ---
+    text = " ".join(str(deal.get(k) or "") for k in
+                    ("description", "notes", "listing_name", "strategy_hint", "document_summary"))
     if text.strip():
         for rx, sev, label in _RISK_KEYWORDS:
             if rx.search(text):
                 add(sev, label)
+
+    # --- Uploaded documents (inspection/appraisal/…) drive risk directly ---
+    for doc in (deal.get("documents") or []):
+        a = (doc.get("analysis") or {})
+        for b in (a.get("deal_breakers") or []):
+            add("deal_breaker", f"Inspection : {b}")
+        for f in (a.get("findings") or []):
+            if f.get("severity") in ("major", "safety") and f.get("issue"):
+                add("high", f"Inspection : {str(f['issue'])[:90]}")
+        if a.get("verdict") == "bad":
+            add("high", "Document inséré : verdict défavorable")
 
     # --- Grade ---
     highs = sum(1 for f in flags if f["severity"] == "high")

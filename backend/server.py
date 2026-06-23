@@ -20,6 +20,7 @@ import io
 import logging
 import os
 import re
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -44,6 +45,8 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 FRONTEND_DIR = ROOT / "frontend"
 PDF_DIR = DATA_DIR / "pdfs"
 PDF_DIR.mkdir(parents=True, exist_ok=True)
+DOCS_DIR = DATA_DIR / "deal-docs"   # uploaded per-deal documents (inspections…)
+DOCS_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_DIR / "flip-board.json"
 COOKIE_STORE = DATA_DIR / "auth-cookies.json"
 
@@ -345,6 +348,123 @@ def refresh_deal(deal_id: str, payload: dict = Body(default={})):
         "sale_comps": len(updates.get("sale_comparables", [])),
         "rent_comps": len(updates.get("rent_comparables", [])),
     }
+
+
+def _refresh_document_risk(deal: dict):
+    """Roll up uploaded-document findings so the risk engine + summary see them."""
+    parts = []
+    for doc in (deal.get("documents") or []):
+        a = doc.get("analysis") or {}
+        if a.get("summary"):
+            parts.append(a["summary"])
+        for b in (a.get("deal_breakers") or []):
+            parts.append(b)
+        for f in (a.get("findings") or []):
+            if f.get("severity") in ("major", "safety"):
+                parts.append(f.get("issue", ""))
+    deal["document_summary"] = " ".join(p for p in parts if p)[:4000]
+
+
+@app.post("/api/deals/{deal_id}/documents")
+async def upload_deal_document(deal_id: str, file: UploadFile = File(...),
+                               apply_rehab: str = Form("1")):
+    """Upload a PDF document (inspection, appraisal, title…) to a deal: extract
+    text, analyze with Claude, store the file + analysis, and roll findings into
+    the deal's rehab + risk."""
+    import uuid as _uuid
+    d = db.get_deal(deal_id)
+    if not d:
+        raise HTTPException(404, "Deal not found")
+    if not ai_research.is_configured():
+        raise HTTPException(400, "AI not configured. Add an Anthropic API key in Settings → AI.")
+    if not file.filename or not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(400, "File must be a .pdf")
+    pdf_bytes = await file.read()
+    if not pdf_bytes:
+        raise HTTPException(400, "Empty file")
+    if len(pdf_bytes) > 25 * 1024 * 1024:
+        raise HTTPException(413, "PDF too large (>25 MB)")
+
+    extracted = pdf_importer.extract_text_from_pdf(pdf_bytes)
+    if not extracted.get("ok") or not (extracted.get("text") or "").strip():
+        return {"ok": False, "error": "Could not read text from this PDF (scanned image?). "
+                "Try a text-based PDF."}
+
+    res = ai_tasks.analyze_document(d, extracted["text"])
+    if not res.get("ok"):
+        et = res.get("error_type")
+        if et == "billing": raise HTTPException(402, res.get("error", ""))
+        if et == "auth": raise HTTPException(401, res.get("error", ""))
+        return {"ok": False, "error": res.get("error", "Analysis failed")}
+    analysis = res.get("result") or {}
+
+    doc_id = _uuid.uuid4().hex[:12]
+    deal_dir = DOCS_DIR / deal_id
+    deal_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        (deal_dir / f"{doc_id}.pdf").write_bytes(pdf_bytes)
+    except Exception as e:
+        log.warning("Could not save document file: %s", e)
+
+    rec = {
+        "id": doc_id,
+        "filename": file.filename,
+        "size": len(pdf_bytes),
+        "pages": extracted.get("page_count"),
+        "uploaded_at": datetime.utcnow().isoformat() + "Z",
+        "analysis": analysis,
+    }
+    d.setdefault("documents", []).append(rec)
+
+    # Apply the document's data to the deal: rehab from inspection, risk rollup.
+    applied = {}
+    sugg = analysis.get("suggested_rehab")
+    if apply_rehab not in ("0", "false", "no") and isinstance(sugg, (int, float)) and sugg > 0:
+        d["rehab_base"] = int(sugg)
+        applied["rehab_base"] = int(sugg)
+    kn = analysis.get("key_numbers") or {}
+    if kn.get("year_built") and not d.get("year_built"):
+        d["year_built"] = kn["year_built"]
+    _refresh_document_risk(d)
+
+    m = analyzer.compute_metrics(d)
+    score, grade, signal = analyzer.compute_score(d, m)
+    d["score"], d["grade"], d["signal"] = score, grade, signal
+    _apply_risk(d, m)
+    db.upsert_deal(d)
+    return {"ok": True, "document": rec, "applied": applied,
+            "risk_grade": d.get("risk_grade"), "deal_breakers": d.get("deal_breakers")}
+
+
+@app.delete("/api/deals/{deal_id}/documents/{doc_id}")
+def delete_deal_document(deal_id: str, doc_id: str):
+    d = db.get_deal(deal_id)
+    if not d:
+        raise HTTPException(404, "Deal not found")
+    docs = d.get("documents") or []
+    d["documents"] = [x for x in docs if x.get("id") != doc_id]
+    if len(d["documents"]) == len(docs):
+        raise HTTPException(404, "Document not found")
+    f = DOCS_DIR / deal_id / f"{doc_id}.pdf"
+    if f.exists():
+        try: f.unlink()
+        except OSError: pass
+    _refresh_document_risk(d)
+    m = analyzer.compute_metrics(d)
+    _apply_risk(d, m)
+    db.upsert_deal(d)
+    return {"ok": True}
+
+
+@app.get("/api/deals/{deal_id}/documents/{doc_id}/file")
+def get_deal_document_file(deal_id: str, doc_id: str):
+    f = DOCS_DIR / deal_id / f"{doc_id}.pdf"
+    if not f.exists():
+        raise HTTPException(404, "File not found")
+    d = db.get_deal(deal_id) or {}
+    doc = next((x for x in (d.get("documents") or []) if x.get("id") == doc_id), None)
+    name = (doc or {}).get("filename") or f"{doc_id}.pdf"
+    return FileResponse(str(f), media_type="application/pdf", filename=name)
 
 
 @app.get("/api/deals/{deal_id}/pdf")

@@ -1088,6 +1088,76 @@
     return `<div class="source-links">${links.join("")}</div>`;
   }
 
+  const _DOC_VERDICT = {
+    good: ["var(--green)", "✅ BON"],
+    caution: ["#e8a93b", "⚠️ PRUDENCE"],
+    bad: ["var(--red)", "⛔ MAUVAIS"],
+  };
+  function renderDealDocuments(data) {
+    const d = data.deal || {};
+    const list = $("#detail-documents-list");
+    if (!list) return;
+    const docs = d.documents || [];
+    const D = v => (v == null || v === "") ? "—" : "$" + Math.round(v).toLocaleString("en-US");
+    const sevLbl = { minor: "mineur", moderate: "moyen", major: "majeur", safety: "sécurité" };
+    list.innerHTML = docs.length ? docs.map(doc => {
+      const a = doc.analysis || {};
+      const vd = _DOC_VERDICT[a.verdict] || ["var(--muted)", "—"];
+      const findings = (a.findings || []).map(f =>
+        `<div class="risk-flag"><span class="risk-sev ${f.severity === 'safety' ? 'deal_breaker' : f.severity === 'major' ? 'high' : f.severity === 'moderate' ? 'medium' : 'low'}">${sevLbl[f.severity] || f.severity}</span>
+          <span style="flex:1;">${escape(f.system ? f.system + " — " : "")}${escape(f.issue || "")}</span>
+          <span style="font-weight:600; white-space:nowrap;">${D(f.est_cost)}</span></div>`).join("");
+      const breakers = (a.deal_breakers || []).map(b => `<li>${escape(b)}</li>`).join("");
+      return `<div class="card" style="margin-bottom:10px; border-left:3px solid ${vd[0]};">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap;">
+          <div>
+            <div style="font-weight:700;">📄 ${escape(doc.filename || "document.pdf")}</div>
+            <div class="muted" style="font-size:12px;">${escape(a.doc_type || "Document")} · ${doc.pages || "?"} p. · ${escape((doc.uploaded_at || "").slice(0, 10))}</div>
+          </div>
+          <span class="pill" style="background:${vd[0]}1a; color:${vd[0]}; font-weight:700; font-size:13px; padding:5px 12px;">${vd[1]}</span>
+        </div>
+        ${a.summary ? `<p style="margin:8px 0; font-size:13px;">${escape(a.summary)}</p>` : ""}
+        ${a.verdict_reason ? `<p style="margin:4px 0; font-size:13px; color:${vd[0]};">${escape(a.verdict_reason)}</p>` : ""}
+        <div style="display:flex; gap:16px; flex-wrap:wrap; margin:8px 0; font-size:13px;">
+          ${a.total_repair_estimate ? `<span><strong>Réparations estimées :</strong> ${D(a.total_repair_estimate)}</span>` : ""}
+          ${a.suggested_rehab ? `<span><strong>Rehab suggéré :</strong> ${D(a.suggested_rehab)} <button class="btn ghost doc-apply" data-rehab="${a.suggested_rehab}" style="font-size:11px; padding:2px 8px;">appliquer</button></span>` : ""}
+          ${(a.key_numbers && a.key_numbers.appraised_value) ? `<span><strong>Valeur expertisée :</strong> ${D(a.key_numbers.appraised_value)}</span>` : ""}
+        </div>
+        ${breakers ? `<div style="margin:6px 0;"><strong style="color:var(--red); font-size:13px;">⛔ Deal-breakers</strong><ul style="margin:4px 0; padding-left:18px; font-size:13px;">${breakers}</ul></div>` : ""}
+        ${findings ? `<details style="margin-top:6px;"><summary style="cursor:pointer; font-size:13px; font-weight:600;">${(a.findings || []).length} constat(s)</summary><div style="margin-top:6px;">${findings}</div></details>` : ""}
+        <div style="display:flex; gap:8px; margin-top:10px;">
+          <a class="btn ghost" href="${API.dealDocumentUrl(d.id, doc.id)}" target="_blank" rel="noopener" style="font-size:12px;">Ouvrir le PDF ↗</a>
+          <button class="btn ghost doc-delete" data-id="${escape(doc.id)}" style="font-size:12px;">🗑 Retirer</button>
+        </div>
+      </div>`;
+    }).join("") : `<p class="muted" style="font-size:13px; margin:0;">Aucun document. Ajoute une inspection pour une analyse automatique.</p>`;
+
+    // Wire delete + apply-rehab
+    list.querySelectorAll(".doc-delete").forEach(b => b.addEventListener("click", async () => {
+      if (!confirm("Retirer ce document ?")) return;
+      try { await API.deleteDealDocument(d.id, b.dataset.id); openDeal(d.id); }
+      catch (e) { toast(e.message, "error"); }
+    }));
+    list.querySelectorAll(".doc-apply").forEach(b => b.addEventListener("click", async () => {
+      try { await API.patchDeal(d.id, { rehab_base: Number(b.dataset.rehab) }); toast("Rehab appliqué", "success"); openDeal(d.id); }
+      catch (e) { toast(e.message, "error"); }
+    }));
+    // Wire the upload input (re-attached each render)
+    const inp = $("#doc-upload-input");
+    if (inp) inp.onchange = () => { if (inp.files && inp.files[0]) _uploadDealDoc(d.id, inp.files[0]); };
+  }
+  async function _uploadDealDoc(dealId, file) {
+    const st = $("#doc-upload-status");
+    if (st) st.innerHTML = '<span class="spinner"></span> Lecture + analyse IA du document… (~30-60s)';
+    try {
+      const r = await API.uploadDealDocument(dealId, file);
+      if (!r.ok) { if (st) st.innerHTML = `<span style="color:var(--red)">${escape(r.error || "Échec")}</span>`; return; }
+      const v = (r.document.analysis || {}).verdict;
+      if (st) st.innerHTML = `<span style="color:var(--green)">✓ Analysé — verdict : ${escape(v || "?")}</span>`;
+      openDeal(dealId);  // re-render with the new doc + updated risk/rehab
+    } catch (e) { if (st) st.innerHTML = `<span style="color:var(--red)">${escape(e.message)}</span>`; }
+  }
+
   function renderDetailRisk(data) {
     const host = $("#detail-risk"); if (!host) return;
     const risk = data.risk || {};
@@ -1240,6 +1310,8 @@
 
     // === Safety / risk block ===
     renderDetailRisk(data);
+    // === Documents (inspection etc.) ===
+    renderDealDocuments(data);
 
     // === Flip-to-rent alert ===
     const alert = $("#flip-alert");

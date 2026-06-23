@@ -718,6 +718,46 @@ def task_marketing(deal: dict) -> dict:
     return _wrap(r, _parse_task_json(r["text"]) or {"error": "parse failed", "raw": r["text"][:1500]})
 
 
+DOC_SYSTEM = """You analyze a real-estate DOCUMENT that a fix-and-flip investor uploaded for a specific property — most often a home INSPECTION report, but it may be an appraisal, a title/lien report, a seller disclosure, or a contractor estimate.
+
+Read the document text and:
+1. Identify the document type.
+2. Extract the concrete findings. For an inspection: EVERY defect/issue, the system it affects (Roof, Foundation/Structural, Electrical, Plumbing, HVAC, Water heater, Windows, Exterior/Siding, Interior, Pests/Termites, Mold, Environmental, Other), a severity (minor | moderate | major | safety), and a rough repair cost in USD.
+3. Pull key numbers present in the doc (appraised value, sqft, year built, any total repair figure stated).
+4. Give an overall VERDICT for the investor: "good" (clean / only minor items), "caution" (notable issues — budget carefully), or "bad" (major/safety defects or deal-breakers). Explain in 1-3 sentences, comparing the implied total repair cost to the deal's current rehab budget and ARV when provided.
+5. List deal_breakers (foundation failure, extensive mold, fire/structural damage, failed septic, unpermitted additions, active leaks/roof at end of life, etc.).
+6. suggested_rehab = your best total repair budget implied by this document (integer USD; 0 if the doc isn't about repairs).
+
+Be conservative — when a cost is unclear, estimate on the higher side. Output ONE JSON code block and NOTHING after it:
+```json
+{
+  "doc_type": "Inspection report|Appraisal|Title/lien report|Seller disclosure|Contractor estimate|Other",
+  "summary": "<2-3 sentence plain-language summary>",
+  "findings": [{"system": "...", "issue": "...", "severity": "minor|moderate|major|safety", "est_cost": <int>}],
+  "total_repair_estimate": <int>,
+  "key_numbers": {"appraised_value": <int|null>, "sqft": <int|null>, "year_built": <int|null>},
+  "deal_breakers": ["..."],
+  "verdict": "good|caution|bad",
+  "verdict_reason": "...",
+  "suggested_rehab": <int>
+}
+```"""
+
+
+def analyze_document(deal: dict, text: str) -> dict:
+    """Analyze an uploaded property document (inspection/appraisal/title/etc.)
+    against the deal. Returns {ok, result:{...}, ...}. No web_search (reads the
+    provided text)."""
+    ctx = _summary(deal, include_financials=True, include_anchors=True)
+    user = (f"DEAL CONTEXT:\n{ctx}\n\n"
+            f"DOCUMENT TEXT (may be truncated):\n{(text or '')[:18000]}\n\n"
+            "Analyze the document and return the JSON.")
+    r = _run_claude(DOC_SYSTEM, user, use_web=False, max_tokens=4000)
+    if not r.get("ok"):
+        return r
+    return _wrap(r, _parse_task_json(r["text"]) or {"error": "parse failed", "raw": r["text"][:1500]})
+
+
 # ============================================================================
 # TASK REGISTRY
 # ============================================================================

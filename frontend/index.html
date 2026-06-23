@@ -571,6 +571,20 @@
       <!-- Safety / risk block (auto pre-screen + AI verdict must-verify) -->
       <div id="detail-risk"></div>
 
+      <!-- Documents (inspection, appraisal, title…) → AI analysis + verdict -->
+      <div class="card" id="detail-documents-card">
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+          <h3 style="margin:0;">📄 Documents</h3>
+          <label class="btn primary" style="cursor:pointer; font-size:13px;">
+            <input type="file" id="doc-upload-input" accept="application/pdf,.pdf" style="display:none;">
+            ⬆ Ajouter un PDF (inspection…)
+          </label>
+        </div>
+        <p class="muted" style="font-size:12px; margin:6px 0 0;">Dépose un rapport (inspection, expertise, titre…) — l'IA en extrait les données, met à jour le rehab et rend un verdict <strong>bon / prudence / mauvais</strong>.</p>
+        <div id="doc-upload-status" class="status-line" style="margin-top:8px;"></div>
+        <div id="detail-documents-list" style="margin-top:10px;"></div>
+      </div>
+
       <!-- Inline-editable Financing card -->
       <div class="card financing-card" id="financing-card">
         <div class="financing-header">

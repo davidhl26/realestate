@@ -60,6 +60,23 @@ const API = (() => {
       }
       return r.json();
     },
+    uploadDealDocument: async (dealId, file, applyRehab = true) => {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("apply_rehab", applyRehab ? "1" : "0");
+      const r = await fetch("/api/deals/" + encodeURIComponent(dealId) + "/documents",
+        { method: "POST", body: fd, credentials: "include" });
+      if (!r.ok) {
+        let msg = `HTTP ${r.status}`;
+        try { const j = await r.json(); msg = j.detail || j.error || msg; } catch {}
+        throw new Error(msg);
+      }
+      return r.json();
+    },
+    deleteDealDocument: (dealId, docId) => req("/api/deals/" + encodeURIComponent(dealId) +
+      "/documents/" + encodeURIComponent(docId), { method: "DELETE" }),
+    dealDocumentUrl: (dealId, docId) => "/api/deals/" + encodeURIComponent(dealId) +
+      "/documents/" + encodeURIComponent(docId) + "/file",
     importPdfCommit: (properties, target, docType, filename) => req("/api/import-pdf/commit",
       { method: "POST", body: JSON.stringify({
         properties, target: target || "deal",
