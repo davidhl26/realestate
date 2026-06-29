@@ -69,19 +69,41 @@
     if (!n) return "";
     return `<div class="deal-card-breaker" title="${escape(d.deal_breakers.join(' · '))}">⛔ ${n} deal-breaker${n > 1 ? "s" : ""} — ${escape(d.deal_breakers[0])}</div>`;
   }
-  // Compact Zillow activity line for cards: days on Zillow + views
+  // Compact Zillow activity line for cards. Days-on-Zillow is editable inline
+  // (click → type once → it auto-increments daily). Views shown if set.
   function cardZillowLine(d) {
-    const bits = [];
-    if (d.days_on_market != null && d.days_on_market !== "") {
-      const n = Number(d.days_on_market);
-      bits.push(`📅 ${n === 0 ? "listé aujourd'hui" : n + " j sur Zillow"}`);
-    } else if (d.time_on_zillow) {
-      bits.push(`📅 ${escape(d.time_on_zillow)}`);
-    }
+    const dom = (d.days_on_market != null && d.days_on_market !== "") ? d.days_on_market : "";
+    const daysChip = `📅 <span class="card-dom-edit" data-id="${escape(d.id)}" data-value="${dom}" title="Jours sur Zillow — clique pour saisir, puis ça s'incrémente seul chaque jour">${dom !== "" ? dom : "—"}</span> j sur Zillow`;
+    let line = daysChip;
     if (d.page_view_count != null && d.page_view_count !== "")
-      bits.push(`👁 ${Number(d.page_view_count).toLocaleString("en-US")} vues`);
-    if (!bits.length) return "";
-    return `<div class="deal-card-zillow">${bits.join(" · ")}</div>`;
+      line += ` · 👁 ${Number(d.page_view_count).toLocaleString("en-US")} vues`;
+    return `<div class="deal-card-zillow">${line}</div>`;
+  }
+  // Inline edit of days-on-Zillow straight from a card (no need to open the deal)
+  function _attachCardDomEdit(container) {
+    $$(".card-dom-edit", container).forEach(el => el.addEventListener("click", e => {
+      e.stopPropagation();
+      if (el.querySelector("input")) return;
+      const id = el.dataset.id, cur = el.dataset.value;
+      const input = document.createElement("input");
+      input.type = "number"; input.min = "0"; input.value = cur || "";
+      input.style.cssText = "width:56px;font-size:11px;padding:1px 4px;";
+      el.textContent = ""; el.appendChild(input); input.focus(); input.select();
+      const save = async () => {
+        const raw = input.value.trim();
+        const val = raw === "" ? null : Number(raw);
+        if (raw !== "" && (isNaN(val) || val < 0)) { el.textContent = cur || "—"; return; }
+        try {
+          await API.patchDeal(id, { days_on_market: val });
+          await refreshDeals();  // re-render with the live value + anchor
+        } catch (err) { el.textContent = cur || "—"; toast(err.message, "error"); }
+      };
+      input.addEventListener("keydown", ev => {
+        if (ev.key === "Enter") { ev.preventDefault(); input.blur(); }
+        else if (ev.key === "Escape") { ev.preventDefault(); el.textContent = cur || "—"; }
+      });
+      input.addEventListener("blur", save);
+    }));
   }
   function signalPillClass(sig) {
     sig = (sig || "").toUpperCase();
@@ -710,6 +732,7 @@
       card.addEventListener("click", e => {
         if (e.target.closest(".status-pill")) return;
         if (e.target.closest(".deal-card-delete")) return;  // delete handles its own
+        if (e.target.closest(".card-dom-edit")) return;     // inline days editor
         if (_dealsSelectMode) {
           _toggleDealSelection(id);
         } else {
@@ -717,6 +740,7 @@
         }
       });
     });
+    _attachCardDomEdit(container);
     // Per-card delete buttons
     $$(".deal-card-delete", container).forEach(btn => {
       btn.addEventListener("click", async e => {
