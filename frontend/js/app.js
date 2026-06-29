@@ -253,12 +253,82 @@
       state.deals = deals;
       state.aggregates = agg;
       renderStats(agg);
-      renderDealSelector(deals);
-      renderProfitChart(deals);
-      renderRoiCapChart(deals);
-      renderScoreChart(deals);
-      renderTopDeals(deals);
+      let watchlist = [], leads = [];
+      try { watchlist = await API.auctionWatchlist(); } catch {}
+      try { leads = await API.leadsList(); } catch {}
+      renderCockpit(deals, watchlist, leads);
     } catch (e) { toast(e.message, "error"); }
+  }
+
+  // ============== DASHBOARD COCKPIT (action-oriented) ==============
+  const _RISK_RANK = { F: 5, D: 4, C: 3, B: 2, A: 1 };
+  function renderCockpit(deals, watchlist, leads) {
+    deals = deals || []; watchlist = watchlist || []; leads = leads || [];
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const todayISO = today.toISOString().slice(0, 10);
+    const setCount = (id, n) => { const e = $(id); if (e) e.textContent = n ? `(${n})` : ""; };
+    const empty = msg => `<p class="muted" style="font-size:13px; margin:6px 0 0;">${msg}</p>`;
+
+    // 1) À vérifier — deal-breakers or F/D risk
+    const alerts = deals
+      .filter(d => (d.deal_breakers && d.deal_breakers.length) || ["F", "D"].includes(d.risk_grade))
+      .sort((a, b) => ((b.deal_breakers?.length ? 100 : 0) + (_RISK_RANK[b.risk_grade] || 0))
+                    - ((a.deal_breakers?.length ? 100 : 0) + (_RISK_RANK[a.risk_grade] || 0)))
+      .slice(0, 8);
+    setCount("#dash-alerts-count", alerts.length);
+    $("#dash-alerts").innerHTML = alerts.length ? alerts.map(d => {
+      const reason = (d.deal_breakers && d.deal_breakers[0]) || "Risque élevé";
+      return `<div class="cockpit-row" data-open="${escape(d.id)}">
+        <span class="risk-badge" style="background:${riskColor(d.risk_grade)};">🛡 ${d.risk_grade || "?"}</span>
+        <div class="cockpit-row-main"><div class="cockpit-row-title">${escape(d.address || "?")}</div>
+          <div class="cockpit-row-sub">${escape(reason)}</div></div>
+      </div>`;
+    }).join("") : empty("✅ Aucun deal à risque — rien à vérifier en urgence.");
+
+    // 2) Meilleures opportunités — clean risk + high score
+    const opps = deals
+      .filter(d => !(d.deal_breakers && d.deal_breakers.length) && ["A", "B"].includes(d.risk_grade || "A"))
+      .sort((a, b) => (b.score || 0) - (a.score || 0))
+      .slice(0, 6);
+    setCount("#dash-opps-count", opps.length);
+    $("#dash-opps").innerHTML = opps.length ? opps.map(d => `
+      <div class="cockpit-row" data-open="${escape(d.id)}">
+        <span class="score-badge" style="background:${scoreColor(d.score)};">${d.score ?? "?"}</span>
+        <div class="cockpit-row-main"><div class="cockpit-row-title">${escape(d.address || "?")}</div>
+          <div class="cockpit-row-sub">${escape(d.signal || "")}${d.net_profit != null ? " · " + fmtMoney(d.net_profit, true) : ""}</div></div>
+      </div>`).join("") : empty("Ajoute des deals pour voir tes meilleures pistes ici.");
+
+    // 3) Enchères qui approchent (≤21 j)
+    const soon = watchlist.map(w => {
+      let dleft = null;
+      if (w.auction_date) { const d = new Date(w.auction_date + "T00:00:00"); dleft = Math.round((d - today) / 86400000); }
+      return { ...w, dleft };
+    }).filter(w => w.dleft != null && w.dleft >= 0 && w.dleft <= 21).sort((a, b) => a.dleft - b.dleft);
+    setCount("#dash-auctions-count", soon.length);
+    $("#dash-auctions").innerHTML = soon.length ? soon.map(w => `
+      <div class="cockpit-row" data-auction="1">
+        <span class="cockpit-jx ${w.dleft <= 7 ? "urgent" : ""}">J−${w.dleft}</span>
+        <div class="cockpit-row-main"><div class="cockpit-row-title">${escape(w.address || "?")}</div>
+          <div class="cockpit-row-sub">${w.max_bid ? "Enchère max " + fmtMoney(w.max_bid) : ""} · ${escape(w.auction_date || "")}</div></div>
+      </div>`).join("") : empty("Aucune enchère suivie dans les 21 jours.");
+
+    // 4) Relances dues
+    const due = leads.filter(l => l.follow_up && l.follow_up <= todayISO)
+      .sort((a, b) => String(a.follow_up).localeCompare(String(b.follow_up)));
+    setCount("#dash-followups-count", due.length);
+    $("#dash-followups").innerHTML = due.length ? due.map(l => `
+      <div class="cockpit-row" data-crm="1">
+        <span class="cockpit-jx urgent">📅</span>
+        <div class="cockpit-row-main"><div class="cockpit-row-title">${escape(l.address || l.name || "Lead")}</div>
+          <div class="cockpit-row-sub">Relance prévue ${escape(l.follow_up)} · ${escape(l.status || "")}</div></div>
+      </div>`).join("") : empty("Aucune relance en retard. 👍");
+
+    // Wiring
+    $$("#view-dashboard .cockpit-row").forEach(row => row.addEventListener("click", () => {
+      if (row.dataset.open) openDeal(row.dataset.open);
+      else if (row.dataset.auction) showView("auction");
+      else if (row.dataset.crm) showView("crm");
+    }));
   }
 
   // ============== DASHBOARD DEAL SELECTOR ==============

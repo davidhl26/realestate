@@ -148,45 +148,33 @@
         </div>
       </header>
 
+      <p class="muted" id="dash-subtitle" style="margin:-6px 0 14px; font-size:13px;">Ce qu'il faut traiter aujourd'hui — trier, vérifier, agir.</p>
       <div class="stats-grid" id="stats-grid"></div>
 
-      <!-- Deal selector + focused panel -->
-      <div class="card" id="deal-selector-card">
-        <h3>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/><circle cx="11" cy="11" r="3"/></svg>
-          Inspect a deal
-          <span class="muted" style="font-weight:500; text-transform:none; letter-spacing:0; font-size:11.5px; margin-left:8px;">
-            Pick from the dropdown OR click any chart bar / point below
-          </span>
-        </h3>
-        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-          <select id="dash-deal-picker" style="flex:1; min-width:280px; padding:9px 12px; border:1px solid var(--border-2); background:var(--card); color:var(--text); border-radius:9px; font-size:13px; font-family:inherit;">
-            <option value="">— Select a deal —</option>
-          </select>
-          <button class="btn" id="dash-clear-selection" style="display:none">Clear</button>
+      <div class="cockpit-grid">
+        <div class="card cockpit-col">
+          <h3>⛔ À vérifier en priorité <span class="cockpit-count" id="dash-alerts-count"></span></h3>
+          <p class="muted cockpit-sub">Deals avec deal-breakers / risque élevé — à régler avant toute offre.</p>
+          <div id="dash-alerts"></div>
         </div>
-        <div id="focused-deal-panel" style="display:none; margin-top:14px;"></div>
-      </div>
-
-      <div class="charts-row">
-        <div class="card">
-          <h3>Net profit by deal <span class="muted" style="font-weight:500; text-transform:none; letter-spacing:0; font-size:11px;">click bar to inspect →</span></h3>
-          <canvas id="chart-profit"></canvas>
-        </div>
-        <div class="card">
-          <h3>ROI vs Cap rate <span class="muted" style="font-weight:500; text-transform:none; letter-spacing:0; font-size:11px;">click point to inspect →</span></h3>
-          <canvas id="chart-roi-cap"></canvas>
+        <div class="card cockpit-col">
+          <h3>🟢 Meilleures opportunités <span class="cockpit-count" id="dash-opps-count"></span></h3>
+          <p class="muted cockpit-sub">Score élevé + risque maîtrisé — à pousser.</p>
+          <div id="dash-opps"></div>
         </div>
       </div>
 
-      <div class="card">
-        <h3>Score distribution <span class="muted" style="font-weight:500; text-transform:none; letter-spacing:0; font-size:11px;">click bar to inspect →</span></h3>
-        <canvas id="chart-scores" height="80"></canvas>
-      </div>
-
-      <div class="card">
-        <h3>Top deals</h3>
-        <div id="top-deals"></div>
+      <div class="cockpit-grid">
+        <div class="card cockpit-col">
+          <h3>🏛 Enchères qui approchent <span class="cockpit-count" id="dash-auctions-count"></span></h3>
+          <p class="muted cockpit-sub">Dates d'enchère dans les 21 jours (depuis ta watchlist).</p>
+          <div id="dash-auctions"></div>
+        </div>
+        <div class="card cockpit-col">
+          <h3>📞 Relances à faire <span class="cockpit-count" id="dash-followups-count"></span></h3>
+          <p class="muted cockpit-sub">Leads dont la date de relance est arrivée.</p>
+          <div id="dash-followups"></div>
+        </div>
       </div>
     </section>
 

@@ -562,6 +562,37 @@ kbd {
   background: linear-gradient(135deg, var(--card) 0%, rgba(31, 203, 137, 0.04) 100%);
 }
 
+/* ============== DASHBOARD COCKPIT ============== */
+.cockpit-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+@media (max-width: 820px) { .cockpit-grid { grid-template-columns: 1fr; } }
+.cockpit-col h3 { display: flex; align-items: center; gap: 6px; }
+.cockpit-count { color: var(--muted); font-weight: 600; font-size: 13px; }
+.cockpit-sub { font-size: 12px; margin: 2px 0 10px; }
+.cockpit-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  border-radius: 6px;
+}
+.cockpit-row:last-child { border-bottom: none; }
+.cockpit-row:hover { background: var(--accent-50, rgba(0,0,0,0.03)); }
+.cockpit-row-main { min-width: 0; flex: 1; }
+.cockpit-row-title { font-weight: 600; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cockpit-row-sub { font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cockpit-jx {
+  font-weight: 800; font-size: 12px; min-width: 38px; text-align: center;
+  padding: 3px 6px; border-radius: 6px; background: var(--border); color: var(--text);
+}
+.cockpit-jx.urgent { background: #EF4444; color: #fff; }
+
 /* ============== SAFETY RISK (cards + detail) ============== */
 .risk-badge {
   display: inline-flex;
