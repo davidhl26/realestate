@@ -69,6 +69,20 @@
     if (!n) return "";
     return `<div class="deal-card-breaker" title="${escape(d.deal_breakers.join(' · '))}">⛔ ${n} deal-breaker${n > 1 ? "s" : ""} — ${escape(d.deal_breakers[0])}</div>`;
   }
+  // Compact Zillow activity line for cards: days on Zillow + views
+  function cardZillowLine(d) {
+    const bits = [];
+    if (d.days_on_market != null && d.days_on_market !== "") {
+      const n = Number(d.days_on_market);
+      bits.push(`📅 ${n === 0 ? "listé aujourd'hui" : n + " j sur Zillow"}`);
+    } else if (d.time_on_zillow) {
+      bits.push(`📅 ${escape(d.time_on_zillow)}`);
+    }
+    if (d.page_view_count != null && d.page_view_count !== "")
+      bits.push(`👁 ${Number(d.page_view_count).toLocaleString("en-US")} vues`);
+    if (!bits.length) return "";
+    return `<div class="deal-card-zillow">${bits.join(" · ")}</div>`;
+  }
   function signalPillClass(sig) {
     sig = (sig || "").toUpperCase();
     if (sig.includes("SLAM") || sig.includes("GOOD")) return "green";
@@ -658,6 +672,7 @@
               ${d.sqft ? `<span>📐 ${d.sqft.toLocaleString()}sf</span>` : ''}
               ${d.year_built ? `<span>📅 ${d.year_built}</span>` : ''}
             </div>
+            ${cardZillowLine(d)}
             <div class="deal-card-row">
               <span class="label">Purchase</span>
               <span class="val">${fmtMoney(d.purchase_price)}</span>
