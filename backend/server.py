@@ -20,7 +20,7 @@ import io
 import logging
 import os
 import re
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -164,6 +164,43 @@ def logout():
     return resp
 
 
+def _set_dom_anchor(deal: dict, force: bool = False) -> None:
+    """Anchor the Zillow listing date so 'days on Zillow' can self-update daily
+    without re-scraping. listed_date = today - days_on_market (set once at
+    capture; refreshed when a new scrape provides a new days_on_market)."""
+    dom = deal.get("days_on_market")
+    if dom in (None, ""):
+        return
+    if force or not deal.get("zillow_listed_date"):
+        try:
+            deal["zillow_listed_date"] = (date.today() - timedelta(days=int(dom))).isoformat()
+        except (TypeError, ValueError):
+            pass
+
+
+def _current_dom(deal: dict):
+    """Days-on-Zillow as of TODAY, computed from the anchored listing date so it
+    increments every day on its own. Falls back to days_on_market offset by the
+    capture date for deals saved before the anchor existed."""
+    base = deal.get("zillow_listed_date")
+    if base:
+        try:
+            return max(0, (date.today() - date.fromisoformat(str(base)[:10])).days)
+        except ValueError:
+            pass
+    dom = deal.get("days_on_market")
+    if dom in (None, ""):
+        return None
+    cap = deal.get("added_date") or deal.get("last_analyzed")
+    try:
+        return max(0, int(dom) + (date.today() - date.fromisoformat(str(cap)[:10])).days)
+    except (TypeError, ValueError):
+        try:
+            return int(dom)
+        except (TypeError, ValueError):
+            return None
+
+
 def _apply_risk(deal: dict, m: dict) -> dict:
     """Run the deterministic safety screen and persist its fields on the deal."""
     risk = analyzer.assess_risk(deal, m)
@@ -179,6 +216,9 @@ def _enrich(deal: dict) -> dict:
     m = analyzer.compute_metrics(deal)
     score, grade, signal = analyzer.compute_score(deal, m)
     risk = analyzer.assess_risk(deal, m)
+    cur = _current_dom(deal)
+    if cur is not None:
+        deal["days_on_market"] = cur   # live value (self-updates daily)
     return {"deal": deal, "metrics": m, "score": score,
             "grade": grade, "signal": signal, "risk": risk}
 
@@ -216,6 +256,7 @@ def list_deals():
                 "baths": d.get("baths"),
                 "sqft": d.get("sqft"),
                 "year_built": d.get("year_built"),
+                "days_on_market": _current_dom(d),
                 "image": d.get("image"),
                 "source_url": d.get("source_url"),
                 "lat": d.get("lat"),
@@ -263,6 +304,7 @@ def create_deal(deal: dict = Body(...)):
     deal["grade"] = grade
     deal["signal"] = signal
     _apply_risk(deal, m)
+    _set_dom_anchor(deal)
     saved = db.upsert_deal(deal)
     return _enrich(saved)
 
@@ -280,6 +322,10 @@ def patch_deal(deal_id: str, updates: dict = Body(...)):
     d["grade"] = grade
     d["signal"] = signal
     _apply_risk(d, m)
+    # A fresh days_on_market re-anchors the listing date — unless the caller set
+    # the anchor explicitly (then that wins).
+    if "days_on_market" in updates and "zillow_listed_date" not in updates:
+        _set_dom_anchor(d, force=True)
     saved = db.upsert_deal(d)
     return _enrich(saved)
 
@@ -340,6 +386,8 @@ def refresh_deal(deal_id: str, payload: dict = Body(default={})):
     updates["source_url"] = url
     for k, v in updates.items():
         d[k] = v
+    if "days_on_market" in updates:
+        _set_dom_anchor(d, force=True)
     saved = db.upsert_deal(d)
     return {
         "ok": True,
@@ -348,6 +396,27 @@ def refresh_deal(deal_id: str, payload: dict = Body(default={})):
         "sale_comps": len(updates.get("sale_comparables", [])),
         "rent_comps": len(updates.get("rent_comparables", [])),
     }
+
+
+@app.post("/api/deals/refresh-dom")
+def refresh_all_dom():
+    """Recompute 'days on Zillow' for every deal from its anchored listing date
+    and persist it. No scraping, no cost — safe to run daily. (Display already
+    computes this live, so this just keeps the stored value in sync.)"""
+    data = db.raw()
+    changed = 0
+    for d in data.get("deals", []):
+        if d.get("days_on_market") in (None, "") and not d.get("zillow_listed_date"):
+            continue
+        _set_dom_anchor(d)  # backfill anchor for deals saved before it existed
+        cur = _current_dom(d)
+        if cur is not None and cur != d.get("days_on_market"):
+            d["days_on_market"] = cur
+            changed += 1
+    if changed:
+        data["updated"] = datetime.utcnow().isoformat() + "Z"
+        db._write(data)
+    return {"ok": True, "updated": changed, "total": len(data.get("deals", []))}
 
 
 def _refresh_document_risk(deal: dict):
