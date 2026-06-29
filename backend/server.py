@@ -164,6 +164,9 @@ def logout():
     return resp
 
 
+_MAX_PLAUSIBLE_DOM = 1825  # ~5 years; above this it's almost surely a bad parse
+
+
 def _set_dom_anchor(deal: dict, force: bool = False) -> None:
     """Anchor the Zillow listing date so 'days on Zillow' can self-update daily
     without re-scraping. listed_date = today - days_on_market (set once at
@@ -171,34 +174,44 @@ def _set_dom_anchor(deal: dict, force: bool = False) -> None:
     dom = deal.get("days_on_market")
     if dom in (None, ""):
         return
+    try:
+        dom = int(dom)
+    except (TypeError, ValueError):
+        return
+    if dom < 0 or dom > _MAX_PLAUSIBLE_DOM:
+        return  # implausible — don't anchor garbage
     if force or not deal.get("zillow_listed_date"):
-        try:
-            deal["zillow_listed_date"] = (date.today() - timedelta(days=int(dom))).isoformat()
-        except (TypeError, ValueError):
-            pass
+        deal["zillow_listed_date"] = (date.today() - timedelta(days=dom)).isoformat()
 
 
 def _current_dom(deal: dict):
     """Days-on-Zillow as of TODAY, computed from the anchored listing date so it
     increments every day on its own. Falls back to days_on_market offset by the
-    capture date for deals saved before the anchor existed."""
+    capture date for deals saved before the anchor existed. Returns None for
+    missing or implausible (>5y) values."""
+    val = None
     base = deal.get("zillow_listed_date")
     if base:
         try:
-            return max(0, (date.today() - date.fromisoformat(str(base)[:10])).days)
+            val = (date.today() - date.fromisoformat(str(base)[:10])).days
         except ValueError:
-            pass
-    dom = deal.get("days_on_market")
-    if dom in (None, ""):
-        return None
-    cap = deal.get("added_date") or deal.get("last_analyzed")
-    try:
-        return max(0, int(dom) + (date.today() - date.fromisoformat(str(cap)[:10])).days)
-    except (TypeError, ValueError):
+            val = None
+    if val is None:
+        dom = deal.get("days_on_market")
+        if dom in (None, ""):
+            return None
         try:
-            return int(dom)
+            dom = int(dom)
         except (TypeError, ValueError):
             return None
+        cap = deal.get("added_date") or deal.get("last_analyzed")
+        try:
+            val = dom + (date.today() - date.fromisoformat(str(cap)[:10])).days
+        except (TypeError, ValueError):
+            val = dom
+    if val is None or val < 0 or val > _MAX_PLAUSIBLE_DOM:
+        return None
+    return val
 
 
 def _apply_risk(deal: dict, m: dict) -> dict:
@@ -216,9 +229,7 @@ def _enrich(deal: dict) -> dict:
     m = analyzer.compute_metrics(deal)
     score, grade, signal = analyzer.compute_score(deal, m)
     risk = analyzer.assess_risk(deal, m)
-    cur = _current_dom(deal)
-    if cur is not None:
-        deal["days_on_market"] = cur   # live value (self-updates daily)
+    deal["days_on_market"] = _current_dom(deal)  # live value (daily); None hides garbage
     return {"deal": deal, "metrics": m, "score": score,
             "grade": grade, "signal": signal, "risk": risk}
 
@@ -410,8 +421,8 @@ def refresh_all_dom():
             continue
         _set_dom_anchor(d)  # backfill anchor for deals saved before it existed
         cur = _current_dom(d)
-        if cur is not None and cur != d.get("days_on_market"):
-            d["days_on_market"] = cur
+        if cur != d.get("days_on_market"):
+            d["days_on_market"] = cur   # None clears implausible/garbage values
             changed += 1
     if changed:
         data["updated"] = datetime.utcnow().isoformat() + "Z"
