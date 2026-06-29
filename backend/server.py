@@ -167,10 +167,11 @@ def logout():
 _MAX_PLAUSIBLE_DOM = 1825  # ~5 years; above this it's almost surely a bad parse
 
 
-def _set_dom_anchor(deal: dict, force: bool = False) -> None:
-    """Anchor the Zillow listing date so 'days on Zillow' can self-update daily
-    without re-scraping. listed_date = today - days_on_market (set once at
-    capture; refreshed when a new scrape provides a new days_on_market)."""
+def _set_dom_anchor(deal: dict, capture_date=None, force: bool = False) -> None:
+    """Anchor the Zillow listing date so 'days on Zillow' self-updates daily
+    without re-scraping: listed_date = capture_date - days_on_market.
+    capture_date is TODAY for a fresh scrape (create/refresh); for backfilling
+    an old stored value, pass the deal's added_date (when it was captured)."""
     dom = deal.get("days_on_market")
     if dom in (None, ""):
         return
@@ -180,8 +181,10 @@ def _set_dom_anchor(deal: dict, force: bool = False) -> None:
         return
     if dom < 0 or dom > _MAX_PLAUSIBLE_DOM:
         return  # implausible — don't anchor garbage
-    if force or not deal.get("zillow_listed_date"):
-        deal["zillow_listed_date"] = (date.today() - timedelta(days=dom)).isoformat()
+    if not (force or not deal.get("zillow_listed_date")):
+        return
+    cap = capture_date or date.today()
+    deal["zillow_listed_date"] = (cap - timedelta(days=dom)).isoformat()
 
 
 def _current_dom(deal: dict):
@@ -419,7 +422,15 @@ def refresh_all_dom():
     for d in data.get("deals", []):
         if d.get("days_on_market") in (None, "") and not d.get("zillow_listed_date"):
             continue
-        _set_dom_anchor(d)  # backfill anchor for deals saved before it existed
+        # Anchor from when the value was captured (added_date), not today, so an
+        # old stored days_on_market isn't mistaken for today's count.
+        cap = None
+        try:
+            cap = date.fromisoformat(str(d.get("added_date"))[:10])
+        except (TypeError, ValueError):
+            cap = None
+        if not d.get("zillow_listed_date"):
+            _set_dom_anchor(d, capture_date=cap)
         cur = _current_dom(d)
         if cur != d.get("days_on_market"):
             d["days_on_market"] = cur   # None clears implausible/garbage values
