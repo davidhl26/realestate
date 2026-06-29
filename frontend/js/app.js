@@ -248,16 +248,15 @@
 
   // ============== DASHBOARD ==============
   async function refreshDashboard() {
-    try {
-      const [deals, agg] = await Promise.all([API.listDeals(), API.aggregates()]);
-      state.deals = deals;
-      state.aggregates = agg;
-      renderStats(agg);
-      let watchlist = [], leads = [];
-      try { watchlist = await API.auctionWatchlist(); } catch {}
-      try { leads = await API.leadsList(); } catch {}
-      renderCockpit(deals, watchlist, leads);
-    } catch (e) { toast(e.message, "error"); }
+    let deals = [];
+    try { deals = await API.listDeals(); state.deals = deals; }
+    catch (e) { toast(e.message, "error"); return; }
+    // Stats + side panels are best-effort — never let one failure blank the cockpit.
+    try { const agg = await API.aggregates(); state.aggregates = agg; renderStats(agg); } catch {}
+    let watchlist = [], leads = [];
+    try { watchlist = await API.auctionWatchlist(); } catch {}
+    try { leads = await API.leadsList(); } catch {}
+    try { renderCockpit(deals, watchlist, leads); } catch (e) { console.error("cockpit", e); }
   }
 
   // ============== DASHBOARD COCKPIT (action-oriented) ==============

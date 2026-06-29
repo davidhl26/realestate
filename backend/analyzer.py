@@ -461,15 +461,23 @@ def assess_risk(deal: dict, m: dict) -> dict:
 
 
 def board_aggregates(deals_with_metrics: list) -> dict:
-    """Compute board-level aggregate statistics."""
+    """Compute board-level aggregate statistics. Null-safe: deals may be missing
+    rehab_base or other fields."""
     if not deals_with_metrics:
         return {"count": 0}
-    total_cap = sum(m["acquisition"] + d["rehab_base"]
+
+    def _n(v):
+        try:
+            return float(v or 0)
+        except (TypeError, ValueError):
+            return 0.0
+
+    total_cap = sum(_n(m.get("acquisition")) + _n(d.get("rehab_base"))
                     for d, m in deals_with_metrics)
-    total_profit = sum(m["net_profit"] for _, m in deals_with_metrics)
-    avg_roi = sum(m["roi"] for _, m in deals_with_metrics) / len(deals_with_metrics)
-    avg_cap = sum(m["rent"]["cap_rate"] for _, m in deals_with_metrics) / len(deals_with_metrics)
-    passing = sum(1 for _, m in deals_with_metrics if m["rule_70_pass"])
+    total_profit = sum(_n(m.get("net_profit")) for _, m in deals_with_metrics)
+    avg_roi = sum(_n(m.get("roi")) for _, m in deals_with_metrics) / len(deals_with_metrics)
+    avg_cap = sum(_n((m.get("rent") or {}).get("cap_rate")) for _, m in deals_with_metrics) / len(deals_with_metrics)
+    passing = sum(1 for _, m in deals_with_metrics if m.get("rule_70_pass"))
     by_signal = {}
     for d, _ in deals_with_metrics:
         s = d.get("signal", "UNKNOWN")
