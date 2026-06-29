@@ -1274,14 +1274,11 @@
     const sigHex = signalPillClass(data.signal);
     // Zillow market-activity line: time on Zillow (auto) · views · saves (editable —
     // Zillow no longer exposes view/save counts to scrapers, so the user pastes them).
-    const _dom = (d.days_on_market != null && d.days_on_market !== "") ? Number(d.days_on_market)
-               : (d.median_dom != null && d.median_dom !== "") ? Number(d.median_dom) : null;
-    let _since = null;
-    if (_dom != null && _dom > 0) _since = `${_dom} day${_dom > 1 ? "s" : ""} on Zillow`;
-    else if (d.time_on_zillow) _since = /zillow/i.test(d.time_on_zillow) ? d.time_on_zillow : `${d.time_on_zillow} on Zillow`;
-    else if (_dom === 0) _since = "Listed today";
     const _cnt = v => (v != null && v !== "" && !isNaN(v)) ? Number(v).toLocaleString() : "—";
-    const sinceChip = _since ? `<span class="zchip">📅 ${escape(String(_since))}</span>` : "";
+    // Days on Zillow — editable: enter it once, then it auto-increments daily
+    // (the backend anchors the listing date and recomputes the count each day).
+    const _domVal = (d.days_on_market != null && d.days_on_market !== "") ? d.days_on_market : "";
+    const sinceChip = `<span class="zchip" title="Jours sur Zillow — clique pour saisir, puis ça s'incrémente seul chaque jour">📅 <span class="editable-count" data-count-field="days_on_market" data-value="${_domVal}">${_domVal !== "" ? _domVal : "—"}</span> j sur Zillow</span>`;
     const viewsChip = `<span class="zchip" title="Vues Zillow (clique pour saisir)">👁 <span class="editable-count" data-count-field="page_view_count" data-value="${d.page_view_count ?? ""}">${_cnt(d.page_view_count)}</span> views</span>`;
     const savesChip = `<span class="zchip" title="Saves Zillow (clique pour saisir)">♥ <span class="editable-count" data-count-field="favorite_count" data-value="${d.favorite_count ?? ""}">${_cnt(d.favorite_count)}</span> saves</span>`;
     const zLine = `<div class="detail-hero-zillow">${sinceChip}${viewsChip}${savesChip}</div>`;
