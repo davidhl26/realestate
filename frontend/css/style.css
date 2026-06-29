@@ -600,6 +600,35 @@ kbd {
 .price-blocked { position: relative; opacity: .55; }
 .price-blocked::after { content: "⛔"; margin-left: 4px; }
 
+/* ============== DEAL COMMENTS ============== */
+.deal-comment {
+  border-left: 3px solid var(--accent-100, var(--border));
+  background: var(--bg, rgba(0,0,0,0.02));
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+}
+.deal-comment-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.deal-comment-del {
+  border: none;
+  background: none;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+.deal-comment-del:hover { color: var(--red); background: rgba(239,68,68,0.1); }
+.deal-comment-text { font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; }
+
 /* ============== GROUP SUB-TABS (Sourcing / Auctions) ============== */
 .group-tabs {
   display: flex;

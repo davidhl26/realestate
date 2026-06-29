@@ -585,6 +585,17 @@
         <div id="detail-documents-list" style="margin-top:10px;"></div>
       </div>
 
+      <!-- Timestamped comments -->
+      <div class="card" id="detail-comments-card">
+        <h3 style="margin:0 0 10px;">💬 Commentaires</h3>
+        <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
+          <textarea id="deal-comment-input" rows="2" placeholder="Ajouter un commentaire (visite, négociation, appel…)" style="flex:1; min-width:220px; resize:vertical;"></textarea>
+          <button class="btn primary" id="deal-comment-add">+ Ajouter</button>
+        </div>
+        <p class="muted" style="font-size:11.5px; margin:6px 0 0;">Chaque commentaire est horodaté (date + heure) automatiquement. Ctrl/⌘+Entrée pour envoyer.</p>
+        <div id="deal-comments-list" style="margin-top:12px;"></div>
+      </div>
+
       <!-- Inline-editable Financing card -->
       <div class="card financing-card" id="financing-card">
         <div class="financing-header">

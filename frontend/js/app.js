@@ -1158,6 +1158,47 @@
     } catch (e) { if (st) st.innerHTML = `<span style="color:var(--red)">${escape(e.message)}</span>`; }
   }
 
+  function _fmtCommentTs(ts) {
+    try {
+      return new Date(ts).toLocaleString("fr-FR", {
+        day: "2-digit", month: "2-digit", year: "numeric",
+        hour: "2-digit", minute: "2-digit",
+      });
+    } catch { return ts || ""; }
+  }
+  function renderDealComments(data) {
+    const d = data.deal || {};
+    const list = $("#deal-comments-list"); if (!list) return;
+    const comments = (d.comments || []).slice().sort((a, b) =>
+      String(b.created_at || "").localeCompare(String(a.created_at || "")));  // newest first
+    list.innerHTML = comments.length ? comments.map(c => `
+      <div class="deal-comment">
+        <div class="deal-comment-meta">
+          <span>🕒 ${escape(_fmtCommentTs(c.created_at))}</span>
+          <button class="deal-comment-del" data-id="${escape(c.id)}" title="Supprimer">✕</button>
+        </div>
+        <div class="deal-comment-text">${escape(c.text).replace(/\n/g, "<br>")}</div>
+      </div>`).join("") : `<p class="muted" style="font-size:13px; margin:0;">Aucun commentaire pour l'instant.</p>`;
+    list.querySelectorAll(".deal-comment-del").forEach(b => b.addEventListener("click", async () => {
+      if (!confirm("Supprimer ce commentaire ?")) return;
+      try { const r = await API.deleteDealComment(d.id, b.dataset.id); d.comments = r.comments; renderDealComments(data); }
+      catch (e) { toast(e.message, "error"); }
+    }));
+    const inp = $("#deal-comment-input"), btn = $("#deal-comment-add");
+    const submit = async () => {
+      const text = (inp.value || "").trim();
+      if (!text) return;
+      btn.disabled = true;
+      try {
+        const r = await API.addDealComment(d.id, text);
+        d.comments = r.comments; inp.value = ""; renderDealComments(data);
+      } catch (e) { toast(e.message, "error"); }
+      finally { btn.disabled = false; }
+    };
+    if (btn) btn.onclick = submit;
+    if (inp) inp.onkeydown = (e) => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); submit(); } };
+  }
+
   function renderDetailRisk(data) {
     const host = $("#detail-risk"); if (!host) return;
     const risk = data.risk || {};
@@ -1312,6 +1353,8 @@
     renderDetailRisk(data);
     // === Documents (inspection etc.) ===
     renderDealDocuments(data);
+    // === Timestamped comments ===
+    renderDealComments(data);
 
     // === Flip-to-rent alert ===
     const alert = $("#flip-alert");

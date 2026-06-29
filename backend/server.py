@@ -558,6 +558,34 @@ def get_deal_document_file(deal_id: str, doc_id: str):
     return FileResponse(str(f), media_type="application/pdf", filename=name)
 
 
+# ---- Per-deal timestamped comments ----
+@app.post("/api/deals/{deal_id}/comments")
+def add_deal_comment(deal_id: str, payload: dict = Body(...)):
+    import uuid as _uuid
+    d = db.get_deal(deal_id)
+    if not d:
+        raise HTTPException(404, "Deal not found")
+    text = (payload.get("text") or "").strip()
+    if not text:
+        raise HTTPException(400, "text required")
+    d.setdefault("comments", []).append({
+        "id": _uuid.uuid4().hex[:8], "text": text[:4000],
+        "created_at": datetime.utcnow().isoformat() + "Z",
+    })
+    db.upsert_deal(d)
+    return {"ok": True, "comments": d["comments"]}
+
+
+@app.delete("/api/deals/{deal_id}/comments/{comment_id}")
+def delete_deal_comment(deal_id: str, comment_id: str):
+    d = db.get_deal(deal_id)
+    if not d:
+        raise HTTPException(404, "Deal not found")
+    d["comments"] = [c for c in d.get("comments", []) if c.get("id") != comment_id]
+    db.upsert_deal(d)
+    return {"ok": True, "comments": d["comments"]}
+
+
 @app.get("/api/deals/{deal_id}/pdf")
 def deal_pdf(deal_id: str):
     d = db.get_deal(deal_id)

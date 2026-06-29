@@ -77,6 +77,10 @@ const API = (() => {
       "/documents/" + encodeURIComponent(docId), { method: "DELETE" }),
     dealDocumentUrl: (dealId, docId) => "/api/deals/" + encodeURIComponent(dealId) +
       "/documents/" + encodeURIComponent(docId) + "/file",
+    addDealComment: (dealId, text) => req("/api/deals/" + encodeURIComponent(dealId) + "/comments",
+      { method: "POST", body: JSON.stringify({ text }) }),
+    deleteDealComment: (dealId, commentId) => req("/api/deals/" + encodeURIComponent(dealId) +
+      "/comments/" + encodeURIComponent(commentId), { method: "DELETE" }),
     importPdfCommit: (properties, target, docType, filename) => req("/api/import-pdf/commit",
       { method: "POST", body: JSON.stringify({
         properties, target: target || "deal",
