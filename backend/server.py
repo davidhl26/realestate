@@ -459,6 +459,27 @@ def _refresh_document_risk(deal: dict):
     deal["document_summary"] = " ".join(p for p in parts if p)[:4000]
 
 
+def _apply_document_to_deal(deal: dict, analysis: dict, apply_rehab: bool = True) -> dict:
+    """Apply a document's extracted data to the deal (rehab, year), roll its
+    findings into the risk engine, and recompute score + risk. Returns the
+    fields applied. Shared by upload and the 'refresh from document' button."""
+    applied = {}
+    sugg = (analysis or {}).get("suggested_rehab")
+    if apply_rehab and isinstance(sugg, (int, float)) and sugg > 0:
+        deal["rehab_base"] = int(sugg)
+        applied["rehab_base"] = int(sugg)
+    kn = (analysis or {}).get("key_numbers") or {}
+    if kn.get("year_built") and not deal.get("year_built"):
+        deal["year_built"] = kn["year_built"]
+        applied["year_built"] = kn["year_built"]
+    _refresh_document_risk(deal)
+    m = analyzer.compute_metrics(deal)
+    score, grade, signal = analyzer.compute_score(deal, m)
+    deal["score"], deal["grade"], deal["signal"] = score, grade, signal
+    _apply_risk(deal, m)
+    return applied
+
+
 @app.post("/api/deals/{deal_id}/documents")
 async def upload_deal_document(deal_id: str, file: UploadFile = File(...),
                                apply_rehab: str = Form("1")):
@@ -509,24 +530,25 @@ async def upload_deal_document(deal_id: str, file: UploadFile = File(...),
         "analysis": analysis,
     }
     d.setdefault("documents", []).append(rec)
-
-    # Apply the document's data to the deal: rehab from inspection, risk rollup.
-    applied = {}
-    sugg = analysis.get("suggested_rehab")
-    if apply_rehab not in ("0", "false", "no") and isinstance(sugg, (int, float)) and sugg > 0:
-        d["rehab_base"] = int(sugg)
-        applied["rehab_base"] = int(sugg)
-    kn = analysis.get("key_numbers") or {}
-    if kn.get("year_built") and not d.get("year_built"):
-        d["year_built"] = kn["year_built"]
-    _refresh_document_risk(d)
-
-    m = analyzer.compute_metrics(d)
-    score, grade, signal = analyzer.compute_score(d, m)
-    d["score"], d["grade"], d["signal"] = score, grade, signal
-    _apply_risk(d, m)
+    applied = _apply_document_to_deal(d, analysis, apply_rehab=apply_rehab not in ("0", "false", "no"))
     db.upsert_deal(d)
     return {"ok": True, "document": rec, "applied": applied,
+            "risk_grade": d.get("risk_grade"), "deal_breakers": d.get("deal_breakers")}
+
+
+@app.post("/api/deals/{deal_id}/documents/{doc_id}/reapply")
+def reapply_deal_document(deal_id: str, doc_id: str):
+    """Refresh the deal's data from an already-analyzed document (re-apply rehab,
+    year, and risk rollup). No AI call — uses the stored analysis."""
+    d = db.get_deal(deal_id)
+    if not d:
+        raise HTTPException(404, "Deal not found")
+    doc = next((x for x in (d.get("documents") or []) if x.get("id") == doc_id), None)
+    if not doc:
+        raise HTTPException(404, "Document not found")
+    applied = _apply_document_to_deal(d, doc.get("analysis") or {}, apply_rehab=True)
+    db.upsert_deal(d)
+    return {"ok": True, "applied": applied,
             "risk_grade": d.get("risk_grade"), "deal_breakers": d.get("deal_breakers")}
 
 

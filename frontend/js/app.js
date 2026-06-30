@@ -1233,7 +1233,8 @@
         </div>
         ${breakers ? `<div style="margin:6px 0;"><strong style="color:var(--red); font-size:13px;">⛔ Deal-breakers</strong><ul style="margin:4px 0; padding-left:18px; font-size:13px;">${breakers}</ul></div>` : ""}
         ${findings ? `<details style="margin-top:6px;"><summary style="cursor:pointer; font-size:13px; font-weight:600;">${(a.findings || []).length} constat(s)</summary><div style="margin-top:6px;">${findings}</div></details>` : ""}
-        <div style="display:flex; gap:8px; margin-top:10px;">
+        <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
+          <button class="btn doc-reapply" data-id="${escape(doc.id)}" style="font-size:12px;">🔄 Rafraîchir les données du deal</button>
           <a class="btn ghost" href="${API.dealDocumentUrl(d.id, doc.id)}" target="_blank" rel="noopener" style="font-size:12px;">Ouvrir le PDF ↗</a>
           <button class="btn ghost doc-delete" data-id="${escape(doc.id)}" style="font-size:12px;">🗑 Retirer</button>
         </div>
@@ -1245,6 +1246,15 @@
       if (!confirm("Retirer ce document ?")) return;
       try { await API.deleteDealDocument(d.id, b.dataset.id); openDeal(d.id); }
       catch (e) { toast(e.message, "error"); }
+    }));
+    list.querySelectorAll(".doc-reapply").forEach(b => b.addEventListener("click", async () => {
+      b.disabled = true; b.textContent = "…";
+      try {
+        const r = await API.reapplyDealDocument(d.id, b.dataset.id);
+        const ap = r.applied || {};
+        toast(Object.keys(ap).length ? `Données rafraîchies (${Object.keys(ap).join(", ")})` : "Données déjà à jour", "success");
+        openDeal(d.id);
+      } catch (e) { b.disabled = false; b.textContent = "🔄 Rafraîchir les données du deal"; toast(e.message, "error"); }
     }));
     list.querySelectorAll(".doc-apply").forEach(b => b.addEventListener("click", async () => {
       try { await API.patchDeal(d.id, { rehab_base: Number(b.dataset.rehab) }); toast("Rehab appliqué", "success"); openDeal(d.id); }

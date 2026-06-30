@@ -75,6 +75,8 @@ const API = (() => {
     },
     deleteDealDocument: (dealId, docId) => req("/api/deals/" + encodeURIComponent(dealId) +
       "/documents/" + encodeURIComponent(docId), { method: "DELETE" }),
+    reapplyDealDocument: (dealId, docId) => req("/api/deals/" + encodeURIComponent(dealId) +
+      "/documents/" + encodeURIComponent(docId) + "/reapply", { method: "POST", body: "{}" }),
     dealDocumentUrl: (dealId, docId) => "/api/deals/" + encodeURIComponent(dealId) +
       "/documents/" + encodeURIComponent(docId) + "/file",
     addDealComment: (dealId, text) => req("/api/deals/" + encodeURIComponent(dealId) + "/comments",
