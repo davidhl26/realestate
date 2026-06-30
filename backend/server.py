@@ -501,11 +501,9 @@ async def upload_deal_document(deal_id: str, file: UploadFile = File(...),
         raise HTTPException(413, "PDF too large (>25 MB)")
 
     extracted = pdf_importer.extract_text_from_pdf(pdf_bytes)
-    if not extracted.get("ok") or not (extracted.get("text") or "").strip():
-        return {"ok": False, "error": "Could not read text from this PDF (scanned image?). "
-                "Try a text-based PDF."}
-
-    res = ai_tasks.analyze_document(d, extracted["text"])
+    text = (extracted.get("text") or "").strip() if extracted.get("ok") else ""
+    # No text layer (scanned / vector PDF)? Send the PDF straight to Claude.
+    res = ai_tasks.analyze_document(d, text=text, pdf_bytes=None if text else pdf_bytes)
     if not res.get("ok"):
         et = res.get("error_type")
         if et == "billing": raise HTTPException(402, res.get("error", ""))

@@ -85,8 +85,11 @@ def _summary(deal: dict, include_financials: bool = True,
 
 
 def _run_claude(system: str, user: str, *, use_web: bool = True,
-                  max_tokens: int = 3000, vision_images: Optional[list] = None) -> dict:
-    """Common wrapper. Returns {ok, text, model, usage, web_searches_used} or {ok:False, error}."""
+                  max_tokens: int = 3000, vision_images: Optional[list] = None,
+                  pdf_bytes: Optional[bytes] = None) -> dict:
+    """Common wrapper. Returns {ok, text, model, usage, web_searches_used} or {ok:False, error}.
+    pdf_bytes: attach a PDF directly so Claude reads it natively (handles
+    scanned / no-text-layer PDFs that pdfplumber can't extract)."""
     if not is_configured():
         return {"ok": False, "error": "No Anthropic API key (Settings → AI)."}
     try:
@@ -97,6 +100,11 @@ def _run_claude(system: str, user: str, *, use_web: bool = True,
         if vision_images:
             for url in vision_images[:6]:  # limit
                 content.append({"type": "image", "source": {"type": "url", "url": url}})
+        if pdf_bytes:
+            import base64
+            content.append({"type": "document", "source": {
+                "type": "base64", "media_type": "application/pdf",
+                "data": base64.standard_b64encode(pdf_bytes).decode("ascii")}})
         content.append({"type": "text", "text": user})
 
         kwargs = {
@@ -744,15 +752,21 @@ Be conservative — when a cost is unclear, estimate on the higher side. Output 
 ```"""
 
 
-def analyze_document(deal: dict, text: str) -> dict:
-    """Analyze an uploaded property document (inspection/appraisal/title/etc.)
-    against the deal. Returns {ok, result:{...}, ...}. No web_search (reads the
-    provided text)."""
+def analyze_document(deal: dict, text: str = "", pdf_bytes: Optional[bytes] = None) -> dict:
+    """Analyze an uploaded property document (inspection/appraisal/title/quote).
+    Uses the extracted text when available; otherwise sends the PDF straight to
+    Claude (handles scanned / no-text-layer PDFs). Returns {ok, result:{...}}."""
     ctx = _summary(deal, include_financials=True, include_anchors=True)
-    user = (f"DEAL CONTEXT:\n{ctx}\n\n"
-            f"DOCUMENT TEXT (may be truncated):\n{(text or '')[:18000]}\n\n"
-            "Analyze the document and return the JSON.")
-    r = _run_claude(DOC_SYSTEM, user, use_web=False, max_tokens=4000)
+    if (text or "").strip():
+        user = (f"DEAL CONTEXT:\n{ctx}\n\nDOCUMENT TEXT (may be truncated):\n"
+                f"{text[:18000]}\n\nAnalyze the document and return the JSON.")
+        r = _run_claude(DOC_SYSTEM, user, use_web=False, max_tokens=4000)
+    elif pdf_bytes:
+        user = (f"DEAL CONTEXT:\n{ctx}\n\nAnalyze the ATTACHED PDF document "
+                "(no text layer — read it directly) and return the JSON.")
+        r = _run_claude(DOC_SYSTEM, user, use_web=False, max_tokens=4000, pdf_bytes=pdf_bytes)
+    else:
+        return {"ok": False, "error": "No document content"}
     if not r.get("ok"):
         return r
     return _wrap(r, _parse_task_json(r["text"]) or {"error": "parse failed", "raw": r["text"][:1500]})
