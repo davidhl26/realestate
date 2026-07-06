@@ -606,12 +606,25 @@ def deal_comps_map(deal_id: str):
         d["comps_geo"] = cache
         db.upsert_deal(d)
 
+    # Sanity filter: a true comp sits within ~2 miles of the subject. Anything
+    # farther is almost surely a bad geocode (wrong street matched in another
+    # part of town) and would zoom the map out to region level — drop it.
+    import math
+    def _km(lat1, lng1, lat2, lng2):
+        rl1, rl2 = math.radians(lat1), math.radians(lat2)
+        dlat, dlng = rl2 - rl1, math.radians(lng2 - lng1)
+        a = math.sin(dlat / 2) ** 2 + math.cos(rl1) * math.cos(rl2) * math.sin(dlng / 2) ** 2
+        return 6371 * 2 * math.asin(math.sqrt(a))
+    kept = [c for c in comps if _km(d["lat"], d["lng"], c["lat"], c["lng"]) <= 8.0]
+    dropped = len(comps) - len(kept)
+    comps = kept
+
     return {"ok": True,
             "subject": {"lat": d["lat"], "lng": d["lng"],
                         "address": d.get("address", ""),
                         "price": d.get("purchase_price"),
                         "arv": d.get("arv_base"), "image": d.get("image")},
-            "comps": comps}
+            "comps": comps, "dropped_far": dropped}
 
 
 @app.post("/api/deals/archive-photos")

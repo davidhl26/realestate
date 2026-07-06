@@ -1413,8 +1413,9 @@
             `${c.distance_mi ? `<br>à ${Number(c.distance_mi).toFixed(1)} mi` : ""}`);
       });
       if (pts.length > 1) map.fitBounds(pts, { padding: [40, 40], maxZoom: 17 });
+      const droppedTxt = r.dropped_far ? ` (${r.dropped_far} écarté(s) : adresse introuvable près du bien)` : "";
       if (note) note.textContent = (r.comps || []).length
-        ? `${r.comps.length} comparable(s) géolocalisé(s). Clique un prix pour le détail — clique la carte pour activer le zoom molette.`
+        ? `${r.comps.length} comparable(s) géolocalisé(s)${droppedTxt}. Clique un prix pour le détail — clique la carte pour activer le zoom molette.`
         : "Aucun comparable géolocalisé pour l'instant — lance « Recherche ARV (IA) » pour en obtenir, ils apparaîtront ici.";
     } catch (e) {
       if (note) note.textContent = "Comparables indisponibles : " + e.message;
