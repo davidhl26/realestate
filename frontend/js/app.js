@@ -1437,7 +1437,17 @@
               `${c.date ? `<br>${escape(String(c.date))}` : ""}` +
               `${c.distance_mi ? `<br>à ${Number(c.distance_mi).toFixed(1)} mi` : ""}`);
         });
-        if (pts.length > 1) map.fitBounds(pts, { padding: [40, 40], maxZoom: 17 });
+        // Initial framing: the immediate neighborhood (like Zillow), not the
+        // whole town — farther pins stay on the map when zooming out.
+        if (pts.length > 1) {
+          const kmTo = (p) => {
+            const dy = (p[0] - s.lat) * 111.32;
+            const dx = (p[1] - s.lng) * 111.32 * Math.cos(s.lat * Math.PI / 180);
+            return Math.sqrt(dx * dx + dy * dy);
+          };
+          const near = pts.filter(p => kmTo(p) <= 1.2);
+          map.fitBounds(near.length >= 4 ? near : pts, { padding: [40, 40], maxZoom: 17 });
+        }
         const n = (r.comps || []).length;
         const nSold = (r.comps || []).filter(c => c.source === "sold").length;
         const droppedTxt = r.dropped_far ? ` · ${r.dropped_far} écarté(s) (adresse introuvable près du bien)` : "";
