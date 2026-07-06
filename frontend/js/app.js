@@ -1363,8 +1363,22 @@
   async function renderDealMap(data) {
     const card = $("#detail-map-card"); if (!card) return;
     const d = data.deal || {};
-    if (typeof L === "undefined") { card.style.display = "none"; return; }  // Leaflet CDN absent (offline)
     card.style.display = "block";
+    if (typeof L === "undefined") {
+      // Leaflet couldn't load (blocker/offline) — degrade to a plain comps list
+      // instead of silently hiding the whole section.
+      const mapEl = $("#detail-map");
+      try {
+        const r = await API.dealCompsMap(d.id);
+        const list = (r.comps || []).map(c =>
+          `<div class="risk-flag"><span style="font-weight:700;">$${Math.round((c.price || 0) / 1000)}K</span><span style="flex:1;">${escape(c.address || "?")}</span><span class="muted">${escape(String(c.date || ""))}</span></div>`).join("");
+        if (mapEl) mapEl.innerHTML = list || '<p class="muted" style="padding:12px;">Aucun comparable pour l\'instant.</p>';
+        if (mapEl) mapEl.style.height = "auto";
+        const note = $("#detail-map-note");
+        if (note) note.textContent = "Carte indisponible (librairie bloquée) — comparables affichés en liste.";
+      } catch {}
+      return;
+    }
     const note = $("#detail-map-note");
     if (note) note.textContent = "Chargement de la carte + comparables…";
     if (_dealMap) { try { _dealMap.remove(); } catch {} _dealMap = null; }
