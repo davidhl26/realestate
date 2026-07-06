@@ -593,10 +593,17 @@ def deal_comps_map(deal_id: str):
                         "date": c.get("sold_date") or c.get("date"),
                         "distance_mi": c.get("distance_mi"),
                         "lat": c.get("lat"), "lng": c.get("lng"), "source": "ai"})
+    # Neighborhood sold layer (find_area_sales) — the Zillow-style price tags.
+    for s in (d.get("area_sales") or []):
+        if isinstance(s, dict) and s.get("address"):
+            raw.append({"address": s.get("address"), "price": s.get("price"),
+                        "beds": s.get("beds"), "sqft": s.get("sqft"),
+                        "date": s.get("date"), "lat": s.get("lat"),
+                        "lng": s.get("lng"), "source": "sold"})
 
     # Dedupe by address, geocode missing coords (cached on the deal).
     cache = d.get("comps_geo") or {}
-    seen, comps, geocoded = set(), [], 0
+    seen, comps, geocoded, ungeocoded = set(), [], 0, 0
     nominatim = not ai_research.get_maps_key()
     for c in raw:
         addr = (c.get("address") or "").strip()
@@ -606,15 +613,19 @@ def deal_comps_map(deal_id: str):
         seen.add(akey)
         if not (c.get("lat") and c.get("lng")):
             if akey in cache:
-                c["lat"], c["lng"] = cache[akey]
+                cached = cache[akey]
+                if cached:            # None = geocode already failed; skip
+                    c["lat"], c["lng"] = cached
             elif geocoded < 12:   # bound per request
                 loc = _geocode(addr)
                 geocoded += 1
                 if nominatim:
                     _time.sleep(1.0)   # Nominatim fair-use: 1 req/s
+                cache[akey] = list(loc) if loc else None
                 if loc:
                     c["lat"], c["lng"] = loc
-                    cache[akey] = list(loc)
+            else:
+                ungeocoded += 1   # cap hit — a follow-up request will finish
         if c.get("lat") and c.get("lng"):
             comps.append(c)
     if geocoded:
@@ -639,7 +650,25 @@ def deal_comps_map(deal_id: str):
                         "address": d.get("address", ""),
                         "price": d.get("purchase_price"),
                         "arv": d.get("arv_base"), "image": d.get("image")},
-            "comps": comps, "dropped_far": dropped}
+            "comps": comps, "dropped_far": dropped, "ungeocoded": ungeocoded}
+
+
+@app.post("/api/deals/{deal_id}/area-sales")
+def deal_area_sales(deal_id: str):
+    """Fetch recent neighborhood sales (AI web search) and store them on the
+    deal — they show up as sold-price pins on the comps map."""
+    d = db.get_deal(deal_id)
+    if not d:
+        raise HTTPException(404, "Deal not found")
+    if not ai_research.is_configured():
+        raise HTTPException(400, "AI not configured. Add an Anthropic API key in Settings → AI.")
+    res = ai_research.find_area_sales(d, max_sales=25)
+    if not res.get("ok"):
+        return {"ok": False, "error": res.get("error", "search failed")}
+    d["area_sales"] = res["sales"]
+    d["area_sales_at"] = datetime.utcnow().isoformat() + "Z"
+    db.upsert_deal(d)
+    return {"ok": True, "count": len(res["sales"]), "notes": res.get("notes", "")}
 
 
 @app.post("/api/deals/archive-photos")

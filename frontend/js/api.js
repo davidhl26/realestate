@@ -41,6 +41,7 @@ const API = (() => {
     aggregates: () => req("/api/board/aggregates"),
     dealsDuplicates: () => req("/api/deals-duplicates"),
     dealCompsMap: (id) => req("/api/deals/" + encodeURIComponent(id) + "/comps-map"),
+    dealAreaSales: (id) => req("/api/deals/" + encodeURIComponent(id) + "/area-sales", { method: "POST", body: "{}" }),
     watchesList: () => req("/api/watches"),
     watchCreate: (payload) => req("/api/watches", { method: "POST", body: JSON.stringify(payload) }),
     watchDelete: (id) => req("/api/watches/" + encodeURIComponent(id), { method: "DELETE" }),

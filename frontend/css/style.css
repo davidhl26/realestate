@@ -588,6 +588,7 @@ kbd {
   white-space: nowrap;
   cursor: pointer;
 }
+.comp-pill.comp-hl { border-color: var(--accent, #1FCB89); box-shadow: 0 0 0 1.5px var(--accent, #1FCB89), 0 1px 4px rgba(0,0,0,.45); }
 .map-subject-pin {
   background: var(--accent, #1FCB89);
   color: #fff;

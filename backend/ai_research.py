@@ -626,6 +626,77 @@ def find_listings_in_area(params: dict, max_listings: int = 60) -> dict:
     }
 
 
+AREA_SALES_SYSTEM = """You compile RECENT HOME SALES around a specific address for a real-estate investor's neighborhood map (like Zillow's sold layer).
+
+Use web_search aggressively: Zillow "recently sold" pages for the street/zip, Redfin sold pages, Realtor.com sold, county transfer records, Homes.com. Target sales from the LAST 18 MONTHS within roughly half a mile of the subject (same street and immediate surrounding streets first).
+
+RULES:
+- Only report sales that actually appear in your search results — address + sold price. NEVER invent addresses or prices.
+- Prefer many nearby sales over few distant ones. 15-25 sales is the goal; fewer is fine if the area is quiet.
+- Exclude the subject property itself.
+
+End with ONE JSON code block and NOTHING after:
+```json
+{
+  "sales": [
+    {"address": "<full street address>", "price": <integer USD sold price>, "date": "<YYYY-MM or YYYY-MM-DD>", "beds": <int|null>, "sqft": <int|null>, "source": "<site>"}
+  ],
+  "notes": "<1 sentence: coverage>"
+}
+```"""
+
+
+def find_area_sales(deal: dict, max_sales: int = 25) -> dict:
+    """Recent sold properties around the deal's address (for the map's sold
+    layer). Returns {ok, sales:[...], notes} or {ok:False, error}."""
+    api_key = get_api_key()
+    if not api_key:
+        return {"ok": False, "error": "No Anthropic API key configured. Add one in Settings → AI."}
+    import anthropic
+    client = anthropic.Anthropic(api_key=api_key)
+    model = get_model()
+    addr = deal.get("address", "")
+    user = (f"Subject property: {addr}\n\n"
+            f"Find up to {max_sales} recent sales (last 18 months) within ~1/2 mile — "
+            "same street and surrounding streets first — and return the JSON.")
+    try:
+        message = client.messages.create(
+            model=model, max_tokens=6000, system=AREA_SALES_SYSTEM,
+            tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 10}],
+            messages=[{"role": "user", "content": user}],
+        )
+    except anthropic.AuthenticationError:
+        return {"ok": False, "error": "Invalid API key — check Settings → AI."}
+    except Exception as e:
+        log.exception("Area sales search failed")
+        return {"ok": False, "error": f"Area sales search failed: {e}"}
+    text = "\n".join(b.text for b in message.content if hasattr(b, "text"))
+    data = _extract_json(text)
+    if not data or not isinstance(data.get("sales"), list):
+        start = text.find("{")
+        data = _repair_json(text[start:]) if start >= 0 else None
+    if not data or not isinstance(data.get("sales"), list):
+        return {"ok": False, "error": "Could not parse area sales.", "raw_text": text[-1200:]}
+    sales, seen = [], set()
+    for s in data["sales"]:
+        if not isinstance(s, dict):
+            continue
+        a = (s.get("address") or "").strip()
+        if not a or a.lower() in seen:
+            continue
+        seen.add(a.lower())
+        try:
+            price = int(round(float(s.get("price"))))
+        except (TypeError, ValueError):
+            continue
+        sales.append({"address": a, "price": price, "date": s.get("date"),
+                      "beds": s.get("beds"), "sqft": s.get("sqft"),
+                      "source": s.get("source")})
+        if len(sales) >= max_sales:
+            break
+    return {"ok": True, "sales": sales, "notes": data.get("notes", ""), "model": model}
+
+
 AUCTION_SEARCH_SYSTEM = """You help a fix-and-flip investor DISCOVER residential properties going to AUCTION / foreclosure sale in a given city or state, then triage them.
 
 Use the web_search tool aggressively. Search sources like: auction.com, Hubzu, Xome, RealtyTrac, Foreclosure.com, county sheriff-sale / tax-foreclosure lists, and Zillow's "foreclosures / auctions" filter. Run many queries (per city, per county, per source).

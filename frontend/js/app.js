@@ -1402,60 +1402,97 @@
     setTimeout(() => { try { map.invalidateSize(); } catch {} }, 250);
 
     const K = v => (v == null || v === "" || isNaN(v)) ? "?" : "$" + Math.round(Number(v) / 1000) + "K";
-    try {
-      const r = await API.dealCompsMap(d.id);
-      if (!r.ok) {
-        if (note) note.textContent = r.error || "Carte indisponible pour ce bien.";
-        map.setView([39.5, -98.35], 4);
-        return;
+    const pinLayer = L.layerGroup().addTo(map);
+    let viewSet = false;
+
+    // (Re)load all pins. Geocoding is capped server-side (12/request), so we
+    // poll until `ungeocoded` reaches 0 — pins pop in as addresses resolve.
+    const loadPins = async (attempt = 0) => {
+      try {
+        const r = await API.dealCompsMap(d.id);
+        if (!r.ok) {
+          if (note) note.textContent = r.error || "Carte indisponible pour ce bien.";
+          if (!viewSet) map.setView([39.5, -98.35], 4);
+          return;
+        }
+        const s = r.subject;
+        if (!viewSet) { map.setView([s.lat, s.lng], 16); viewSet = true; }
+        pinLayer.clearLayers();
+        const pts = [[s.lat, s.lng]];
+        L.marker([s.lat, s.lng], { zIndexOffset: 1000, icon: L.divIcon({
+            className: "", iconAnchor: [46, 16],
+            html: `<div class="map-subject-pin">🏠 CE BIEN ${s.price ? "· " + K(s.price) : ""}</div>` }) })
+          .addTo(pinLayer)
+          .bindPopup(`<strong>${escape(s.address)}</strong><br>Achat: ${s.price ? "$" + Number(s.price).toLocaleString("en-US") : "?"}${s.arv ? "<br>ARV: $" + Number(s.arv).toLocaleString("en-US") : ""}`);
+        (r.comps || []).forEach(c => {
+          pts.push([c.lat, c.lng]);
+          const isComp = c.source !== "sold";
+          L.marker([c.lat, c.lng], { icon: L.divIcon({
+              className: "", iconAnchor: [22, 13],
+              html: `<div class="comp-pill${isComp ? " comp-hl" : ""}">${K(c.price)}</div>` }) })
+            .addTo(pinLayer)
+            .bindPopup(`<strong>${escape(c.address || "?")}</strong><br>` +
+              `${c.price ? (c.source === "sold" ? "Vendu: $" : "Comparable: $") + Number(c.price).toLocaleString("en-US") : ""}` +
+              `${c.beds ? `<br>${c.beds}bd${c.baths ? "/" + c.baths + "ba" : ""}${c.sqft ? " · " + c.sqft + " sf" : ""}` : ""}` +
+              `${c.date ? `<br>${escape(String(c.date))}` : ""}` +
+              `${c.distance_mi ? `<br>à ${Number(c.distance_mi).toFixed(1)} mi` : ""}`);
+        });
+        if (pts.length > 1) map.fitBounds(pts, { padding: [40, 40], maxZoom: 17 });
+        const n = (r.comps || []).length;
+        const nSold = (r.comps || []).filter(c => c.source === "sold").length;
+        const droppedTxt = r.dropped_far ? ` · ${r.dropped_far} écarté(s) (adresse introuvable près du bien)` : "";
+        const geoTxt = r.ungeocoded ? ` · géocodage en cours (${r.ungeocoded} restants)…` : "";
+        if (note) note.textContent = n
+          ? `${n} pin(s) — ${nSold} vente(s) du quartier, ${n - nSold} comparable(s)${droppedTxt}${geoTxt} Clique un prix pour le détail.`
+          : "Aucun pin pour l'instant — « 📍 Ventes du quartier » remplit la carte comme sur Zillow (~45 s, ~$0.40) ; « 🤖 Trouver les comparables » cible les meilleurs comps ARV.";
+        const findBtn = $("#map-find-comps");
+        if (findBtn) {
+          findBtn.style.display = n ? "none" : "inline-flex";
+          findBtn.disabled = false;
+          findBtn.textContent = "🤖 Trouver les comparables (IA)";
+          findBtn.onclick = async () => {
+            findBtn.disabled = true;
+            findBtn.innerHTML = '<span class="spinner"></span> Recherche…';
+            try {
+              const rr = await API.aiRun("arv", d.id);
+              if (!rr.ok) { toast(rr.error || "Échec de la recherche", "error"); findBtn.disabled = false; findBtn.textContent = "🤖 Trouver les comparables (IA)"; return; }
+              toast(`✓ ARV + ${((rr.result || {}).comparables || []).length} comparable(s) trouvés`, "success");
+              openDeal(d.id);
+            } catch (e) {
+              toast(e.message, "error");
+              findBtn.disabled = false; findBtn.textContent = "🤖 Trouver les comparables (IA)";
+            }
+          };
+        }
+        if (r.ungeocoded > 0 && attempt < 6) setTimeout(() => loadPins(attempt + 1), 1500);
+      } catch (e) {
+        if (note) note.textContent = "Comparables indisponibles : " + e.message;
       }
-      const s = r.subject;
-      map.setView([s.lat, s.lng], 16);
-      const pts = [[s.lat, s.lng]];
-      L.marker([s.lat, s.lng], { zIndexOffset: 1000, icon: L.divIcon({
-          className: "", iconAnchor: [46, 16],
-          html: `<div class="map-subject-pin">🏠 CE BIEN ${s.price ? "· " + K(s.price) : ""}</div>` }) })
-        .addTo(map)
-        .bindPopup(`<strong>${escape(s.address)}</strong><br>Achat: ${s.price ? "$" + Number(s.price).toLocaleString("en-US") : "?"}${s.arv ? "<br>ARV: $" + Number(s.arv).toLocaleString("en-US") : ""}`);
-      (r.comps || []).forEach(c => {
-        pts.push([c.lat, c.lng]);
-        L.marker([c.lat, c.lng], { icon: L.divIcon({
-            className: "", iconAnchor: [22, 13],
-            html: `<div class="comp-pill">${K(c.price)}</div>` }) })
-          .addTo(map)
-          .bindPopup(`<strong>${escape(c.address || "?")}</strong><br>` +
-            `${c.price ? "Vendu/listé: $" + Number(c.price).toLocaleString("en-US") : ""}` +
-            `${c.beds ? `<br>${c.beds}bd/${c.baths || "?"}ba${c.sqft ? " · " + c.sqft + " sf" : ""}` : ""}` +
-            `${c.date ? `<br>${escape(String(c.date))}` : ""}` +
-            `${c.distance_mi ? `<br>à ${Number(c.distance_mi).toFixed(1)} mi` : ""}`);
-      });
-      if (pts.length > 1) map.fitBounds(pts, { padding: [40, 40], maxZoom: 17 });
-      const droppedTxt = r.dropped_far ? ` (${r.dropped_far} écarté(s) : adresse introuvable près du bien)` : "";
-      const findBtn = $("#map-find-comps");
-      if (note) note.textContent = (r.comps || []).length
-        ? `${r.comps.length} comparable(s) géolocalisé(s)${droppedTxt}. Clique un prix pour le détail — clique la carte pour activer le zoom molette.`
-        : "Aucun comparable pour l'instant — clique « 🤖 Trouver les comparables » : l'IA cherche les ventes récentes autour et les épingle ici (~30-60 s, ~$0.30).";
-      if (findBtn) {
-        findBtn.style.display = (r.comps || []).length ? "none" : "inline-flex";
-        findBtn.disabled = false;
-        findBtn.textContent = "🤖 Trouver les comparables (IA)";
-        findBtn.onclick = async () => {
-          findBtn.disabled = true;
-          findBtn.innerHTML = '<span class="spinner"></span> Recherche des ventes…';
-          if (note) note.textContent = "L'IA cherche les ventes comparables autour du bien… (~30-60 s)";
-          try {
-            const rr = await API.aiRun("arv", d.id);
-            if (!rr.ok) { toast(rr.error || "Échec de la recherche", "error"); findBtn.disabled = false; findBtn.textContent = "🤖 Trouver les comparables (IA)"; return; }
-            toast(`✓ ARV + ${((rr.result || {}).comparables || []).length} comparable(s) trouvés`, "success");
-            openDeal(d.id);   // re-render: pins + ARV/score/max-offer à jour
-          } catch (e) {
-            toast(e.message, "error");
-            findBtn.disabled = false; findBtn.textContent = "🤖 Trouver les comparables (IA)";
-          }
-        };
-      }
-    } catch (e) {
-      if (note) note.textContent = "Comparables indisponibles : " + e.message;
+    };
+    loadPins();
+
+    // 📍 Ventes du quartier — the Zillow-style sold layer (AI web search)
+    const salesBtn = $("#map-load-sales");
+    if (salesBtn) {
+      salesBtn.disabled = false;
+      salesBtn.textContent = (d.area_sales && d.area_sales.length)
+        ? "📍 Actualiser les ventes" : "📍 Ventes du quartier";
+      salesBtn.onclick = async () => {
+        salesBtn.disabled = true;
+        salesBtn.innerHTML = '<span class="spinner"></span> Recherche des ventes… (~45 s)';
+        if (note) note.textContent = "L'IA cherche les ventes récentes autour du bien (Zillow sold, Redfin, registres)…";
+        try {
+          const rr = await API.dealAreaSales(d.id);
+          if (!rr.ok) { toast(rr.error || "Échec", "error"); }
+          else toast(`✓ ${rr.count} vente(s) trouvée(s) — géocodage en cours…`, "success");
+          salesBtn.disabled = false;
+          salesBtn.textContent = "📍 Actualiser les ventes";
+          loadPins();
+        } catch (e) {
+          toast(e.message, "error");
+          salesBtn.disabled = false; salesBtn.textContent = "📍 Ventes du quartier";
+        }
+      };
     }
   }
 
