@@ -564,6 +564,22 @@
       <!-- Safety / risk block (auto pre-screen + AI verdict must-verify) -->
       <div id="detail-risk"></div>
 
+      <!-- Neighborhood map + comparables -->
+      <div class="card" id="detail-map-card" style="display:none;">
+        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
+          <h3 style="margin:0;">🗺 Quartier &amp; comparables</h3>
+          <div style="display:flex; gap:6px; align-items:center;">
+            <button class="btn" id="map-find-comps" style="display:none; font-size:12px;">🤖 Trouver les comparables (IA)</button>
+            <div class="map-layer-toggle">
+              <button class="group-tab active" id="map-layer-sat">🛰 Satellite</button>
+              <button class="group-tab" id="map-layer-road">🚗 Road</button>
+            </div>
+          </div>
+        </div>
+        <div id="detail-map" style="height:420px; border-radius:10px; margin-top:10px;"></div>
+        <p class="muted" id="detail-map-note" style="font-size:12px; margin:8px 0 0;"></p>
+      </div>
+
       <!-- Documents (inspection, appraisal, title…) → AI analysis + verdict -->
       <div class="card" id="detail-documents-card">
         <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
@@ -576,19 +592,6 @@
         <p class="muted" style="font-size:12px; margin:6px 0 0;">Dépose un rapport (inspection, expertise, titre…) — l'IA en extrait les données, met à jour le rehab et rend un verdict <strong>bon / prudence / mauvais</strong>.</p>
         <div id="doc-upload-status" class="status-line" style="margin-top:8px;"></div>
         <div id="detail-documents-list" style="margin-top:10px;"></div>
-      </div>
-
-      <!-- Neighborhood map + comparables -->
-      <div class="card" id="detail-map-card" style="display:none;">
-        <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
-          <h3 style="margin:0;">🗺 Quartier &amp; comparables</h3>
-          <div class="map-layer-toggle">
-            <button class="group-tab active" id="map-layer-sat">🛰 Satellite</button>
-            <button class="group-tab" id="map-layer-road">🚗 Road</button>
-          </div>
-        </div>
-        <div id="detail-map" style="height:420px; border-radius:10px; margin-top:10px;"></div>
-        <p class="muted" id="detail-map-note" style="font-size:12px; margin:8px 0 0;"></p>
       </div>
 
       <!-- Timestamped comments -->

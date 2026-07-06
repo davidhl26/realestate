@@ -1417,9 +1417,29 @@
       });
       if (pts.length > 1) map.fitBounds(pts, { padding: [40, 40], maxZoom: 17 });
       const droppedTxt = r.dropped_far ? ` (${r.dropped_far} écarté(s) : adresse introuvable près du bien)` : "";
+      const findBtn = $("#map-find-comps");
       if (note) note.textContent = (r.comps || []).length
         ? `${r.comps.length} comparable(s) géolocalisé(s)${droppedTxt}. Clique un prix pour le détail — clique la carte pour activer le zoom molette.`
-        : "Aucun comparable géolocalisé pour l'instant — lance « Recherche ARV (IA) » pour en obtenir, ils apparaîtront ici.";
+        : "Aucun comparable pour l'instant — clique « 🤖 Trouver les comparables » : l'IA cherche les ventes récentes autour et les épingle ici (~30-60 s, ~$0.30).";
+      if (findBtn) {
+        findBtn.style.display = (r.comps || []).length ? "none" : "inline-flex";
+        findBtn.disabled = false;
+        findBtn.textContent = "🤖 Trouver les comparables (IA)";
+        findBtn.onclick = async () => {
+          findBtn.disabled = true;
+          findBtn.innerHTML = '<span class="spinner"></span> Recherche des ventes…';
+          if (note) note.textContent = "L'IA cherche les ventes comparables autour du bien… (~30-60 s)";
+          try {
+            const rr = await API.aiRun("arv", d.id);
+            if (!rr.ok) { toast(rr.error || "Échec de la recherche", "error"); findBtn.disabled = false; findBtn.textContent = "🤖 Trouver les comparables (IA)"; return; }
+            toast(`✓ ARV + ${((rr.result || {}).comparables || []).length} comparable(s) trouvés`, "success");
+            openDeal(d.id);   // re-render: pins + ARV/score/max-offer à jour
+          } catch (e) {
+            toast(e.message, "error");
+            findBtn.disabled = false; findBtn.textContent = "🤖 Trouver les comparables (IA)";
+          }
+        };
+      }
     } catch (e) {
       if (note) note.textContent = "Comparables indisponibles : " + e.message;
     }
