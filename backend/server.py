@@ -79,6 +79,10 @@ _auctions_mod.set_credentials_path(DATA_DIR / "realauction-credentials.json")
 from .watchlist import WatchlistDB
 watchlist_db = WatchlistDB(DATA_DIR / "auction-watchlist.json")
 
+# Zillow watches (saved searches that run repeatedly and diff results)
+from .watches import WatchesDB
+watches_db = WatchesDB(DATA_DIR / "zillow-watches.json")
+
 # Initialize browser scraper profile dir
 try:
     from . import scraper_browser
@@ -1470,6 +1474,82 @@ def auction_recheck_all(payload: dict = Body(default={})):
                 pass
     return {"ok": True, "checked": len(results), "results": results,
             "opportunities": opportunities, "upcoming": upcoming}
+
+
+# ---- Zillow watches (veille) ----
+def _run_watch(watch_id: str) -> dict:
+    """Run one watch: AI area search with the watch's criteria, then diff."""
+    from . import ai_research
+    w = watches_db.get(watch_id)
+    if not w:
+        return {"ok": False, "error": "watch not found"}
+    params = {"search_term": w.get("location", "")}
+    for k in ("price_max", "price_min", "beds_min", "property_type"):
+        if w.get(k):
+            params[k] = w[k]
+    res = ai_research.find_listings_in_area(params, max_listings=w.get("max_listings") or 15)
+    if not res.get("ok"):
+        return {"ok": False, "error": res.get("error", "search failed")}
+    out = watches_db.apply_run(watch_id, res.get("listings") or [])
+    out["area_label"] = res.get("area_label", "")
+    return out
+
+
+@app.get("/api/watches")
+def watches_list():
+    return [watches_db.summary(w) for w in watches_db.list_watches()]
+
+
+@app.post("/api/watches")
+def watches_create(payload: dict = Body(...)):
+    if not (payload.get("location") or "").strip():
+        raise HTTPException(400, "location required (ville, zip ou état)")
+    w = watches_db.create(payload)
+    return watches_db.summary(w)
+
+
+@app.delete("/api/watches/{watch_id}")
+def watches_delete(watch_id: str):
+    if not watches_db.delete(watch_id):
+        raise HTTPException(404, "Watch not found")
+    return {"ok": True}
+
+
+@app.post("/api/watches/{watch_id}/run")
+def watches_run(watch_id: str):
+    if not ai_research.is_configured():
+        raise HTTPException(400, "AI not configured. Add an Anthropic API key in Settings → AI.")
+    return _run_watch(watch_id)
+
+
+@app.post("/api/watches/run-stale")
+def watches_run_stale(payload: dict = Body(default={})):
+    """Kick stale watches (last_run older than max_age_h) in a background
+    thread — called on app open so the veille refreshes itself daily without a
+    server-side cron (Render free tier sleeps). Bounded to `limit` watches."""
+    import threading
+    from datetime import datetime as dt, timedelta, timezone as tz
+    if not ai_research.is_configured():
+        return {"ok": True, "started": []}
+    try:
+        max_age_h = float(payload.get("max_age_h") or 20)
+        limit = max(1, min(int(payload.get("limit") or 3), 5))
+    except (TypeError, ValueError):
+        max_age_h, limit = 20.0, 3
+    cutoff = dt.now(tz.utc) - timedelta(hours=max_age_h)
+    stale = []
+    for w in watches_db.list_watches():
+        lr = w.get("last_run")
+        try:
+            fresh = lr and dt.fromisoformat(lr) > cutoff
+        except ValueError:
+            fresh = False
+        if not fresh:
+            stale.append(w["id"])
+    started = stale[:limit]
+    for wid in started:
+        threading.Thread(target=_run_watch, args=(wid,), daemon=True).start()
+    return {"ok": True, "started": started, "stale_total": len(stale)}
 
 
 @app.post("/api/batch/start")

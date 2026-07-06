@@ -562,6 +562,19 @@ kbd {
   background: linear-gradient(135deg, var(--card) 0%, rgba(31, 203, 137, 0.04) 100%);
 }
 
+/* ============== ZILLOW WATCH ============== */
+.watch-event {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 4px;
+  border-bottom: 1px solid var(--border);
+}
+.watch-event:last-child { border-bottom: none; }
+.watch-event-main { flex: 1; min-width: 0; }
+.watch-event-title { font-weight: 600; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.watch-event-sub { font-size: 12px; color: var(--muted); }
+
 /* ============== NEIGHBORHOOD MAP ============== */
 .comp-pill {
   background: rgba(17, 17, 17, 0.92);

@@ -870,6 +870,42 @@
       <div id="search-results"></div>
     </section>
 
+    <!-- ============ ZILLOW WATCH (veille) ============ -->
+    <section id="view-watch" class="view">
+      <header class="page-header">
+        <div class="page-header-text">
+          <div class="page-eyebrow">Sourcing</div>
+          <h2>🔭 Veille Zillow</h2>
+          <p>Définis tes critères une fois — la veille relance la recherche, mémorise ce qu'elle a vu et te signale les <strong>🆕 nouveautés</strong>, <strong>📉 baisses de prix</strong> et <strong>❌ biens partis</strong>.</p>
+        </div>
+      </header>
+
+      <div class="card hero-card">
+        <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+          <label style="flex:1; min-width:200px;">Ville / zip / état
+            <input id="watch-location" type="text" placeholder="Cleveland, OH · 44105 · Ohio">
+          </label>
+          <label style="width:120px;">Prix max ($) <input id="watch-pricemax" type="number" placeholder="—"></label>
+          <label style="width:90px;">Ch. min <input id="watch-bedsmin" type="number" placeholder="—"></label>
+          <label style="width:150px;">Type
+            <select id="watch-type">
+              <option value="">Tous</option>
+              <option value="Single Family Residence">Maison</option>
+              <option value="Multi-family / Duplex">Multi / Duplex</option>
+            </select>
+          </label>
+          <label style="width:90px;">Suivre
+            <select id="watch-count"><option value="15" selected>15</option><option value="10">10</option><option value="20">20</option><option value="30">30</option></select>
+          </label>
+          <button class="btn primary" id="watch-create">➕ Créer la veille</button>
+        </div>
+        <p class="muted" style="font-size:12px; margin:8px 0 0;">Chaque actualisation = 1 recherche IA (~$0.20-0.40). Les veilles de plus de 20 h se relancent automatiquement à l'ouverture de l'app.</p>
+        <div id="watch-status" class="status-line" style="margin-top:8px;"></div>
+      </div>
+
+      <div id="watch-list"></div>
+    </section>
+
     <!-- ============ AUCTION ASSISTANT ============ -->
     <section id="view-auction" class="view">
       <header class="page-header">

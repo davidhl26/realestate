@@ -166,11 +166,13 @@
   // Grouped nav: several views live under one sidebar entry, shown via a
   // sub-tab strip (keeps the working views intact, just collapses the nav).
   const _VIEW_GROUP = { add: "sourcing", search: "sourcing", batch: "sourcing",
+                        watch: "sourcing",
                         auction: "auctions", skiptrace: "auctions" };
   const _GROUP_TABS = {
     sourcing: [
       { v: "add", label: "➕ Adresse / URL / PDF" },
       { v: "search", label: "🔎 Recherche par zone" },
+      { v: "watch", label: "🔭 Veille" },
       { v: "batch", label: "📚 Import en masse" },
     ],
     auctions: [
@@ -210,6 +212,7 @@
     if (name === "skiptrace") refreshSkipTraceView();
     if (name === "usamap") refreshUsaMapView();
     if (name === "auction" && typeof renderWatchlist === "function") setTimeout(renderWatchlist, 50);
+    if (name === "watch" && typeof refreshWatchView === "function") setTimeout(refreshWatchView, 50);
     if (name === "add") {
       // Entering the form defaults to a NEW deal. The edit flow re-binds
       // formDealId to the edited deal AFTER calling showView("add").
@@ -2972,6 +2975,119 @@
     _renderSavedSearches(); toast("Recherche enregistrée", "success");
   });
   _renderSavedSearches();
+
+  // ============== ZILLOW WATCH (veille) ==============
+  async function refreshWatchView() {
+    const box = $("#watch-list"); if (!box) return;
+    let watches = [];
+    try { watches = await API.watchesList(); }
+    catch (e) { box.innerHTML = `<div class="card">${escape(e.message)}</div>`; return; }
+    if (!state.deals || !state.deals.length) { try { state.deals = await API.listDeals(); } catch {} }
+    if (!watches.length) {
+      box.innerHTML = `<div class="card"><p class="muted" style="margin:0;">Aucune veille. Crée la première ci-dessus — ex. « Cleveland, OH » sous $120K.</p></div>`;
+      return;
+    }
+    const D = v => (v == null || v === "") ? "—" : "$" + Number(v).toLocaleString("en-US");
+    const ago = ts => {
+      if (!ts) return "jamais";
+      const h = Math.round((Date.now() - new Date(ts).getTime()) / 3600000);
+      return h < 1 ? "il y a <1 h" : h < 48 ? `il y a ${h} h` : `il y a ${Math.round(h / 24)} j`;
+    };
+    const evBadge = {
+      new: '<span class="pill green">🆕 NOUVEAU</span>',
+      price_drop: '<span class="pill yellow">📉 BAISSE</span>',
+      gone: '<span class="pill gray">❌ PARTI</span>',
+    };
+    box.innerHTML = watches.map(w => {
+      const crit = [w.price_max ? "< " + D(w.price_max) : "", w.beds_min ? w.beds_min + "ch+" : "",
+                    w.property_type || ""].filter(Boolean).join(" · ");
+      const events = (w.events || []).slice(0, 25).map((e, i) => {
+        const price = e.type === "price_drop"
+          ? `<s class="muted">${D(e.old_price)}</s> → <strong>${D(e.price)}</strong> <span style="color:var(--green); font-weight:700;">(−${D(e.drop)})</span>`
+          : D(e.price);
+        const ob = _onBoard(e.address);
+        return `<div class="watch-event">
+          ${evBadge[e.type] || ""}
+          <div class="watch-event-main">
+            <div class="watch-event-title">${escape(e.address || "?")}</div>
+            <div class="watch-event-sub">${price}${e.beds ? ` · ${e.beds}bd${e.sqft ? " · " + e.sqft + " sf" : ""}` : ""} · ${escape(String(e.ts || "").slice(0, 10))}</div>
+          </div>
+          ${e.url ? `<a class="btn ghost" href="${escape(e.url)}" target="_blank" rel="noopener" style="font-size:11px;">Zillow ↗</a>` : ""}
+          ${e.type !== "gone" ? `<button class="btn ${ob ? "" : "ghost"} watch-add" data-w="${escape(w.id)}" data-i="${i}" ${ob ? "disabled" : ""} style="font-size:11px;">${ob ? "✓ Board" : "+ Board"}</button>` : ""}
+        </div>`;
+      }).join("");
+      return `<div class="card" style="margin-bottom:14px;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap;">
+          <div>
+            <div style="font-weight:700; font-size:15px;">🔭 ${escape(w.label || w.location)}</div>
+            <div class="muted" style="font-size:12px;">${escape(crit)}${crit ? " · " : ""}${w.tracked} bien(s) suivis · actualisée ${ago(w.last_run)} · ${w.run_count} run(s)</div>
+          </div>
+          <div style="display:flex; gap:6px;">
+            <button class="btn primary watch-run" data-id="${escape(w.id)}" style="font-size:12px;">🔄 Actualiser</button>
+            <button class="btn ghost watch-del" data-id="${escape(w.id)}" style="font-size:12px;">🗑</button>
+          </div>
+        </div>
+        <div style="margin-top:10px;">${events || '<p class="muted" style="font-size:13px;">Pas encore d\'événements — clique « Actualiser » pour le premier passage.</p>'}</div>
+      </div>`;
+    }).join("");
+
+    box.querySelectorAll(".watch-run").forEach(b => b.addEventListener("click", async () => {
+      b.disabled = true; b.innerHTML = '<span class="spinner"></span> IA…';
+      try {
+        const r = await API.watchRun(b.dataset.id);
+        if (!r.ok) { toast(r.error || "Échec", "error"); }
+        else toast(`✓ ${r.found} annonce(s) — ${r.new} nouveauté(s), ${r.price_drops} baisse(s)${r.gone ? ", " + r.gone + " parti(s)" : ""}`, "success");
+        refreshWatchView();
+      } catch (e) { toast(e.message, "error"); b.disabled = false; b.textContent = "🔄 Actualiser"; }
+    }));
+    box.querySelectorAll(".watch-del").forEach(b => b.addEventListener("click", async () => {
+      if (!confirm("Supprimer cette veille (et son historique) ?")) return;
+      try { await API.watchDelete(b.dataset.id); refreshWatchView(); } catch (e) { toast(e.message, "error"); }
+    }));
+    box.querySelectorAll(".watch-add").forEach(b => b.addEventListener("click", async () => {
+      const w = watches.find(x => x.id === b.dataset.w);
+      const e = (w?.events || [])[+b.dataset.i];
+      if (!e) return;
+      b.disabled = true; b.textContent = "…";
+      try {
+        const full = [e.address, e.city, `${e.state || ""} ${e.zip || ""}`.trim()].filter(s => s && s.trim()).join(", ") || e.address;
+        const r = await API.createDeal({
+          address: full, city: e.city || "", state: e.state || "", zip: String(e.zip || ""),
+          beds: e.beds || null, baths: e.baths || null, sqft: e.sqft || null, year_built: e.year_built || null,
+          purchase_price: e.price || 0, arv_base: e.arv_estimate || 0, rehab_base: e.rehab_estimate || 0,
+          arv_confidence: "Low", source: "watch", source_url: e.url || "", status: "evaluating",
+          notes: `[Veille Zillow — ${w.label || w.location}]` + (e.type === "price_drop" ? `\nBaisse de prix: −$${Number(e.drop).toLocaleString("en-US")}` : ""),
+        });
+        (state.deals = state.deals || []).push(r.deal || r);
+        b.textContent = "✓ Board"; toast("Deal ajouté", "success");
+      } catch (err) {
+        b.disabled = false; b.textContent = "+ Board";
+        toast(err.message, "error");
+      }
+    }));
+  }
+  $("#watch-create")?.addEventListener("click", async () => {
+    const loc = ($("#watch-location")?.value || "").trim();
+    if (!loc) { toast("Entre une ville, un zip ou un état", "warn"); return; }
+    const p = { location: loc, max_listings: Number($("#watch-count")?.value) || 15 };
+    const n = id => { const v = Number($(id)?.value); return v > 0 ? v : null; };
+    if (n("#watch-pricemax")) p.price_max = n("#watch-pricemax");
+    if (n("#watch-bedsmin")) p.beds_min = n("#watch-bedsmin");
+    if ($("#watch-type")?.value) p.property_type = $("#watch-type").value;
+    const st = $("#watch-status");
+    try {
+      const w = await API.watchCreate(p);
+      $("#watch-location").value = "";
+      if (st) st.textContent = "✓ Veille créée — premier passage en cours…";
+      refreshWatchView();
+      // First run right away so the watch starts with a baseline.
+      try { await API.watchRun(w.id); } catch {}
+      if (st) st.textContent = "✓ Veille créée et initialisée.";
+      refreshWatchView();
+    } catch (e) { toast(e.message, "error"); }
+  });
+  // Kick stale watches (>20 h) in the background at app open — the "veille".
+  setTimeout(() => { API.watchesRunStale?.().catch(() => {}); }, 4000);
 
   // ============== AUCTION ASSISTANT ==============
   let _aucLast = null;  // last analysis result
