@@ -1427,15 +1427,29 @@
         (r.comps || []).forEach(c => {
           pts.push([c.lat, c.lng]);
           const isComp = c.source !== "sold";
+          // Zillow link: real listing URL when we have one, else Zillow's
+          // address-search URL which lands on the property page.
+          const zUrl = c.url && /^https?:/.test(c.url) ? c.url
+            : "https://www.zillow.com/homes/" + encodeURIComponent(c.address || "") + "_rb/";
+          const ppsf = (c.price && c.sqft) ? Math.round(Number(c.price) / Number(c.sqft)) : null;
+          const deltaArv = (c.price && s.arv) ? Number(c.price) - Number(s.arv) : null;
+          const explain = isComp
+            ? "💡 Comparable retenu pour estimer ton ARV (vente similaire proche)."
+            : "💡 Vente récente du quartier — donne le niveau de prix du marché autour.";
           L.marker([c.lat, c.lng], { icon: L.divIcon({
               className: "", iconAnchor: [22, 13],
               html: `<div class="comp-pill${isComp ? " comp-hl" : ""}">${K(c.price)}</div>` }) })
             .addTo(pinLayer)
             .bindPopup(`<strong>${escape(c.address || "?")}</strong><br>` +
-              `${c.price ? (c.source === "sold" ? "Vendu: $" : "Comparable: $") + Number(c.price).toLocaleString("en-US") : ""}` +
-              `${c.beds ? `<br>${c.beds}bd${c.baths ? "/" + c.baths + "ba" : ""}${c.sqft ? " · " + c.sqft + " sf" : ""}` : ""}` +
-              `${c.date ? `<br>${escape(String(c.date))}` : ""}` +
-              `${c.distance_mi ? `<br>à ${Number(c.distance_mi).toFixed(1)} mi` : ""}`);
+              `${c.price ? (c.source === "sold" ? "Vendu : <strong>$" : "Comparable : <strong>$") + Number(c.price).toLocaleString("en-US") + "</strong>" : ""}` +
+              `${c.date ? ` · ${escape(String(c.date))}` : ""}` +
+              `${c.beds ? `<br>${c.beds}ch${c.baths ? "/" + c.baths + "sdb" : ""}${c.sqft ? " · " + Number(c.sqft).toLocaleString("en-US") + " sf" : ""}` : ""}` +
+              `${ppsf ? `<br>≈ <strong>$${ppsf}/sqft</strong>` : ""}` +
+              `${deltaArv != null ? `<br>vs ton ARV ($${Math.round(s.arv / 1000)}K) : <strong style="color:${deltaArv >= 0 ? "#0fae6f" : "#e05353"};">${deltaArv >= 0 ? "+" : "−"}$${Math.abs(Math.round(deltaArv / 1000))}K</strong>` : ""}` +
+              `${c.distance_mi ? `<br>à ${Number(c.distance_mi).toFixed(1)} mi du bien` : ""}` +
+              `<br><span style="font-size:11px; color:#667;">${explain}</span>` +
+              `<br><a href="${zUrl}" target="_blank" rel="noopener" style="display:inline-block; margin-top:6px; font-weight:700;">Voir sur Zillow ↗</a>`,
+              { maxWidth: 280 });
         });
         // Initial framing: the immediate neighborhood (like Zillow), not the
         // whole town — farther pins stay on the map when zooming out.
@@ -6042,6 +6056,79 @@
       const badge = $("#nav-crm-count");
       if (badge) badge.textContent = _kanbanLeadsCache.length || "";
     } catch (e) { toast(e.message, "error"); }
+    try { await renderDealsPipeline(); } catch (e) { console.error("deals pipeline", e); }
+  }
+
+  // ============== DEALS PIPELINE (track deals to closing) ==============
+  const _DP_COLS = [
+    ["evaluating", "🔎 En évaluation", "#3b82f6"],
+    ["under_contract", "📝 Sous contrat", "#f59e0b"],
+    ["closed", "✅ Closé", "#10b981"],
+    ["sold", "💰 Revendu", "#8b5cf6"],
+    ["passed", "⛔ Passé", "#9ca3af"],
+  ];
+  async function renderDealsPipeline() {
+    const host = $("#deals-pipeline"); if (!host) return;
+    let deals = [];
+    try { deals = await API.listDeals(); state.deals = deals; }
+    catch (e) { host.innerHTML = `<p class="muted">${escape(e.message)}</p>`; return; }
+    if (!deals.length) {
+      host.innerHTML = `<p class="muted" style="font-size:13px; margin:0;">Aucun deal — ajoute-en depuis Sourcing.</p>`;
+      return;
+    }
+    const D = v => (v == null || v === "") ? "—" : "$" + Math.round(Number(v) / 1000) + "K";
+    host.innerHTML = `<div class="dp-cols">${_DP_COLS.map(([key, label, color]) => {
+      const items = deals.filter(d => (d.status || "evaluating") === key);
+      const cards = items.map(d => `
+        <div class="dp-card" data-id="${escape(d.id)}">
+          <div class="dp-card-top">
+            <span class="dp-addr" data-open="${escape(d.id)}" title="Ouvrir le deal">${escape(d.address || "?")}</span>
+            ${riskBadge(d)}
+          </div>
+          <div class="dp-meta">
+            🎯 ${D(d.max_offer)}${d.max_offer_blocked ? " ⛔" : ""} · profit ${D(d.net_profit)}
+          </div>
+          <select class="dp-status" data-id="${escape(d.id)}" title="Changer le statut">
+            ${_DP_COLS.map(([k, l]) => `<option value="${k}" ${k === key ? "selected" : ""}>${l}</option>`).join("")}
+          </select>
+          ${key === "under_contract" ? `
+            <label class="dp-close-label">Closing prévu
+              <input type="date" class="dp-closing" data-id="${escape(d.id)}" value="${escape(d.closing_date || "")}">
+            </label>
+            ${(d.deal_breakers && d.deal_breakers.length) ? `<div class="dp-warn">⛔ ${d.deal_breakers.length} deal-breaker(s) non levé(s)</div>` : ""}` : ""}
+        </div>`).join("");
+      return `<div class="dp-col">
+        <div class="dp-col-head" style="border-top:3px solid ${color};">${label} <span class="dp-count">${items.length}</span></div>
+        ${cards || '<div class="dp-empty">—</div>'}
+      </div>`;
+    }).join("")}</div>`;
+
+    // Open deal on address click
+    host.querySelectorAll("[data-open]").forEach(el =>
+      el.addEventListener("click", () => openDeal(el.dataset.open)));
+    // Direct status change (with a risk gate before committing)
+    host.querySelectorAll(".dp-status").forEach(sel => sel.addEventListener("change", async () => {
+      const id = sel.dataset.id;
+      const target = sel.value;
+      const deal = deals.find(x => x.id === id);
+      const engaging = ["under_contract", "closed"].includes(target);
+      if (engaging && deal && deal.deal_breakers && deal.deal_breakers.length) {
+        const ok = confirm(`⛔ « ${deal.address} » a ${deal.deal_breakers.length} deal-breaker(s) NON levé(s) :\n\n- ${deal.deal_breakers.join("\n- ")}\n\nT'engager quand même sur « ${target === "under_contract" ? "sous contrat" : "closé"} » ?`);
+        if (!ok) { renderDealsPipeline(); return; }
+      }
+      try {
+        await API.patchDeal(id, { status: target });
+        toast(`Statut → ${target}`, "success");
+        renderDealsPipeline();
+      } catch (e) { toast(e.message, "error"); renderDealsPipeline(); }
+    }));
+    // Closing date persist
+    host.querySelectorAll(".dp-closing").forEach(inp => inp.addEventListener("change", async () => {
+      try {
+        await API.patchDeal(inp.dataset.id, { closing_date: inp.value || null });
+        toast(inp.value ? `Closing prévu le ${inp.value}` : "Date de closing retirée", "success");
+      } catch (e) { toast(e.message, "error"); }
+    }));
   }
 
   // ============== LEADS KANBAN ==============
