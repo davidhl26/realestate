@@ -751,6 +751,7 @@
               <span class="score-badge" style="background:${scoreColor(d.score)}">${d.score}</span>
               <span class="pill ${signalPillClass(d.signal)}">${escape(d.signal)}</span>
               ${riskBadge(d)}
+              ${d.ai_auto === "running" ? '<span class="pill yellow" title="Analyse automatique en cours (ARV/photos)">🤖…</span>' : ""}
             </div>
           </div>
           <div class="deal-card-body">
@@ -814,6 +815,14 @@
       });
     });
     _attachCardDomEdit(container);
+    // While an auto-analysis runs, poll once every 10 s so the 🤖 badge clears
+    // and ARV/max-offer appear without a manual refresh.
+    clearTimeout(window._aiAutoTimer);
+    if (deals.some(d => d.ai_auto === "running")) {
+      window._aiAutoTimer = setTimeout(() => {
+        if ($("#view-deals")?.classList.contains("active")) refreshDeals();
+      }, 10000);
+    }
     // Per-card delete buttons
     $$(".deal-card-delete", container).forEach(btn => {
       btn.addEventListener("click", async e => {
@@ -4047,6 +4056,14 @@
         ? `Configured (${cfg.key_preview}) — re-enter to update`
         : "sk-ant-...";
       $("#ai-model-input").value = cfg.model || "claude-opus-4-7";
+      const ar = $("#ai-auto-research");
+      if (ar) {
+        ar.checked = cfg.auto_research !== false;
+        ar.onchange = async () => {
+          try { await API.saveAiConfig({ auto_research: ar.checked }); toast(ar.checked ? "Auto-analyse activée" : "Auto-analyse désactivée", "success"); }
+          catch (e) { toast(e.message, "error"); }
+        };
+      }
       $("#ai-status").textContent = cfg.configured
         ? `✓ Configured with ${cfg.model || 'claude-opus-4-7'}`
         : "Not configured — AI ARV research is disabled.";

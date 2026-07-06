@@ -47,6 +47,8 @@ PDF_DIR = DATA_DIR / "pdfs"
 PDF_DIR.mkdir(parents=True, exist_ok=True)
 DOCS_DIR = DATA_DIR / "deal-docs"   # uploaded per-deal documents (inspections…)
 DOCS_DIR.mkdir(parents=True, exist_ok=True)
+PHOTOS_DIR = DATA_DIR / "deal-photos"   # locally archived listing photos
+PHOTOS_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_DIR / "flip-board.json"
 COOKIE_STORE = DATA_DIR / "auth-cookies.json"
 
@@ -217,6 +219,78 @@ def _current_dom(deal: dict):
     return val
 
 
+def _auto_enrich_deal(deal_id: str, do_ai: bool = True):
+    """Background worker run after create: archive photos locally, then fill
+    missing ARV (and rehab) via AI so the price/risk engines never sit on
+    zeros. Progress is tracked on deal.ai_auto ('running'→'done'/'error')."""
+    import threading  # noqa: F401  (documents intent; thread started by caller)
+    d = db.get_deal(deal_id)
+    if not d:
+        return
+    try:
+        d["ai_auto"] = "running"
+        db.upsert_deal(d)
+
+        # 1) Photos: copy remote gallery to local storage (free, no AI).
+        try:
+            from . import photo_store
+            if photo_store.archive_deal_photos(d, PHOTOS_DIR):
+                db.upsert_deal(d)
+        except Exception:
+            log.exception("photo archive failed for %s", deal_id)
+
+        # 2) ARV via AI when missing.
+        if do_ai and not (d.get("arv_base") or 0):
+            r = ai_research.research_arv(d)
+            if r.get("ok") and r.get("arv_base"):
+                d["arv_base"] = r["arv_base"]
+                if r.get("arv_low"):  d["arv_low"] = r["arv_low"]
+                if r.get("arv_high"): d["arv_high"] = r["arv_high"]
+                d["arv_confidence"] = r.get("confidence", "Low")
+                insights = d.get("ai_insights") or {}
+                insights["arv"] = {"ok": True, "result": r, "auto": True}
+                d["ai_insights"] = insights
+
+        # 3) Rehab via AI when missing (only if we now have an ARV to price against).
+        if do_ai and (d.get("arv_base") or 0) and not (d.get("rehab_base") or 0):
+            rr = ai_research.estimate_rehab(d)
+            if rr.get("ok") and rr.get("items"):
+                total = sum(int(it.get("cost") or 0) for it in rr["items"])
+                d["rehab_base"] = int(round(total * 1.15))
+                d["rehab_items"] = rr["items"]
+                d["rehab_contingency_pct"] = 15
+
+        m = analyzer.compute_metrics(d)
+        score, grade, signal = analyzer.compute_score(d, m)
+        d["score"], d["grade"], d["signal"] = score, grade, signal
+        _apply_risk(d, m)
+        d["ai_auto"] = "done"
+        db.upsert_deal(d)
+    except Exception as e:
+        log.exception("auto-enrich failed for %s", deal_id)
+        try:
+            d = db.get_deal(deal_id)
+            if d:
+                d["ai_auto"] = f"error: {str(e)[:120]}"
+                db.upsert_deal(d)
+        except Exception:
+            pass
+
+
+def _maybe_spawn_auto_enrich(deal: dict):
+    """Fire the enrich worker for a fresh deal when useful: photos always (if a
+    remote gallery exists), AI only when ARV is missing AND auto_research is on."""
+    import threading
+    needs_photos = any(str(u).startswith("http") for u in (deal.get("image_gallery") or []))
+    cfg = ai_research.read_config()
+    auto_ai = cfg.get("auto_research", True) and ai_research.is_configured()
+    needs_ai = auto_ai and not (deal.get("arv_base") or 0)
+    if not (needs_photos or needs_ai):
+        return
+    threading.Thread(target=_auto_enrich_deal, args=(deal["id"], needs_ai),
+                     daemon=True).start()
+
+
 def _apply_risk(deal: dict, m: dict) -> dict:
     """Run the deterministic safety screen and persist its fields on the deal."""
     risk = analyzer.assess_risk(deal, m)
@@ -276,6 +350,7 @@ def list_deals():
                 "max_offer": offer["max_offer"],
                 "max_offer_blocked": bool(risk["deal_breakers"]),
                 "max_offer_gap": offer["gap_vs_price"],
+                "ai_auto": d.get("ai_auto"),
                 "city": d.get("city", ""),
                 "state": d.get("state", ""),
                 "beds": d.get("beds"),
@@ -343,6 +418,7 @@ def create_deal(deal: dict = Body(...)):
     _apply_risk(deal, m)
     _set_dom_anchor(deal)
     saved = db.upsert_deal(deal)
+    _maybe_spawn_auto_enrich(saved)   # photos + missing-ARV research, in background
     return _enrich(saved)
 
 
@@ -433,6 +509,30 @@ def refresh_deal(deal_id: str, payload: dict = Body(default={})):
         "sale_comps": len(updates.get("sale_comparables", [])),
         "rent_comps": len(updates.get("rent_comparables", [])),
     }
+
+
+@app.post("/api/deals/archive-photos")
+def archive_all_photos(payload: dict = Body(default={})):
+    """Migrate remote photo galleries to local storage, `limit` deals per call
+    (call repeatedly until remaining=0). Free, no AI."""
+    from . import photo_store
+    try:
+        limit = max(1, min(int(payload.get("limit") or 5), 20))
+    except (TypeError, ValueError):
+        limit = 5
+    deals = db.list_deals()
+    pending = [d for d in deals
+               if any(str(u).startswith("http") for u in (d.get("image_gallery") or []))]
+    done = []
+    for d in pending[:limit]:
+        try:
+            if photo_store.archive_deal_photos(d, PHOTOS_DIR):
+                db.upsert_deal(d)
+                done.append(d["id"])
+        except Exception:
+            log.exception("archive failed for %s", d.get("id"))
+    return {"ok": True, "archived": done,
+            "remaining": max(0, len(pending) - limit)}
 
 
 @app.post("/api/deals/refresh-dom")
@@ -2020,6 +2120,7 @@ def ai_config_get():
         "configured": bool(key),
         "key_preview": MASK if key else "",
         "model": cfg.get("model", "claude-opus-4-7"),
+        "auto_research": cfg.get("auto_research", True),
         "source": source,
         "maps_configured": bool(maps_key),
         "maps_key_preview": MASK if maps_key else "",
@@ -2039,6 +2140,8 @@ def ai_config_set(payload: dict = Body(...)):
         cfg["google_maps_key"] = (payload["google_maps_key"] or "").strip()
     if "scraper_api_key" in payload:
         cfg["scraper_api_key"] = (payload["scraper_api_key"] or "").strip()
+    if "auto_research" in payload:
+        cfg["auto_research"] = bool(payload["auto_research"])
     ai_research.write_config(cfg)
     return {"ok": True}
 
@@ -2544,6 +2647,9 @@ class NoCacheMiddleware(BaseHTTPMiddleware):
 
 app.add_middleware(NoCacheMiddleware)
 
+
+# Locally archived deal photos (mounted before "/" so it wins).
+app.mount("/deal-photos", StaticFiles(directory=str(PHOTOS_DIR)), name="deal-photos")
 
 # Mount static frontend last so /api routes take precedence.
 if FRONTEND_DIR.exists():
