@@ -739,9 +739,9 @@
     const container = $("#deals-cards-container");
     if (!deals.length) {
       container.innerHTML = `<div class="card empty">
-        <div class="empty-ico">🔍</div>
-        <h3>No deals match</h3>
-        <p>Try a different search, or add a new deal.</p>
+        <img src="/img/empty-state.png" alt="" style="width:150px; height:150px; object-fit:contain; margin:0 auto 6px; display:block; opacity:.92;">
+        <h3>Aucun deal ici</h3>
+        <p>Change ta recherche ou ajoute un deal via Sourcing.</p>
       </div>`;
       return;
     }

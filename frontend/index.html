@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Flip Board</title>
+  <link rel="icon" type="image/png" href="/img/logo.png">
   <link rel="stylesheet" href="/css/style.css">
   <link rel="stylesheet" href="/css/leaflet.css">
   <script src="/js/leaflet.js"></script>
@@ -12,16 +13,20 @@
 <body>
   <!-- Login overlay (shown only when the app is password-protected) -->
   <div id="login-overlay" style="display:none; position:fixed; inset:0; z-index:9999;
-       background:linear-gradient(160deg,#0d3b5e,#13507e 60%,#1f7e8f);
-       align-items:center; justify-content:center;">
-    <form id="login-form" style="background:#fff; border-radius:16px; padding:32px 30px; width:340px;
-         box-shadow:0 20px 60px rgba(0,0,0,.35); text-align:center;">
-      <div style="font-family:Georgia,serif; font-size:24px; font-weight:700; color:#0d3b5e;">Flip Board</div>
-      <p style="color:#5b7384; font-size:13px; margin:6px 0 18px;">Entre le mot de passe pour accéder.</p>
+       background:#0b1118 url('/img/login-bg.jpg') center/cover no-repeat;
+       align-items:center; justify-content:flex-start;">
+    <div style="position:absolute; inset:0; background:linear-gradient(90deg, rgba(8,13,20,.88) 0%, rgba(8,13,20,.55) 45%, rgba(8,13,20,.15) 100%);"></div>
+    <form id="login-form" style="position:relative; margin-left:clamp(16px, 8vw, 120px);
+         background:rgba(13,20,30,.72); backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+         border:1px solid rgba(255,255,255,.08); border-radius:20px; padding:38px 34px; width:360px; max-width:calc(100vw - 32px);
+         box-shadow:0 30px 80px rgba(0,0,0,.55); text-align:center;">
+      <img src="/img/logo.png" alt="Flip Board" style="width:76px; height:76px; border-radius:20px; margin-bottom:12px; box-shadow:0 8px 24px rgba(31,203,137,.25);">
+      <div style="font-size:26px; font-weight:800; letter-spacing:-.02em; color:#fff;">Flip Board</div>
+      <p style="color:rgba(255,255,255,.55); font-size:13px; margin:6px 0 20px;">Trouve. Vérifie. Offre le bon prix.</p>
       <input id="login-password" type="password" placeholder="Mot de passe" autocomplete="current-password"
-             style="width:100%; padding:11px 13px; border:1px solid #d7e0e7; border-radius:10px; font-size:14px;">
-      <div id="login-error" style="color:#e76f51; font-size:12px; min-height:16px; margin:8px 0;"></div>
-      <button type="submit" class="btn primary" style="width:100%; justify-content:center;">Entrer</button>
+             style="width:100%; padding:12px 14px; border:1px solid rgba(255,255,255,.15); background:rgba(255,255,255,.07); color:#fff; border-radius:12px; font-size:14px; outline:none;">
+      <div id="login-error" style="color:#ff8f73; font-size:12px; min-height:16px; margin:8px 0;"></div>
+      <button type="submit" class="btn primary" style="width:100%; justify-content:center; padding:12px; font-size:14.5px;">Entrer</button>
     </form>
   </div>
 
@@ -36,8 +41,8 @@
 
   <aside class="sidebar">
     <div class="brand">
-      <div class="brand-mark">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 12l9-9 9 9-9 9-9-9z" stroke-linejoin="round"/><path d="M3 12h18M12 3v18" stroke-linecap="round" opacity="0.5"/></svg>
+      <div class="brand-mark brand-logo">
+        <img src="/img/logo.png" alt="Flip Board">
       </div>
       <div class="brand-text">
         <h1>Flip Board</h1>
