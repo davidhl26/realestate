@@ -511,6 +511,109 @@ def refresh_deal(deal_id: str, payload: dict = Body(default={})):
     }
 
 
+def _geocode(address: str) -> Optional[tuple]:
+    """Address → (lat, lng). Google Geocoding when a Maps key is configured,
+    else free Nominatim (OSM). Returns None on failure."""
+    import httpx as _httpx
+    if not address or len(address.strip()) < 8:
+        return None
+    key = ai_research.get_maps_key()
+    try:
+        if key:
+            r = _httpx.get("https://maps.googleapis.com/maps/api/geocode/json",
+                           params={"address": address, "key": key}, timeout=12)
+            js = r.json()
+            if js.get("results"):
+                loc = js["results"][0]["geometry"]["location"]
+                return (loc["lat"], loc["lng"])
+        else:
+            r = _httpx.get("https://nominatim.openstreetmap.org/search",
+                           params={"q": address, "format": "json", "limit": 1,
+                                   "countrycodes": "us"},
+                           headers={"User-Agent": "flip-board/1.0"}, timeout=12)
+            js = r.json()
+            if js:
+                return (float(js[0]["lat"]), float(js[0]["lon"]))
+    except Exception as e:
+        log.warning("geocode failed for %s: %s", address[:50], str(e)[:80])
+    return None
+
+
+@app.get("/api/deals/{deal_id}/comps-map")
+def deal_comps_map(deal_id: str):
+    """Subject + comparables with coordinates for the neighborhood map.
+
+    Gathers comps from sale_comparables and the AI ARV research, geocodes the
+    ones missing lat/lng (results cached on the deal in comps_geo), and
+    returns pins ready to plot."""
+    import time as _time
+    d = db.get_deal(deal_id)
+    if not d:
+        raise HTTPException(404, "Deal not found")
+    if not (d.get("lat") and d.get("lng")):
+        # Try to geocode the subject itself once.
+        loc = _geocode(d.get("address", ""))
+        if loc:
+            d["lat"], d["lng"] = loc
+            db.upsert_deal(d)
+        else:
+            return {"ok": False, "error": "Pas de coordonnées pour ce bien "
+                    "(adresse non géocodable)."}
+
+    # Collect comps: scraped first, then AI ARV comps.
+    raw = []
+    for c in (d.get("sale_comparables") or []):
+        raw.append({"address": c.get("address"), "price": c.get("price"),
+                    "beds": c.get("beds"), "baths": c.get("baths"),
+                    "sqft": c.get("sqft"), "date": c.get("date"),
+                    "distance_mi": c.get("distance_mi"),
+                    "lat": c.get("lat"), "lng": c.get("lng"), "source": "scrape"})
+    arv_ins = ((d.get("ai_insights") or {}).get("arv") or {}).get("result") or {}
+    for c in (arv_ins.get("comparables") or []):
+        if isinstance(c, dict) and c.get("address"):
+            raw.append({"address": c.get("address"),
+                        "price": c.get("sold_price") or c.get("price"),
+                        "beds": c.get("beds"), "baths": c.get("baths"),
+                        "sqft": c.get("sqft"),
+                        "date": c.get("sold_date") or c.get("date"),
+                        "distance_mi": c.get("distance_mi"),
+                        "lat": c.get("lat"), "lng": c.get("lng"), "source": "ai"})
+
+    # Dedupe by address, geocode missing coords (cached on the deal).
+    cache = d.get("comps_geo") or {}
+    seen, comps, geocoded = set(), [], 0
+    nominatim = not ai_research.get_maps_key()
+    for c in raw:
+        addr = (c.get("address") or "").strip()
+        akey = addr.lower()
+        if not addr or akey in seen:
+            continue
+        seen.add(akey)
+        if not (c.get("lat") and c.get("lng")):
+            if akey in cache:
+                c["lat"], c["lng"] = cache[akey]
+            elif geocoded < 12:   # bound per request
+                loc = _geocode(addr)
+                geocoded += 1
+                if nominatim:
+                    _time.sleep(1.0)   # Nominatim fair-use: 1 req/s
+                if loc:
+                    c["lat"], c["lng"] = loc
+                    cache[akey] = list(loc)
+        if c.get("lat") and c.get("lng"):
+            comps.append(c)
+    if geocoded:
+        d["comps_geo"] = cache
+        db.upsert_deal(d)
+
+    return {"ok": True,
+            "subject": {"lat": d["lat"], "lng": d["lng"],
+                        "address": d.get("address", ""),
+                        "price": d.get("purchase_price"),
+                        "arv": d.get("arv_base"), "image": d.get("image")},
+            "comps": comps}
+
+
 @app.post("/api/deals/archive-photos")
 def archive_all_photos(payload: dict = Body(default={})):
     """Migrate remote photo galleries to local storage, `limit` deals per call

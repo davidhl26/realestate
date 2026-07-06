@@ -40,6 +40,7 @@ const API = (() => {
     deleteDeal: (id) => req("/api/deals/" + encodeURIComponent(id), { method: "DELETE" }),
     aggregates: () => req("/api/board/aggregates"),
     dealsDuplicates: () => req("/api/deals-duplicates"),
+    dealCompsMap: (id) => req("/api/deals/" + encodeURIComponent(id) + "/comps-map"),
     compareDeals: (dealIds, includeVerdict, focus) => req("/api/board/compare",
       { method: "POST", body: JSON.stringify({
         deal_ids: dealIds || [],

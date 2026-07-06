@@ -562,6 +562,35 @@ kbd {
   background: linear-gradient(135deg, var(--card) 0%, rgba(31, 203, 137, 0.04) 100%);
 }
 
+/* ============== NEIGHBORHOOD MAP ============== */
+.comp-pill {
+  background: rgba(17, 17, 17, 0.92);
+  color: #fff;
+  font-weight: 800;
+  font-size: 12px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1.5px solid #fff;
+  box-shadow: 0 1px 4px rgba(0,0,0,.45);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.map-subject-pin {
+  background: var(--accent, #1FCB89);
+  color: #fff;
+  font-weight: 800;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 2px solid #fff;
+  box-shadow: 0 2px 6px rgba(0,0,0,.5);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.map-layer-toggle { display: flex; gap: 6px; }
+#detail-map { z-index: 0; }
+.leaflet-popup-content { font-size: 12.5px; line-height: 1.45; }
+
 /* ============== DASHBOARD COCKPIT ============== */
 .cockpit-grid {
   display: grid;

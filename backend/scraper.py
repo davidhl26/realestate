@@ -864,6 +864,8 @@ def parse_ispeedtolead(url: str) -> dict:
             "price": c.get("price"),
             "date": (c.get("listedDate") or c.get("removedDate") or "")[:10],
             "distance_mi": c.get("distance"),
+            "lat": c.get("latitude"),
+            "lng": c.get("longitude"),
         }
         for c in (comp_obj.get("comparables") or [])[:10]
     ]
