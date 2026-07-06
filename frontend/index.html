@@ -199,6 +199,7 @@
             <option value="newest">🆕 Plus récents</option>
             <option value="risk">🛡 Risque (pires d'abord)</option>
           </select>
+          <button class="btn ghost" id="deals-dup-btn" title="Détecter les adresses en double" style="font-size:13px;">👯 Doublons</button>
           <div class="view-toggle" id="view-toggle">
             <button data-mode="cards" class="active">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
@@ -234,6 +235,8 @@
           Mode sélection
         </button>
       </div>
+
+      <div id="deals-dup-banner" style="display:none;"></div>
 
       <div id="deals-cards-container"></div>
 

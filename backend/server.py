@@ -233,13 +233,21 @@ def _enrich(deal: dict) -> dict:
     score, grade, signal = analyzer.compute_score(deal, m)
     risk = analyzer.assess_risk(deal, m)
     deal["days_on_market"] = _current_dom(deal)  # live value (daily); None hides garbage
+    offer = analyzer.recommended_max_offer(deal, m)
+    offer["blocked"] = bool(risk.get("deal_breakers"))
     return {"deal": deal, "metrics": m, "score": score,
-            "grade": grade, "signal": signal, "risk": risk}
+            "grade": grade, "signal": signal, "risk": risk, "max_offer": offer}
 
 
 @app.get("/api/healthz")
 def healthz():
     return {"ok": True, "deals": len(db.list_deals())}
+
+
+@app.get("/api/deals-duplicates")
+def deals_duplicates():
+    """Groups of deals that look like the same property (loose address key)."""
+    return db.duplicate_groups()
 
 
 @app.get("/api/backups")
@@ -258,12 +266,16 @@ def list_deals():
             m = analyzer.compute_metrics(d)
             score, grade, signal = analyzer.compute_score(d, m)
             risk = analyzer.assess_risk(d, m)
+            offer = analyzer.recommended_max_offer(d, m)
             out.append({
                 "id": d["id"],
                 "address": d.get("address", ""),
                 "risk_grade": risk["risk_grade"],
                 "deal_breakers": risk["deal_breakers"],
                 "risk_flags": risk["risk_flags"],
+                "max_offer": offer["max_offer"],
+                "max_offer_blocked": bool(risk["deal_breakers"]),
+                "max_offer_gap": offer["gap_vs_price"],
                 "city": d.get("city", ""),
                 "state": d.get("state", ""),
                 "beds": d.get("beds"),
@@ -312,6 +324,14 @@ def create_deal(deal: dict = Body(...)):
     # (e.g. quick-insert from Search, then refine).
     if not deal.get("address"):
         raise HTTPException(400, "address is required")
+    # Address dedup: same house number + street name (+zip) as an existing deal
+    # → refuse unless the caller explicitly forces (Add-form dialog).
+    force_dup = bool(deal.pop("force_duplicate", False))
+    if not force_dup and not deal.get("id"):
+        dup = db.find_duplicate(deal["address"])
+        if dup:
+            raise HTTPException(409, f"Doublon possible : « {dup.get('address')} » "
+                                     f"existe déjà sur le board (id: {dup['id']}).")
     if not deal.get("purchase_price"):
         deal["purchase_price"] = 0
     # Auto-compute score/grade/signal so they are stored
@@ -2136,8 +2156,15 @@ def ai_run_all(payload: dict = Body(...)):
         raise HTTPException(404, "Deal not found")
 
     # Independent tasks that can run concurrently (verdict excluded — it depends).
-    INDEPENDENT = ["arv", "rehab", "rent_comps", "neighborhood",
-                   "taxes_insurance", "history", "risks", "photos", "red_flags"]
+    # Default = the buy-decision essentials. rent_comps / neighborhood /
+    # taxes_insurance are opt-in (run them from their tab, or pass
+    # {include: [...]}) — they rarely change a flip decision and each costs a
+    # 30-60s web-search call. Cuts run-all cost/latency roughly in half.
+    INDEPENDENT = ["arv", "rehab", "history", "risks", "photos", "red_flags"]
+    extra = payload.get("include") or []
+    for t in extra:
+        if t in ("rent_comps", "neighborhood", "taxes_insurance") and t not in INDEPENDENT:
+            INDEPENDENT.append(t)
 
     results = {}
     full_outputs = {}

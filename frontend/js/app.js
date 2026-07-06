@@ -773,6 +773,10 @@
               <span class="val">${fmtMoney(d.arv_base)}</span>
             </div>
             <div class="deal-card-row">
+              <span class="label">🎯 Max à offrir</span>
+              <span class="val ${d.max_offer_blocked ? "price-blocked" : ""}" style="font-weight:800; color:${d.max_offer_blocked ? "var(--red)" : "var(--green)"};" title="${d.max_offer_blocked ? "Bloqué — deal-breaker à lever" : (d.max_offer_gap != null ? (d.max_offer_gap >= 0 ? "Marge de " + fmtMoney(d.max_offer_gap) + " sous le prix demandé" : "Demandé " + fmtMoney(-d.max_offer_gap) + " au-dessus de ton max") : "")}">${d.max_offer != null ? fmtMoney(d.max_offer) : "—"}</span>
+            </div>
+            <div class="deal-card-row">
               <span class="label">Net profit (flip)</span>
               <span class="val ${moneyClass(d.net_profit)}">${fmtMoney(d.net_profit, true)}</span>
             </div>
@@ -936,6 +940,31 @@
     renderDeals();
   });
   { const ds = $("#deals-sort"); if (ds) ds.value = state.dealsSort; }
+  // Duplicate detector
+  $("#deals-dup-btn")?.addEventListener("click", async () => {
+    const banner = $("#deals-dup-banner"); if (!banner) return;
+    banner.style.display = "block";
+    banner.innerHTML = `<div class="card"><span class="spinner"></span> Recherche de doublons…</div>`;
+    try {
+      const groups = await API.dealsDuplicates();
+      if (!groups.length) {
+        banner.innerHTML = `<div class="card" style="border-left:3px solid var(--green);">✅ Aucun doublon détecté. <button class="btn ghost" id="dup-close" style="font-size:12px; margin-left:8px;">Fermer</button></div>`;
+      } else {
+        banner.innerHTML = `<div class="card" style="border-left:3px solid #e8a93b;">
+          <strong>👯 ${groups.length} groupe(s) de doublons possibles</strong>
+          ${groups.map(g => `<div style="margin-top:8px; font-size:13px;">${g.map(x =>
+            `<div style="display:flex; gap:8px; align-items:center; padding:2px 0;">
+               <a href="#" data-dup-open="${escape(x.id)}" style="font-weight:600;">${escape(x.address)}</a>
+             </div>`).join("")}</div>`).join("")}
+          <p class="muted" style="font-size:12px; margin:8px 0 0;">Ouvre chaque fiche et supprime celle en trop (bouton Supprimer sur la carte). <button class="btn ghost" id="dup-close" style="font-size:12px;">Fermer</button></p>
+        </div>`;
+      }
+      banner.querySelectorAll("[data-dup-open]").forEach(a => a.addEventListener("click", e => {
+        e.preventDefault(); openDeal(a.dataset.dupOpen);
+      }));
+      banner.querySelector("#dup-close")?.addEventListener("click", () => { banner.style.display = "none"; });
+    } catch (e) { banner.innerHTML = `<div class="card">${escape(e.message)}</div>`; }
+  });
 
   // ----- Bulk selection wiring -----
   $("#deals-toggle-select-mode")?.addEventListener("click", () => _toggleSelectMode());
@@ -1423,6 +1452,12 @@
             <span class="lbl">Rehab <span style="font-weight:500; color:var(--accent); text-transform:none; letter-spacing:0;">🛠 estimer</span></span>
             <span class="val">
               <button class="rehab-open-btn" data-rehab-open="${escape(d.id)}" title="Ouvrir l'estimateur de travaux">${fmtMoney(d.rehab_base)}</button>
+            </span>
+          </div>
+          <div class="detail-hero-stat">
+            <span class="lbl">🎯 Max à offrir ${data.max_offer?.basis === "auction" ? "(enchère)" : ""}</span>
+            <span class="val ${data.max_offer?.blocked ? "price-blocked" : ""}" style="color:${data.max_offer?.blocked ? "var(--red)" : "var(--green)"}; font-weight:800;">
+              ${data.max_offer?.max_offer != null ? fmtMoney(data.max_offer.max_offer) : "—"}
             </span>
           </div>
           <div class="detail-hero-stat">
@@ -2559,7 +2594,7 @@
   // Run full analysis = parallel research tier + verdict (one backend call)
   $("#ai-run-research")?.addEventListener("click", async () => {
     if (!state.currentDealId) return;
-    if (!confirm(`Run the full AI analysis (9 research tasks in parallel + verdict)?\nTakes ~10-20 s. Cost ~$1.50-$2.50 (Opus 4.7).`)) return;
+    if (!confirm(`Analyse complète IA — l'essentiel du flip :\nARV, Rehab, Historique (titre/liens), Risques + Photos, Red flags, Verdict.\n~10-20 s · coût ~$0.80-$1.30 (÷2 vs avant).\n\nRent comps / Quartier / Taxes ne sont plus inclus par défaut — lance-les depuis leur onglet si besoin.`)) return;
     const btn = $("#ai-run-research");
     btn.disabled = true;
     btn.innerHTML = `<span class="spinner"></span> Analyse parallèle en cours…`;
@@ -3685,7 +3720,23 @@
       state.currentDealId = data.deal.id;
       state.formDealId = data.deal.id;  // a re-submit now updates this same deal
       openDeal(state.currentDealId);
-    } catch (e) { toast(e.message, "error"); }
+    } catch (e) {
+      // Duplicate address → offer to open the existing deal or force-create.
+      if (/Doublon possible/.test(e.message)) {
+        const m = e.message.match(/id:\s*([a-z0-9-]+)/i);
+        if (confirm(e.message + "\n\nOK = ouvrir le deal existant\nAnnuler = créer quand même un doublon")) {
+          if (m) { openDeal(m[1]); return; }
+        } else {
+          try {
+            const data = await API.createDeal({ ...obj, force_duplicate: true });
+            toast("Deal créé (doublon assumé)", "success");
+            state.currentDealId = data.deal.id; state.formDealId = data.deal.id;
+            openDeal(state.currentDealId); return;
+          } catch (e2) { toast(e2.message, "error"); return; }
+        }
+      }
+      toast(e.message, "error");
+    }
   });
 
   // ============== COMPARE ==============

@@ -223,36 +223,45 @@ def _build_rehab_prompt(deal: dict) -> str:
 
 
 def estimate_rehab(deal: dict) -> dict:
-    """Call Claude (web_search) to produce an itemized rehab budget."""
-    api_key = get_api_key()
-    if not api_key:
-        return {"ok": False, "error": "No Anthropic API key configured. Add one in Settings → AI."}
-    import anthropic
-    client = anthropic.Anthropic(api_key=api_key)
-    model = get_model()
-    try:
-        message = client.messages.create(
-            model=model, max_tokens=2000, system=REHAB_SYSTEM,
-            tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 4}],
-            messages=[{"role": "user", "content": _build_rehab_prompt(deal)}],
-        )
-    except anthropic.AuthenticationError:
-        return {"ok": False, "error": "Invalid API key — check Settings → AI."}
-    except Exception as e:
-        log.exception("Rehab estimate failed")
-        return {"ok": False, "error": f"Rehab estimate failed: {e}"}
-    text = "\n".join(b.text for b in message.content if hasattr(b, "text"))
-    data = _extract_json(text)
-    if not data or not isinstance(data.get("items"), list):
-        return {"ok": False, "error": "Could not parse rehab estimate.", "raw_text": text[:1500]}
+    """Itemized rehab budget for the rehab-estimator modal.
+
+    Single source of truth: delegates to ai_tasks.task_rehab (regional
+    multiplier + low/base/high line items) and adapts its output to the
+    modal's {items:[{label,cost}], summary} shape — one rehab prompt to
+    maintain instead of two."""
+    from . import ai_tasks
+    r = ai_tasks.task_rehab(deal)
+    if not r.get("ok"):
+        return r
+    res = r.get("result") or {}
+    if "error" in res or not isinstance(res.get("line_items"), list):
+        return {"ok": False, "error": res.get("error", "Could not parse rehab estimate."),
+                "raw_text": str(res.get("raw", ""))[:1500]}
     items = []
-    for it in data["items"]:
-        if isinstance(it, dict) and it.get("label"):
+    for li in res["line_items"]:
+        if not isinstance(li, dict):
+            continue
+        label = str(li.get("category") or li.get("label") or "").strip()
+        if not label:
+            continue
+        try:
+            cost = int(round(float(li.get("base") or li.get("cost") or 0)))
+        except (TypeError, ValueError):
+            cost = 0
+        if li.get("count") and cost:
             try:
-                items.append({"label": str(it["label"])[:120], "cost": int(round(float(it.get("cost") or 0)))})
+                cost *= max(1, int(li["count"]))
+                label += f" ×{int(li['count'])}"
             except (TypeError, ValueError):
-                items.append({"label": str(it["label"])[:120], "cost": 0})
-    return {"ok": True, "items": items, "summary": data.get("summary", ""), "model": model}
+                pass
+        items.append({"label": label[:120], "cost": cost})
+    summary = (res.get("scope_notes") or "").strip()
+    if res.get("scope_recommended"):
+        summary = f"[{res['scope_recommended']}] {summary}".strip()
+    return {"ok": True, "items": items, "summary": summary[:500],
+            "totals": {"low": res.get("total_low"), "base": res.get("total_base"),
+                       "high": res.get("total_high")},
+            "model": r.get("model")}
 
 
 AUCTION_SYSTEM = """You are evaluating a property listed at a foreclosure / real-estate AUCTION for a fix-and-flip investor. Given the address and any condition notes/comments from the listing, estimate two numbers and summarize.

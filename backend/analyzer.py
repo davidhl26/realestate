@@ -328,6 +328,47 @@ def compute_score(deal: dict, m: dict) -> tuple:
     return score, grade, signal
 
 
+def recommended_max_offer(deal: dict, m: dict) -> dict:
+    """THE one price not to exceed for this deal — the headline number.
+
+    Auction-sourced deals use the auction max-bid math (5% buyer's premium +
+    fixed closing); everything else back-solves the purchase price at the
+    target margin (same cost model as compute_metrics). Returns
+    {max_offer, basis, target_margin_pct, gap_vs_price} — max_offer is None
+    when there's no usable ARV yet."""
+    arv = deal.get("arv_base", 0) or 0
+    if arv <= 0:
+        return {"max_offer": None, "basis": None,
+                "target_margin_pct": None, "gap_vs_price": None}
+    rehab = deal.get("rehab_base", 0) or 0
+    try:
+        margin = float(deal.get("target_margin_pct") or 15)
+    except (TypeError, ValueError):
+        margin = 15.0
+    target_profit = arv * margin / 100.0
+    selling = m.get("selling") or round(arv * ((deal.get("selling_cost_pct", 8) or 8) / 100))
+    holding = m.get("holding") or 0
+
+    is_auction = (deal.get("source") == "auction"
+                  or "auction" in (deal.get("source_url") or "").lower())
+    if is_auction:
+        # bid*(1+premium) + closing = ARV - rehab - selling - holding - profit
+        premium, closing = 0.05, 2500
+        net = arv - rehab - selling - holding - closing - target_profit
+        max_offer = max(0, net / (1 + premium))
+        basis = "auction"
+    else:
+        # Mirror of the back-solver: acquisition = price*1.02 (closing ≈ 2%)
+        max_acq = arv - target_profit - rehab - holding - selling
+        max_offer = max(0, max_acq / 1.02)
+        basis = "flip"
+
+    pp = deal.get("purchase_price", 0) or 0
+    return {"max_offer": int(round(max_offer)), "basis": basis,
+            "target_margin_pct": margin,
+            "gap_vs_price": int(round(max_offer - pp)) if pp else None}
+
+
 import re as _re
 
 # Description/notes keyword scan → (compiled regex, severity, label).
