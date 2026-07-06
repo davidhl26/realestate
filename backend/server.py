@@ -317,6 +317,17 @@ def _enrich(deal: dict) -> dict:
             "grade": grade, "signal": signal, "risk": risk, "max_offer": offer}
 
 
+# Changes on every deploy/restart — the frontend polls it and self-reloads
+# when it differs from the version it booted with (stale-SPA killer).
+import uuid as _uuid_mod
+APP_BOOT_ID = _uuid_mod.uuid4().hex[:12]
+
+
+@app.get("/api/version")
+def app_version():
+    return {"version": APP_BOOT_ID}
+
+
 @app.get("/api/healthz")
 def healthz():
     return {"ok": True, "deals": len(db.list_deals())}

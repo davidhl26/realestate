@@ -3109,6 +3109,30 @@
   // Kick stale watches (>20 h) in the background at app open — the "veille".
   setTimeout(() => { API.watchesRunStale?.().catch(() => {}); }, 4000);
 
+  // ===== Auto-update: reload when a new version is deployed (stale-SPA killer) =====
+  (() => {
+    let bootVersion = null;
+    const check = async () => {
+      try {
+        const r = await fetch("/api/version", { credentials: "include" });
+        if (!r.ok) return;
+        const v = (await r.json()).version;
+        if (!bootVersion) { bootVersion = v; return; }
+        if (v && v !== bootVersion) {
+          const last = Number(localStorage.getItem("fb-autoreload-ts") || 0);
+          if (Date.now() - last > 120000) {   // guard against reload loops
+            localStorage.setItem("fb-autoreload-ts", String(Date.now()));
+            toast("Nouvelle version — rechargement…", "success");
+            setTimeout(() => location.reload(), 800);
+          }
+        }
+      } catch {}
+    };
+    check();
+    window.addEventListener("focus", check);
+    setInterval(check, 5 * 60 * 1000);
+  })();
+
   // ============== AUCTION ASSISTANT ==============
   let _aucLast = null;  // last analysis result
   function _gatherAuction() {
