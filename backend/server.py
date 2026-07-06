@@ -641,7 +641,11 @@ def deal_comps_map(deal_id: str):
         dlat, dlng = rl2 - rl1, math.radians(lng2 - lng1)
         a = math.sin(dlat / 2) ** 2 + math.cos(rl1) * math.cos(rl2) * math.sin(dlng / 2) ** 2
         return 6371 * 2 * math.asin(math.sqrt(a))
-    kept = [c for c in comps if _km(d["lat"], d["lng"], c["lat"], c["lng"]) <= 8.0]
+    # Sold-layer pins are promised within ~0.5 mi by the prompt → 2.5 km cap
+    # (a farther hit is a wrong-street geocode); ARV comps can be farther (8 km).
+    kept = [c for c in comps
+            if _km(d["lat"], d["lng"], c["lat"], c["lng"])
+               <= (2.5 if c.get("source") == "sold" else 8.0)]
     dropped = len(comps) - len(kept)
     comps = kept
 
