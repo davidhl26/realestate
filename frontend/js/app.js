@@ -3111,13 +3111,28 @@
           ${e.type !== "gone" ? `<button class="btn ${ob ? "" : "ghost"} watch-add" data-w="${escape(w.id)}" data-i="${i}" ${ob ? "disabled" : ""} style="font-size:11px;">${ob ? "✓ Board" : "+ Board"}</button>` : ""}
         </div>`;
       }).join("");
+      const iv = Number(w.interval_min ?? 60);
+      const ivLabel = { 0: "manuel", 60: "⏱ toutes les heures", 180: "⏱ toutes les 3 h", 360: "⏱ toutes les 6 h", 1440: "⏱ 1×/jour" }[iv] || `⏱ toutes les ${iv} min`;
+      let nextTxt = "";
+      if (iv > 0 && w.last_run) {
+        const next = new Date(new Date(w.last_run).getTime() + iv * 60000);
+        nextTxt = next > new Date() ? ` · prochaine ~${next.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}` : " · imminente";
+      }
       return `<div class="card" style="margin-bottom:14px;">
         <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap;">
           <div>
             <div style="font-weight:700; font-size:15px;">🔭 ${escape(w.label || w.location)}</div>
             <div class="muted" style="font-size:12px;">${escape(crit)}${crit ? " · " : ""}${w.tracked} bien(s) suivis · actualisée ${ago(w.last_run)} · ${w.run_count} run(s)</div>
+            <div style="font-size:12px; font-weight:600; color:${iv > 0 ? "var(--green)" : "var(--muted)"};">${ivLabel}${nextTxt}</div>
           </div>
-          <div style="display:flex; gap:6px;">
+          <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+            <select class="watch-interval-sel" data-id="${escape(w.id)}" title="Fréquence automatique" style="font-size:12px; padding:5px 6px;">
+              <option value="60" ${iv === 60 ? "selected" : ""}>1 h</option>
+              <option value="180" ${iv === 180 ? "selected" : ""}>3 h</option>
+              <option value="360" ${iv === 360 ? "selected" : ""}>6 h</option>
+              <option value="1440" ${iv === 1440 ? "selected" : ""}>24 h</option>
+              <option value="0" ${iv === 0 ? "selected" : ""}>Manuel</option>
+            </select>
             <button class="btn primary watch-run" data-id="${escape(w.id)}" style="font-size:12px;">🔄 Actualiser</button>
             <button class="btn ghost watch-del" data-id="${escape(w.id)}" style="font-size:12px;">🗑</button>
           </div>
@@ -3138,6 +3153,14 @@
     box.querySelectorAll(".watch-del").forEach(b => b.addEventListener("click", async () => {
       if (!confirm("Supprimer cette veille (et son historique) ?")) return;
       try { await API.watchDelete(b.dataset.id); refreshWatchView(); } catch (e) { toast(e.message, "error"); }
+    }));
+    box.querySelectorAll(".watch-interval-sel").forEach(sel => sel.addEventListener("change", async () => {
+      const iv = Number(sel.value);
+      try {
+        await API.watchPatch(sel.dataset.id, { interval_min: iv });
+        toast(iv === 0 ? "Veille passée en manuel" : `Veille automatique : toutes les ${iv >= 60 ? (iv / 60) + " h" : iv + " min"}`, "success");
+        refreshWatchView();
+      } catch (e) { toast(e.message, "error"); }
     }));
     box.querySelectorAll(".watch-add").forEach(b => b.addEventListener("click", async () => {
       const w = watches.find(x => x.id === b.dataset.w);
@@ -3164,7 +3187,8 @@
   $("#watch-create")?.addEventListener("click", async () => {
     const loc = ($("#watch-location")?.value || "").trim();
     if (!loc) { toast("Entre une ville, un zip ou un état", "warn"); return; }
-    const p = { location: loc, max_listings: Number($("#watch-count")?.value) || 15 };
+    const p = { location: loc, max_listings: Number($("#watch-count")?.value) || 15,
+                interval_min: Number($("#watch-interval")?.value ?? 60) };
     const n = id => { const v = Number($(id)?.value); return v > 0 ? v : null; };
     if (n("#watch-pricemax")) p.price_max = n("#watch-pricemax");
     if (n("#watch-bedsmin")) p.beds_min = n("#watch-bedsmin");

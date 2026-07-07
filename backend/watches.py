@@ -80,6 +80,8 @@ class WatchesDB:
             "beds_min": criteria.get("beds_min"),
             "property_type": criteria.get("property_type"),
             "max_listings": min(int(criteria.get("max_listings") or 15), 30),
+            # Auto-run cadence in minutes (60 = hourly). 0 = manual only.
+            "interval_min": int(criteria.get("interval_min") if criteria.get("interval_min") is not None else 60),
             "created_at": _now(),
             "last_run": None,
             "run_count": 0,
@@ -195,8 +197,32 @@ class WatchesDB:
             "price_max": w.get("price_max"), "price_min": w.get("price_min"),
             "beds_min": w.get("beds_min"), "property_type": w.get("property_type"),
             "max_listings": w.get("max_listings"),
+            "interval_min": w.get("interval_min", 60),
             "created_at": w.get("created_at"), "last_run": w.get("last_run"),
             "run_count": w.get("run_count", 0),
             "tracked": len(active),
             "events": (w.get("events") or [])[:40],
         }
+
+    def due_watches(self) -> list:
+        """Watches whose auto-interval has elapsed since their last run."""
+        out = []
+        now = datetime.now(timezone.utc)
+        for w in self.list_watches():
+            try:
+                interval = int(w.get("interval_min", 60) or 0)
+            except (TypeError, ValueError):
+                interval = 60
+            if interval <= 0:
+                continue   # manual-only
+            lr = w.get("last_run")
+            if not lr:
+                out.append(w["id"])
+                continue
+            try:
+                age_min = (now - datetime.fromisoformat(lr)).total_seconds() / 60
+            except ValueError:
+                age_min = interval + 1
+            if age_min >= interval:
+                out.append(w["id"])
+        return out

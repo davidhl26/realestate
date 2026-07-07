@@ -1567,6 +1567,53 @@ def watches_run(watch_id: str):
     return _run_watch(watch_id)
 
 
+@app.patch("/api/watches/{watch_id}")
+def watches_patch(watch_id: str, payload: dict = Body(...)):
+    """Update a watch's settings (interval_min, filters, label)."""
+    w = watches_db.get(watch_id)
+    if not w:
+        raise HTTPException(404, "Watch not found")
+    for k in ("interval_min", "label", "price_max", "price_min", "beds_min",
+              "property_type", "max_listings"):
+        if k in payload:
+            w[k] = payload[k]
+    watches_db.save(w)
+    return watches_db.summary(w)
+
+
+# ---- Hourly watch scheduler (server-side, plan standard = always on) ----
+_WATCH_TICK_SEC = int(os.environ.get("FLIPBOARD_WATCH_TICK", "300"))  # 5 min
+
+
+def _watch_scheduler():
+    """Background loop: every tick, run watches whose interval has elapsed.
+    Sequential (one AI call at a time) to stay gentle on rate limits/cost."""
+    import time as _t
+    log.info("watch scheduler started (tick=%ss)", _WATCH_TICK_SEC)
+    while True:
+        try:
+            if ai_research.is_configured():
+                for wid in watches_db.due_watches():
+                    try:
+                        res = _run_watch(wid)
+                        log.info("veille %s: %s", wid,
+                                 {k: res.get(k) for k in ("ok", "new", "price_drops", "gone", "error")})
+                    except Exception:
+                        log.exception("veille %s failed", wid)
+        except Exception:
+            log.exception("watch scheduler tick failed")
+        _t.sleep(_WATCH_TICK_SEC)
+
+
+@app.on_event("startup")
+def _start_watch_scheduler():
+    import threading
+    if os.environ.get("FLIPBOARD_NO_SCHEDULER") == "1":
+        return
+    t = threading.Thread(target=_watch_scheduler, daemon=True, name="watch-scheduler")
+    t.start()
+
+
 @app.post("/api/watches/run-stale")
 def watches_run_stale(payload: dict = Body(default={})):
     """Kick stale watches (last_run older than max_age_h) in a background

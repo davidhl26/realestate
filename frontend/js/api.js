@@ -45,6 +45,7 @@ const API = (() => {
     watchesList: () => req("/api/watches"),
     watchCreate: (payload) => req("/api/watches", { method: "POST", body: JSON.stringify(payload) }),
     watchDelete: (id) => req("/api/watches/" + encodeURIComponent(id), { method: "DELETE" }),
+    watchPatch: (id, u) => req("/api/watches/" + encodeURIComponent(id), { method: "PATCH", body: JSON.stringify(u) }),
     watchRun: (id) => req("/api/watches/" + encodeURIComponent(id) + "/run", { method: "POST", body: "{}" }),
     watchesRunStale: () => req("/api/watches/run-stale", { method: "POST", body: "{}" }),
     compareDeals: (dealIds, includeVerdict, focus) => req("/api/board/compare",

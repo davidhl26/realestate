@@ -906,9 +906,18 @@
           <label style="width:90px;">Suivre
             <select id="watch-count"><option value="15" selected>15</option><option value="10">10</option><option value="20">20</option><option value="30">30</option></select>
           </label>
+          <label style="width:170px;">⏱ Fréquence auto
+            <select id="watch-interval">
+              <option value="60" selected>Toutes les heures</option>
+              <option value="180">Toutes les 3 h</option>
+              <option value="360">Toutes les 6 h</option>
+              <option value="1440">1× par jour</option>
+              <option value="0">Manuel seulement</option>
+            </select>
+          </label>
           <button class="btn primary" id="watch-create">➕ Créer la veille</button>
         </div>
-        <p class="muted" style="font-size:12px; margin:8px 0 0;">Chaque actualisation = 1 recherche IA (~$0.20-0.40). Les veilles de plus de 20 h se relancent automatiquement à l'ouverture de l'app.</p>
+        <p class="muted" style="font-size:12px; margin:8px 0 0;">Le serveur relance chaque veille <strong>tout seul</strong> à la fréquence choisie (même app fermée) : les nouvelles annonces Zillow arrivent analysées (ARV/rehab/profit estimés) dans le flux. 1 actualisation = 1 recherche IA ≈ $0.20-0.40 → <strong>toutes les heures ≈ $5-9/jour par veille</strong>, 1×/jour ≈ $0.30/jour.</p>
         <div id="watch-status" class="status-line" style="margin-top:8px;"></div>
       </div>
 
