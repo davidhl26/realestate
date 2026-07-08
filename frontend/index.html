@@ -22,11 +22,11 @@
          box-shadow:0 30px 80px rgba(0,0,0,.55); text-align:center;">
       <img src="/img/logo.png" alt="Flip Board" style="width:76px; height:76px; border-radius:20px; margin-bottom:12px; box-shadow:0 8px 24px rgba(31,203,137,.25);">
       <div style="font-size:26px; font-weight:800; letter-spacing:-.02em; color:#fff;">Flip Board</div>
-      <p style="color:rgba(255,255,255,.55); font-size:13px; margin:6px 0 20px;">Trouve. Vérifie. Offre le bon prix.</p>
-      <input id="login-password" type="password" placeholder="Mot de passe" autocomplete="current-password"
+      <p style="color:rgba(255,255,255,.55); font-size:13px; margin:6px 0 20px;">Find. Verify. Offer the right price.</p>
+      <input id="login-password" type="password" placeholder="Password" autocomplete="current-password"
              style="width:100%; padding:12px 14px; border:1px solid rgba(255,255,255,.15); background:rgba(255,255,255,.07); color:#fff; border-radius:12px; font-size:14px; outline:none;">
       <div id="login-error" style="color:#ff8f73; font-size:12px; min-height:16px; margin:8px 0;"></div>
-      <button type="submit" class="btn primary" style="width:100%; justify-content:center; padding:12px; font-size:14.5px;">Entrer</button>
+      <button type="submit" class="btn primary" style="width:100%; justify-content:center; padding:12px; font-size:14.5px;">Sign in</button>
     </form>
   </div>
 
@@ -96,9 +96,9 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" stroke-linejoin="round"/></svg>
         <span id="theme-label">Dark mode</span>
       </button>
-      <button class="theme-toggle" id="logout-btn" onclick="window.fbLogout&&window.fbLogout()" title="Se déconnecter">
+      <button class="theme-toggle" id="logout-btn" onclick="window.fbLogout&&window.fbLogout()" title="Sign out">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4M16 17l5-5-5-5M21 12H9" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        <span>Déconnexion</span>
+        <span>Sign out</span>
       </button>
       <small>Educational use only · not financial advice</small>
     </footer>
@@ -109,16 +109,16 @@
     <div class="global-deal-bar" id="global-deal-bar">
       <div class="gdb-label">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M3 9h18M3 15h18M9 3v18M15 3v18" stroke-linecap="round"/></svg>
-        Deal sélectionné:
+        Selected deal:
       </div>
       <button class="gdb-picker" id="gdb-picker" type="button">
-        <span id="gdb-current">Sélectionner un deal…</span>
+        <span id="gdb-current">Select a deal…</span>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M6 9l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
       <div class="gdb-actions">
         <button class="btn ghost" id="gdb-open" title="Open this deal's detail view" disabled>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M9 5l7 7-7 7" stroke-linecap="round"/></svg>
-          Ouvrir
+          Open
         </button>
         <button class="btn ghost" id="gdb-chat" title="Chat with AI about this deal" disabled>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M21 11.5a8.38 8.38 0 01-.9 3.8 8.5 8.5 0 01-7.6 4.7 8.38 8.38 0 01-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 01-.9-3.8 8.5 8.5 0 014.7-7.6 8.38 8.38 0 013.8-.9h.5a8.48 8.48 0 018 8v.5z" stroke-linejoin="round"/></svg>
@@ -130,7 +130,7 @@
       <div class="gdb-dropdown" id="gdb-dropdown" style="display:none">
         <div class="gdb-search">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg>
-          <input type="search" id="gdb-search" placeholder="Filtrer par adresse, ville, ZIP, score…" autocomplete="off">
+          <input type="search" id="gdb-search" placeholder="Filter by address, city, ZIP, score…" autocomplete="off">
           <span class="gdb-count" id="gdb-count"></span>
         </div>
         <div class="gdb-list" id="gdb-list"></div>
@@ -155,31 +155,31 @@
         </div>
       </header>
 
-      <p class="muted" id="dash-subtitle" style="margin:-6px 0 14px; font-size:13px;">Ce qu'il faut traiter aujourd'hui — trier, vérifier, agir.</p>
+      <p class="muted" id="dash-subtitle" style="margin:-6px 0 14px; font-size:13px;">What to handle today — triage, verify, act.</p>
       <div class="stats-grid" id="stats-grid"></div>
 
       <div class="cockpit-grid">
         <div class="card cockpit-col">
-          <h3>⛔ À vérifier en priorité <span class="cockpit-count" id="dash-alerts-count"></span></h3>
-          <p class="muted cockpit-sub">Deals avec deal-breakers / risque élevé — à régler avant toute offre.</p>
+          <h3>⛔ Verify first <span class="cockpit-count" id="dash-alerts-count"></span></h3>
+          <p class="muted cockpit-sub">Deals with deal-breakers / high risk — resolve before making any offer.</p>
           <div id="dash-alerts"></div>
         </div>
         <div class="card cockpit-col">
-          <h3>🟢 Meilleures opportunités <span class="cockpit-count" id="dash-opps-count"></span></h3>
-          <p class="muted cockpit-sub">Score élevé + risque maîtrisé — à pousser.</p>
+          <h3>🟢 Best opportunities <span class="cockpit-count" id="dash-opps-count"></span></h3>
+          <p class="muted cockpit-sub">High score + managed risk — worth pushing.</p>
           <div id="dash-opps"></div>
         </div>
       </div>
 
       <div class="cockpit-grid">
         <div class="card cockpit-col">
-          <h3>🏛 Enchères qui approchent <span class="cockpit-count" id="dash-auctions-count"></span></h3>
-          <p class="muted cockpit-sub">Dates d'enchère dans les 21 jours (depuis ta watchlist).</p>
+          <h3>🏛 Upcoming auctions <span class="cockpit-count" id="dash-auctions-count"></span></h3>
+          <p class="muted cockpit-sub">Auction dates within 21 days (from your watchlist).</p>
           <div id="dash-auctions"></div>
         </div>
         <div class="card cockpit-col">
-          <h3>📞 Relances à faire <span class="cockpit-count" id="dash-followups-count"></span></h3>
-          <p class="muted cockpit-sub">Leads dont la date de relance est arrivée.</p>
+          <h3>📞 Follow-ups due <span class="cockpit-count" id="dash-followups-count"></span></h3>
+          <p class="muted cockpit-sub">Leads whose follow-up date has arrived.</p>
           <div id="dash-followups"></div>
         </div>
       </div>
@@ -198,15 +198,15 @@
             <input type="search" id="deals-search" placeholder="Search address, city, signal…">
             <span class="kbd-hint">⌘K</span>
           </div>
-          <select id="deals-city" class="input" title="Filtrer par ville" style="font-size:13px; padding:7px 10px;">
-            <option value="">🏙 Toutes les villes</option>
+          <select id="deals-city" class="input" title="Filter by city" style="font-size:13px; padding:7px 10px;">
+            <option value="">🏙 All cities</option>
           </select>
-          <select id="deals-sort" class="input" title="Trier" style="font-size:13px; padding:7px 10px;">
-            <option value="score">⭐ Meilleur score</option>
-            <option value="newest">🆕 Plus récents</option>
-            <option value="risk">🛡 Risque (pires d'abord)</option>
+          <select id="deals-sort" class="input" title="Sort" style="font-size:13px; padding:7px 10px;">
+            <option value="score">⭐ Best score</option>
+            <option value="newest">🆕 Newest</option>
+            <option value="risk">🛡 Risk (worst first)</option>
           </select>
-          <button class="btn ghost" id="deals-dup-btn" title="Détecter les adresses en double" style="font-size:13px;">👯 Doublons</button>
+          <button class="btn ghost" id="deals-dup-btn" title="Detect duplicate addresses" style="font-size:13px;">👯 Duplicates</button>
           <div class="view-toggle" id="view-toggle">
             <button data-mode="cards" class="active">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
@@ -223,14 +223,14 @@
       <!-- Bulk-action bar (shown only when deals are selected) -->
       <div id="deals-bulk-bar" class="deals-bulk-bar" style="display:none;">
         <div class="dbb-left">
-          <span id="deals-bulk-count">0</span> deals sélectionnés
+          <span id="deals-bulk-count">0</span> deals selected
         </div>
         <div class="dbb-actions">
-          <button class="btn ghost" id="deals-bulk-select-all">Tout sélectionner</button>
-          <button class="btn ghost" id="deals-bulk-clear">Désélectionner</button>
+          <button class="btn ghost" id="deals-bulk-select-all">Select all</button>
+          <button class="btn ghost" id="deals-bulk-clear">Deselect</button>
           <button class="btn danger" id="deals-bulk-delete">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" stroke-linecap="round"/></svg>
-            Supprimer
+            Delete
           </button>
         </div>
       </div>
@@ -239,7 +239,7 @@
       <div id="deals-select-toggle" style="margin-bottom:12px;">
         <button class="btn ghost" id="deals-toggle-select-mode">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          Mode sélection
+          Selection mode
         </button>
       </div>
 
@@ -276,7 +276,7 @@
         <div class="page-header-text">
           <div class="page-eyebrow">New</div>
           <h2>Add a deal</h2>
-          <p>Paste a Zillow, Redfin, or ispeedtolead URL — or fill in manually. <a href="#" id="add-open-batch" style="font-size:13px;">📚 Importer plusieurs URLs →</a></p>
+          <p>Paste a Zillow, Redfin, or ispeedtolead URL — or fill in manually. <a href="#" id="add-open-batch" style="font-size:13px;">📚 Import multiple URLs →</a></p>
         </div>
       </header>
 
@@ -331,39 +331,39 @@
         <div id="pdf-drop-zone" style="border:1px solid var(--border); border-radius:12px; padding:16px; background:var(--card);">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
             <div>
-              <strong style="font-size:13px;">📑 Choisis un PDF récent</strong>
-              <div class="muted" style="font-size:11.5px; margin-top:2px;">Scan auto de Downloads, Desktop, Documents</div>
+              <strong style="font-size:13px;">📑 Pick a recent PDF</strong>
+              <div class="muted" style="font-size:11.5px; margin-top:2px;">Auto-scan of Downloads, Desktop, Documents</div>
             </div>
-            <button type="button" id="pdf-refresh-btn" class="btn ghost" style="font-size:11px;">🔄 Rafraîchir</button>
+            <button type="button" id="pdf-refresh-btn" class="btn ghost" style="font-size:11px;">🔄 Refresh</button>
           </div>
           <div id="pdf-recent-list" style="max-height:380px; overflow-y:auto;">
-            <div class="muted" style="text-align:center; padding:20px; font-size:12px;">Chargement…</div>
+            <div class="muted" style="text-align:center; padding:20px; font-size:12px;">Loading…</div>
           </div>
         </div>
         <input type="file" id="pdf-file-input" accept=".pdf,application/pdf"
                 style="position:absolute; left:-9999px; width:1px; height:1px; opacity:0;">
 
 
-        <!-- STAGE 1: Fichier reçu, en attente de validation -->
+        <!-- STAGE 1: File received, awaiting validation -->
         <div id="pdf-received" style="display:none; margin-top:14px; border:2px solid var(--green); border-radius:12px; padding:18px 20px; background:rgba(34,197,94,0.07);">
           <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
             <div style="font-size:28px;">✅</div>
             <div style="flex:1; min-width:200px;">
-              <div style="font-size:14px; font-weight:700; color:var(--green);">Fichier reçu</div>
+              <div style="font-size:14px; font-weight:700; color:var(--green);">File received</div>
               <div id="pdf-received-name" style="font-size:13px; margin-top:2px;"></div>
               <div id="pdf-received-meta" class="muted" style="font-size:11.5px; margin-top:2px;"></div>
             </div>
             <div style="display:flex; gap:6px;">
-              <label style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:var(--muted); align-self:center; margin-right:4px;">Créer comme</label>
+              <label style="font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:var(--muted); align-self:center; margin-right:4px;">Create as</label>
               <select id="pdf-received-target" class="input" style="font-size:12.5px; padding:6px 10px;">
                 <option value="deal">Deals</option>
                 <option value="lead">Leads</option>
                 <option value="auction">Auctions</option>
               </select>
-              <button id="pdf-received-cancel" class="btn ghost">Annuler</button>
+              <button id="pdf-received-cancel" class="btn ghost">Cancel</button>
               <button id="pdf-analyze-btn" class="btn primary">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="14" height="14"><path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                Analyser
+                Analyze
               </button>
             </div>
           </div>
@@ -386,12 +386,12 @@
           </div>
           <div id="pdf-stage-detail" class="muted" style="font-size:11.5px; margin-top:8px; line-height:1.5;"></div>
           <ol id="pdf-step-list" style="margin:12px 0 0; padding-left:0; list-style:none; font-size:12px;">
-            <li data-step="upload"   style="padding:5px 0; opacity:0.4;">⬜ Upload du fichier au backend</li>
-            <li data-step="extract"  style="padding:5px 0; opacity:0.4;">⬜ Extraction du texte (pdfplumber / pypdf)</li>
-            <li data-step="claude"   style="padding:5px 0; opacity:0.4;">⬜ Analyse par Claude (peut prendre 20-60s)</li>
-            <li data-step="render"   style="padding:5px 0; opacity:0.4;">⬜ Affichage des propriétés extraites</li>
+            <li data-step="upload"   style="padding:5px 0; opacity:0.4;">⬜ Uploading file to backend</li>
+            <li data-step="extract"  style="padding:5px 0; opacity:0.4;">⬜ Extracting text (pdfplumber / pypdf)</li>
+            <li data-step="claude"   style="padding:5px 0; opacity:0.4;">⬜ Analysis by Claude (can take 20-60s)</li>
+            <li data-step="render"   style="padding:5px 0; opacity:0.4;">⬜ Displaying extracted properties</li>
           </ol>
-          <button id="pdf-cancel-btn" class="btn ghost" style="margin-top:8px; font-size:11px;">Annuler</button>
+          <button id="pdf-cancel-btn" class="btn ghost" style="margin-top:8px; font-size:11px;">Cancel</button>
         </div>
 
         <div id="pdf-result" style="display:none; margin-top:14px;">
@@ -450,7 +450,7 @@
             <label>Purchase price ($) <input name="purchase_price" type="number" required></label>
             <label>ARV — Base ($)
               <div style="display:flex; gap:6px;">
-                <input name="arv_base" type="number" placeholder="optionnel" style="flex:1;">
+                <input name="arv_base" type="number" placeholder="optional" style="flex:1;">
                 <button type="button" id="arv-research-btn" class="btn ai-pill-btn" title="Research ARV with Claude">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="12" height="12"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" stroke-linejoin="round"/></svg>
                   AI
@@ -464,7 +464,7 @@
                 <option>Low</option><option selected>Medium</option><option>High</option>
               </select>
             </label>
-            <label>Rehab budget ($) <input name="rehab_base" type="number" placeholder="optionnel"></label>
+            <label>Rehab budget ($) <input name="rehab_base" type="number" placeholder="optional"></label>
             <label>Rehab — Low ($) <input name="rehab_low" type="number"></label>
             <label>Rehab — High ($) <input name="rehab_high" type="number"></label>
             <label>Rehab scope
@@ -537,7 +537,7 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" stroke-linecap="round" stroke-linejoin="round"/></svg>
             Edit
           </button>
-          <button id="prequal-btn" class="btn" title="Génère la lettre de pré-qualification de financement (PDF) à la date du jour avec l'adresse de ce deal">
+          <button id="prequal-btn" class="btn" title="Generate the financing pre-qualification letter (PDF) dated today with this deal's address">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h4" stroke-linecap="round" stroke-linejoin="round"/></svg>
             Pre-Qual Letter
           </button>
@@ -572,10 +572,10 @@
       <!-- Neighborhood map + comparables -->
       <div class="card" id="detail-map-card" style="display:none;">
         <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
-          <h3 style="margin:0;">🗺 Quartier &amp; comparables</h3>
+          <h3 style="margin:0;">🗺 Neighborhood &amp; comparables</h3>
           <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
-            <button class="btn" id="map-find-comps" style="display:none; font-size:12px;">🤖 Trouver les comparables (IA)</button>
-            <button class="btn" id="map-load-sales" style="font-size:12px;">📍 Ventes du quartier</button>
+            <button class="btn" id="map-find-comps" style="display:none; font-size:12px;">🤖 Find comparables (AI)</button>
+            <button class="btn" id="map-load-sales" style="font-size:12px;">📍 Neighborhood sales</button>
             <div class="map-layer-toggle">
               <button class="group-tab active" id="map-layer-sat">🛰 Satellite</button>
               <button class="group-tab" id="map-layer-road">🚗 Road</button>
@@ -586,34 +586,34 @@
         <p class="muted" id="detail-map-note" style="font-size:12px; margin:8px 0 0;"></p>
       </div>
 
-      <details class="detail-group"><summary>📄 Documents &amp; pièces</summary>
+      <details class="detail-group"><summary>📄 Documents &amp; files</summary>
       <!-- Documents (inspection, appraisal, title…) → AI analysis + verdict -->
       <div class="card" id="detail-documents-card">
         <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
           <h3 style="margin:0;">📄 Documents</h3>
           <label class="btn primary" style="cursor:pointer; font-size:13px;">
             <input type="file" id="doc-upload-input" accept="application/pdf,.pdf" style="display:none;">
-            ⬆ Ajouter un PDF (inspection…)
+            ⬆ Add a PDF (inspection…)
           </label>
         </div>
-        <p class="muted" style="font-size:12px; margin:6px 0 0;">Dépose un rapport (inspection, expertise, titre…) — l'IA en extrait les données, met à jour le rehab et rend un verdict <strong>bon / prudence / mauvais</strong>.</p>
+        <p class="muted" style="font-size:12px; margin:6px 0 0;">Drop a report (inspection, appraisal, title…) — the AI extracts the data, updates the rehab, and returns a <strong>good / caution / bad</strong> verdict.</p>
         <div id="doc-upload-status" class="status-line" style="margin-top:8px;"></div>
         <div id="detail-documents-list" style="margin-top:10px;"></div>
       </div>
 
       <!-- Timestamped comments -->
       <div class="card" id="detail-comments-card">
-        <h3 style="margin:0 0 10px;">💬 Commentaires</h3>
+        <h3 style="margin:0 0 10px;">💬 Comments</h3>
         <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
-          <textarea id="deal-comment-input" rows="2" placeholder="Ajouter un commentaire (visite, négociation, appel…)" style="flex:1; min-width:220px; resize:vertical;"></textarea>
-          <button class="btn primary" id="deal-comment-add">+ Ajouter</button>
+          <textarea id="deal-comment-input" rows="2" placeholder="Add a comment (showing, negotiation, call…)" style="flex:1; min-width:220px; resize:vertical;"></textarea>
+          <button class="btn primary" id="deal-comment-add">+ Add</button>
         </div>
-        <p class="muted" style="font-size:11.5px; margin:6px 0 0;">Chaque commentaire est horodaté (date + heure) automatiquement. Ctrl/⌘+Entrée pour envoyer.</p>
+        <p class="muted" style="font-size:11.5px; margin:6px 0 0;">Every comment is timestamped (date + time) automatically. Ctrl/⌘+Enter to send.</p>
         <div id="deal-comments-list" style="margin-top:12px;"></div>
       </div>
       </details>
 
-      <details class="detail-group"><summary>💰 Financement, scénarios &amp; analyses IA</summary>
+      <details class="detail-group"><summary>💰 Financing, scenarios &amp; AI analyses</summary>
       <!-- Inline-editable Financing card -->
       <div class="card financing-card" id="financing-card">
         <div class="financing-header">
@@ -721,7 +721,7 @@
       </div>
       </details>
 
-      <details class="detail-group"><summary>🗂 Média, localisation &amp; suivi</summary>
+      <details class="detail-group"><summary>🗂 Media, location &amp; tracking</summary>
       <!-- Section: media -->
       <div class="comps-section" id="visuals-section" style="display:none">
         <div class="card" id="gallery-card">
@@ -807,7 +807,7 @@
           <div style="display:flex;gap:8px">
             <button id="pdf-download" class="btn primary" type="button">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              Télécharger
+              Download
             </button>
             <button class="btn ghost icon-only" id="pdf-close">×</button>
           </div>
@@ -824,118 +824,118 @@
       <header class="page-header">
         <div class="page-header-text">
           <div class="page-eyebrow">Sourcing</div>
-          <h2>Rechercher</h2>
-          <p>Une seule surface : lance une recherche ponctuelle, ou <strong>transforme-la en veille</strong> pour recevoir automatiquement les nouvelles annonces analysées.</p>
+          <h2>Search</h2>
+          <p>One place: run a one-off search, or <strong>turn it into a watch</strong> to automatically receive newly analyzed listings.</p>
         </div>
       </header>
 
       <div class="card hero-card">
-        <label style="display:block;">URL de recherche Zillow <span class="muted" style="font-weight:400;">ou ville (ex. « Cleveland, OH »)</span>
-          <input id="search-input" type="text" placeholder="https://www.zillow.com/homes/for_sale/?searchQueryState=…  ou  Cleveland, OH" style="width:100%;">
+        <label style="display:block;">Zillow search URL <span class="muted" style="font-weight:400;">or city (e.g. "Cleveland, OH")</span>
+          <input id="search-input" type="text" placeholder="https://www.zillow.com/homes/for_sale/?searchQueryState=…  or  Cleveland, OH" style="width:100%;">
         </label>
         <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-top:10px;">
-          <label style="width:120px;">Prix min ($) <input id="search-pricemin" type="number" placeholder="—"></label>
-          <label style="width:120px;">Prix max ($) <input id="search-pricemax" type="number" placeholder="—"></label>
-          <label style="width:90px;">Ch. min <input id="search-bedsmin" type="number" placeholder="—"></label>
-          <label style="width:90px;">SdB min <input id="search-bathsmin" type="number" placeholder="—"></label>
-          <label style="width:110px;">Surf. min (sf) <input id="search-sqftmin" type="number" placeholder="—"></label>
+          <label style="width:120px;">Price min ($) <input id="search-pricemin" type="number" placeholder="—"></label>
+          <label style="width:120px;">Price max ($) <input id="search-pricemax" type="number" placeholder="—"></label>
+          <label style="width:90px;">Beds min <input id="search-bedsmin" type="number" placeholder="—"></label>
+          <label style="width:90px;">Baths min <input id="search-bathsmin" type="number" placeholder="—"></label>
+          <label style="width:110px;">Sq ft min <input id="search-sqftmin" type="number" placeholder="—"></label>
           <label style="width:150px;">Type
             <select id="search-type">
-              <option value="">Tous</option>
-              <option value="Single Family Residence">Maison</option>
+              <option value="">All</option>
+              <option value="Single Family Residence">House</option>
               <option value="Multi-family / Duplex">Multi / Duplex</option>
               <option value="Townhouse">Townhouse</option>
               <option value="Condo">Condo</option>
             </select>
           </label>
-          <label style="width:90px;">Combien
+          <label style="width:90px;">How many
             <select id="search-count">
               <option value="10" selected>10</option><option value="5">5</option>
               <option value="20">20</option><option value="30">30</option><option value="40">40</option>
             </select>
           </label>
-          <label style="width:150px;">Fréquence veille
+          <label style="width:150px;">Watch frequency
             <select id="search-watch-interval">
-              <option value="60">Toutes les heures</option>
-              <option value="180">Toutes les 3 h</option>
-              <option value="360">Toutes les 6 h</option>
-              <option value="1440" selected>1×/jour</option>
+              <option value="60">Every hour</option>
+              <option value="180">Every 3 h</option>
+              <option value="360">Every 6 h</option>
+              <option value="1440" selected>1×/day</option>
             </select>
           </label>
           <button class="btn primary" id="search-run">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="14" height="14"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg>
-            Rechercher
+            Search
           </button>
-          <button class="btn" id="search-to-watch" title="Relancer automatiquement cette recherche et recevoir les nouveautés">🔭 Transformer en veille</button>
-          <button class="btn" id="search-save" title="Enregistrer cette recherche">★ Enregistrer</button>
+          <button class="btn" id="search-to-watch" title="Automatically re-run this search and receive new listings">🔭 Turn into a watch</button>
+          <button class="btn" id="search-save" title="Save this search">★ Save</button>
         </div>
         <div id="search-saved" style="display:flex; gap:6px; flex-wrap:wrap; margin-top:10px;"></div>
         <div id="search-status" class="status-line" style="margin-top:10px;"></div>
       </div>
 
-      <!-- Active watches (fusion Veille dans Recherche) -->
+      <!-- Active watches (Watch merged into Search) -->
       <div id="search-watches" class="card" style="display:none; margin-bottom:12px;"></div>
 
       <!-- Result controls (shown once there are results) -->
       <div id="search-controls" class="card" style="display:none; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:12px;">
         <span id="search-count-label" style="font-weight:600;"></span>
-        <label style="display:flex; align-items:center; gap:6px; font-size:13px; margin:0;">Trier
+        <label style="display:flex; align-items:center; gap:6px; font-size:13px; margin:0;">Sort
           <select id="search-sort" style="font-size:12px; padding:5px 8px;">
             <option value="profit">Profit ↓</option>
-            <option value="price">Prix ↑</option>
-            <option value="recent">Récence</option>
-            <option value="reno">Rénovation récente</option>
+            <option value="price">Price ↑</option>
+            <option value="recent">Recency</option>
+            <option value="reno">Recently renovated</option>
           </select>
         </label>
-        <label style="display:flex; align-items:center; gap:6px; font-size:13px; margin:0;"><input type="checkbox" id="search-newonly"> Nouveautés seulement</label>
-        <label style="display:flex; align-items:center; gap:6px; font-size:13px; margin:0;"><input type="checkbox" id="search-hideboard"> Masquer ceux du board</label>
-        <label style="display:flex; align-items:center; gap:6px; font-size:13px; margin:0;"><input type="checkbox" id="search-analyze"> Analyser (IA) à l'ajout</label>
-        <button class="btn ghost" id="search-mark-seen" style="font-size:12px;">Marquer comme vues</button>
-        <button class="btn" id="search-add-all" style="margin-left:auto;">+ Tout ajouter</button>
+        <label style="display:flex; align-items:center; gap:6px; font-size:13px; margin:0;"><input type="checkbox" id="search-newonly"> New only</label>
+        <label style="display:flex; align-items:center; gap:6px; font-size:13px; margin:0;"><input type="checkbox" id="search-hideboard"> Hide ones on the board</label>
+        <label style="display:flex; align-items:center; gap:6px; font-size:13px; margin:0;"><input type="checkbox" id="search-analyze"> Analyze (AI) on add</label>
+        <button class="btn ghost" id="search-mark-seen" style="font-size:12px;">Mark as seen</button>
+        <button class="btn" id="search-add-all" style="margin-left:auto;">+ Add all</button>
       </div>
 
       <div id="search-results"></div>
     </section>
 
-    <!-- ============ ZILLOW WATCH (veille) ============ -->
+    <!-- ============ ZILLOW WATCH ============ -->
     <section id="view-watch" class="view">
       <header class="page-header">
         <div class="page-header-text">
           <div class="page-eyebrow">Sourcing</div>
-          <h2>🔭 Veille Zillow</h2>
-          <p>Définis tes critères une fois — la veille relance la recherche, mémorise ce qu'elle a vu et te signale les <strong>🆕 nouveautés</strong>, <strong>📉 baisses de prix</strong> et <strong>❌ biens partis</strong>.</p>
+          <h2>🔭 Zillow Watch</h2>
+          <p>Set your criteria once — the watch re-runs the search, remembers what it has seen, and flags <strong>🆕 new listings</strong>, <strong>📉 price drops</strong>, and <strong>❌ listings that are gone</strong>.</p>
         </div>
       </header>
 
       <div class="card hero-card">
         <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
-          <label style="flex:1; min-width:200px;">Ville / zip / état
+          <label style="flex:1; min-width:200px;">City / zip / state
             <input id="watch-location" type="text" placeholder="Cleveland, OH · 44105 · Ohio">
           </label>
-          <label style="width:120px;">Prix max ($) <input id="watch-pricemax" type="number" placeholder="—"></label>
-          <label style="width:90px;">Ch. min <input id="watch-bedsmin" type="number" placeholder="—"></label>
+          <label style="width:120px;">Price max ($) <input id="watch-pricemax" type="number" placeholder="—"></label>
+          <label style="width:90px;">Beds min <input id="watch-bedsmin" type="number" placeholder="—"></label>
           <label style="width:150px;">Type
             <select id="watch-type">
-              <option value="">Tous</option>
-              <option value="Single Family Residence">Maison</option>
+              <option value="">All</option>
+              <option value="Single Family Residence">House</option>
               <option value="Multi-family / Duplex">Multi / Duplex</option>
             </select>
           </label>
-          <label style="width:90px;">Suivre
+          <label style="width:90px;">Track
             <select id="watch-count"><option value="15" selected>15</option><option value="10">10</option><option value="20">20</option><option value="30">30</option></select>
           </label>
-          <label style="width:170px;">⏱ Fréquence auto
+          <label style="width:170px;">⏱ Auto frequency
             <select id="watch-interval">
-              <option value="60" selected>Toutes les heures</option>
-              <option value="180">Toutes les 3 h</option>
-              <option value="360">Toutes les 6 h</option>
-              <option value="1440">1× par jour</option>
-              <option value="0">Manuel seulement</option>
+              <option value="60" selected>Every hour</option>
+              <option value="180">Every 3 h</option>
+              <option value="360">Every 6 h</option>
+              <option value="1440">1× per day</option>
+              <option value="0">Manual only</option>
             </select>
           </label>
-          <button class="btn primary" id="watch-create">➕ Créer la veille</button>
+          <button class="btn primary" id="watch-create">➕ Create watch</button>
         </div>
-        <p class="muted" style="font-size:12px; margin:8px 0 0;">Le serveur relance chaque veille <strong>tout seul</strong> à la fréquence choisie (même app fermée) : les nouvelles annonces Zillow arrivent analysées (ARV/rehab/profit estimés) dans le flux. 1 actualisation = 1 recherche IA ≈ $0.20-0.40 → <strong>toutes les heures ≈ $5-9/jour par veille</strong>, 1×/jour ≈ $0.30/jour.</p>
+        <p class="muted" style="font-size:12px; margin:8px 0 0;">The server re-runs each watch <strong>on its own</strong> at the chosen frequency (even with the app closed): new Zillow listings arrive already analyzed (estimated ARV/rehab/profit) in the feed. 1 refresh = 1 AI search ≈ $0.20-0.40 → <strong>hourly ≈ $5-9/day per watch</strong>, 1×/day ≈ $0.30/day.</p>
         <div id="watch-status" class="status-line" style="margin-top:8px;"></div>
       </div>
 
@@ -946,28 +946,28 @@
     <section id="view-auction" class="view">
       <header class="page-header">
         <div class="page-header-text">
-          <div class="page-eyebrow">Assistant d'enchères</div>
+          <div class="page-eyebrow">Auction assistant</div>
           <h2>Auction</h2>
-          <p>Colle l'adresse + l'état du bien (depuis la fiche auction.com que tu vois connecté). L'IA estime l'ARV et le rehab, et je calcule ton <strong>enchère max</strong> à ne pas dépasser. Tu enchéris toi-même.</p>
+          <p>Paste the address + property condition (from the auction.com listing you see when signed in). The AI estimates ARV and rehab, and I calculate your <strong>max bid</strong> not to exceed. You place the bid yourself.</p>
         </div>
       </header>
 
       <div class="auction-disclaimer card" style="border-left:3px solid var(--accent,#B68A3C); font-size:13px; line-height:1.5;">
-        ⚖️ <strong>Tu places l'enchère toi-même.</strong> Cet outil ne se connecte pas et n'enchérit pas à ta place : une enchère gagnante est un engagement d'achat ferme. Je te donne le chiffre, tu décides. <span class="muted">Estimation éducative, à valider avant d'enchérir.</span>
+        ⚖️ <strong>You place the bid yourself.</strong> This tool does not connect or bid on your behalf: a winning bid is a firm purchase commitment. I give you the number, you decide. <span class="muted">Educational estimate, verify before bidding.</span>
       </div>
 
-      <!-- ① Recherche par zone (ville / état) -->
-      <h3 style="margin:18px 0 8px;">① Trouver des enchères par ville ou état</h3>
+      <!-- ① Search by area (city / state) -->
+      <h3 style="margin:18px 0 8px;">① Find auctions by city or state</h3>
       <div class="card hero-card">
-        <label style="display:block;">Ville ou état <span class="muted" style="font-weight:400;">(ex. « Cleveland, OH » ou « Ohio »)</span>
+        <label style="display:block;">City or state <span class="muted" style="font-weight:400;">(e.g. "Cleveland, OH" or "Ohio")</span>
           <input id="aucf-location" type="text" placeholder="Cleveland, OH   ·   Ohio   ·   Miami-Dade, FL" style="width:100%;">
         </label>
         <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-top:10px;">
-          <label style="width:130px;">Prix max ($) <input id="aucf-pricemax" type="number" placeholder="—"></label>
-          <label style="width:90px;">Ch. min <input id="aucf-bedsmin" type="number" placeholder="—"></label>
-          <label style="width:130px;">Marge cible (%) <input id="aucf-margin" type="number" value="20"></label>
-          <label style="width:110px;">Portage ($) <input id="aucf-holding" type="number" value="3000"></label>
-          <label style="width:90px;">Combien
+          <label style="width:130px;">Price max ($) <input id="aucf-pricemax" type="number" placeholder="—"></label>
+          <label style="width:90px;">Beds min <input id="aucf-bedsmin" type="number" placeholder="—"></label>
+          <label style="width:130px;">Target margin (%) <input id="aucf-margin" type="number" value="20"></label>
+          <label style="width:110px;">Holding ($) <input id="aucf-holding" type="number" value="3000"></label>
+          <label style="width:90px;">How many
             <select id="aucf-count">
               <option value="10" selected>10</option><option value="5">5</option>
               <option value="15">15</option><option value="20">20</option><option value="30">30</option>
@@ -975,45 +975,45 @@
           </label>
           <button class="btn primary" id="aucf-run">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="14" height="14"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg>
-            Trouver &amp; analyser les enchères
+            Find &amp; analyze auctions
           </button>
         </div>
-        <p class="muted" style="font-size:12px; margin:10px 0 0;">🔎 Recherche IA + web (auction.com, sheriff sales, foreclosures…). Pour chaque bien trouvé : ARV/rehab estimés + <strong>enchère max</strong> calculée. <span style="color:var(--accent);">Estimations de triage</span> — ouvre « Analyser en détail » pour un chiffre précis.</p>
+        <p class="muted" style="font-size:12px; margin:10px 0 0;">🔎 AI + web search (auction.com, sheriff sales, foreclosures…). For each property found: estimated ARV/rehab + calculated <strong>max bid</strong>. <span style="color:var(--accent);">Triage estimates</span> — open "Analyze in detail" for a precise number.</p>
         <div id="aucf-status" class="status-line" style="margin-top:8px;"></div>
       </div>
       <div id="aucf-results"></div>
 
-      <!-- ② Analyse d'une adresse précise -->
-      <h3 style="margin:24px 0 8px;">② Analyser une adresse précise</h3>
+      <!-- ② Analyze a specific address -->
+      <h3 style="margin:24px 0 8px;">② Analyze a specific address</h3>
       <div class="card hero-card">
-        <label style="display:block;">Adresse du bien <span class="muted" style="font-weight:400;">(copie-la depuis la fiche)</span>
+        <label style="display:block;">Property address <span class="muted" style="font-weight:400;">(copy it from the listing)</span>
           <input id="auc-address" type="text" placeholder="123 Main St, Cleveland, OH 44102" style="width:100%;">
         </label>
         <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-top:10px;">
-          <label style="width:150px;">Enchère de départ ($) <input id="auc-opening" type="number" placeholder="—"></label>
-          <label style="width:80px;">Ch. <input id="auc-beds" type="number" placeholder="—"></label>
-          <label style="width:80px;">SdB <input id="auc-baths" type="number" placeholder="—"></label>
-          <label style="width:110px;">Surface (sf) <input id="auc-sqft" type="number" placeholder="—"></label>
-          <label style="width:110px;">Année constr. <input id="auc-year" type="number" placeholder="—"></label>
-          <label style="width:150px;">Date de l'enchère <input id="auc-date" type="date"></label>
-          <label style="width:130px;">Marge cible (%) <input id="auc-margin" type="number" value="20"></label>
-          <label style="width:130px;">Portage ($) <input id="auc-holding" type="number" value="3000"></label>
+          <label style="width:150px;">Opening bid ($) <input id="auc-opening" type="number" placeholder="—"></label>
+          <label style="width:80px;">Beds <input id="auc-beds" type="number" placeholder="—"></label>
+          <label style="width:80px;">Baths <input id="auc-baths" type="number" placeholder="—"></label>
+          <label style="width:110px;">Sq ft <input id="auc-sqft" type="number" placeholder="—"></label>
+          <label style="width:110px;">Year built <input id="auc-year" type="number" placeholder="—"></label>
+          <label style="width:150px;">Auction date <input id="auc-date" type="date"></label>
+          <label style="width:130px;">Target margin (%) <input id="auc-margin" type="number" value="20"></label>
+          <label style="width:130px;">Holding ($) <input id="auc-holding" type="number" value="3000"></label>
         </div>
-        <label style="display:block; margin-top:10px;">État / commentaires de la fiche <span class="muted" style="font-weight:400;">(colle ici la description, l'état, occupé/vacant…)</span>
-          <textarea id="auc-comments" rows="3" placeholder="Ex. « Occupied, sold as-is, no interior access. Roof appears recent. Built 1955. »" style="width:100%; resize:vertical;"></textarea>
+        <label style="display:block; margin-top:10px;">Condition / listing notes <span class="muted" style="font-weight:400;">(paste the description, condition, occupied/vacant…)</span>
+          <textarea id="auc-comments" rows="3" placeholder="e.g. &quot;Occupied, sold as-is, no interior access. Roof appears recent. Built 1955.&quot;" style="width:100%; resize:vertical;"></textarea>
         </label>
         <details style="margin-top:10px;">
-          <summary class="muted" style="cursor:pointer; font-size:13px;">Forcer ARV / rehab manuellement (sinon estimés par l'IA)</summary>
+          <summary class="muted" style="cursor:pointer; font-size:13px;">Force ARV / rehab manually (otherwise estimated by the AI)</summary>
           <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:8px;">
-            <label style="width:160px;">ARV ($) <input id="auc-arv-override" type="number" placeholder="auto (IA)"></label>
-            <label style="width:160px;">Rehab ($) <input id="auc-rehab-override" type="number" placeholder="auto (IA)"></label>
-            <label style="flex:1; min-width:220px;">Lien fiche (réf.) <input id="auc-url" type="text" placeholder="https://www.auction.com/…"></label>
+            <label style="width:160px;">ARV ($) <input id="auc-arv-override" type="number" placeholder="auto (AI)"></label>
+            <label style="width:160px;">Rehab ($) <input id="auc-rehab-override" type="number" placeholder="auto (AI)"></label>
+            <label style="flex:1; min-width:220px;">Listing link (ref.) <input id="auc-url" type="text" placeholder="https://www.auction.com/…"></label>
           </div>
         </details>
         <div style="display:flex; gap:10px; align-items:center; margin-top:12px;">
           <button class="btn primary" id="auc-run">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="14" height="14"><path d="M3 21h18 M13 4l7 7-3 3-7-7z" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            Analyser &amp; calculer l'enchère max
+            Analyze &amp; calculate max bid
           </button>
           <span id="auc-status" class="status-line"></span>
         </div>
@@ -1021,13 +1021,13 @@
 
       <div id="auc-result"></div>
 
-      <!-- Watchlist : enchères suivies -->
+      <!-- Watchlist: tracked auctions -->
       <div id="auc-watchlist-wrap" style="margin-top:24px;">
         <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
-          <h3 style="margin:0;">⭐ Enchères suivies</h3>
-          <button class="btn ghost" id="auc-recheck-all" style="font-size:12px;">🔄 Tout ré-analyser</button>
+          <h3 style="margin:0;">⭐ Tracked auctions</h3>
+          <button class="btn ghost" id="auc-recheck-all" style="font-size:12px;">🔄 Re-analyze all</button>
         </div>
-        <p class="muted" style="font-size:12px; margin:4px 0 12px;">Les enchères que tu suis, triées par date. « Tout ré-analyser » relance l'IA sur chacune (utile pour l'alerte du matin).</p>
+        <p class="muted" style="font-size:12px; margin:4px 0 12px;">The auctions you track, sorted by date. "Re-analyze all" re-runs the AI on each one (useful for the morning alert).</p>
         <div id="auc-watchlist"></div>
       </div>
     </section>
@@ -1167,17 +1167,17 @@ https://app.ispeedtolead.com/deal-speed/property/...
     <section id="view-usamap" class="view">
       <header class="page-header">
         <div class="page-header-text">
-          <div class="page-eyebrow">Géographie</div>
-          <h2>USA Map — potentiel par état</h2>
-          <p>Carte interactive des 50 états + DC. Couleur = potentiel de marché. Click un état pour voir tes deals + données détaillées.</p>
+          <div class="page-eyebrow">Geography</div>
+          <h2>USA Map — potential by state</h2>
+          <p>Interactive map of the 50 states + DC. Color = market potential. Click a state to see your deals + detailed data.</p>
         </div>
         <div class="toolbar">
           <select id="usamap-metric" class="input" style="font-size:12px; padding:6px 10px;">
-            <option value="market_score">🏆 Potentiel marché (par défaut)</option>
-            <option value="yoy_pct">📈 Croissance YoY</option>
-            <option value="median_price">💰 Prix médian</option>
-            <option value="my_deals_count">📍 Tes deals</option>
-            <option value="my_total_profit">💵 Ton potentiel profit</option>
+            <option value="market_score">🏆 Market potential (default)</option>
+            <option value="yoy_pct">📈 YoY growth</option>
+            <option value="median_price">💰 Median price</option>
+            <option value="my_deals_count">📍 Your deals</option>
+            <option value="my_total_profit">💵 Your profit potential</option>
           </select>
         </div>
       </header>
@@ -1190,10 +1190,10 @@ https://app.ispeedtolead.com/deal-speed/property/...
         <div class="card">
           <h3>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3z" stroke-linejoin="round"/></svg>
-            Carte USA
+            USA map
           </h3>
           <div id="usamap-svg-container">
-            <div class="muted" style="text-align:center; padding:40px;">Chargement…</div>
+            <div class="muted" style="text-align:center; padding:40px;">Loading…</div>
           </div>
           <div id="usamap-legend" class="usamap-legend"></div>
         </div>
@@ -1202,11 +1202,11 @@ https://app.ispeedtolead.com/deal-speed/property/...
         <div class="card" id="usamap-state-detail">
           <h3>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z" stroke-linejoin="round"/><circle cx="12" cy="10" r="3"/></svg>
-            Détails de l'état
+            State details
           </h3>
           <div id="usamap-state-info">
             <div class="muted" style="text-align:center; padding:30px;">
-              Click un état sur la carte pour voir les détails.
+              Click a state on the map to see the details.
             </div>
           </div>
         </div>
@@ -1216,20 +1216,20 @@ https://app.ispeedtolead.com/deal-speed/property/...
       <div class="card" style="margin-top:14px;">
         <h3>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6-6 6 6M6 15l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          Ranking — top 20 états par potentiel
+          Ranking — top 20 states by potential
         </h3>
         <div class="table-wrap">
           <table class="data-table" id="usamap-ranking-table">
             <thead>
               <tr>
                 <th>#</th>
-                <th>État</th>
-                <th>Région</th>
-                <th>Grade marché</th>
-                <th>Prix médian</th>
+                <th>State</th>
+                <th>Region</th>
+                <th>Market grade</th>
+                <th>Median price</th>
                 <th>YoY</th>
-                <th>Tes deals</th>
-                <th>Net profit cumulé</th>
+                <th>Your deals</th>
+                <th>Cumulative net profit</th>
               </tr>
             </thead>
             <tbody id="usamap-ranking-tbody"></tbody>
@@ -1400,14 +1400,14 @@ https://app.ispeedtolead.com/deal-speed/property/...
         <div class="page-header-text">
           <div class="page-eyebrow">Pipeline</div>
           <h2>Pipeline</h2>
-          <p>Tes deals jusqu'au closing + tes leads. Statut direct, dates de closing, et garde-fou risque avant de t'engager.</p>
+          <p>Your deals through closing + your leads. Direct status, closing dates, and a risk guardrail before you commit.</p>
         </div>
       </header>
 
-      <!-- ============ DEALS PIPELINE (suivi jusqu'au closing) ============ -->
+      <!-- ============ DEALS PIPELINE (tracked through closing) ============ -->
       <div class="card" id="deals-pipeline-card">
-        <h3 style="margin:0 0 4px;">🏠 Deals — suivi jusqu'au closing</h3>
-        <p class="muted" style="font-size:12px; margin:0 0 12px;">Change le statut directement. Passer « sous contrat » avec un ⛔ deal-breaker non levé demande confirmation. La date de closing apparaît sur les deals sous contrat.</p>
+        <h3 style="margin:0 0 4px;">🏠 Deals — tracked through closing</h3>
+        <p class="muted" style="font-size:12px; margin:0 0 12px;">Change the status directly. Moving to "under contract" with an unresolved ⛔ deal-breaker requires confirmation. The closing date appears on deals under contract.</p>
         <div id="deals-pipeline"></div>
       </div>
 
@@ -1419,33 +1419,33 @@ https://app.ispeedtolead.com/deal-speed/property/...
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M15 3v18" stroke-linecap="round"/></svg>
               Leads pipeline (kanban)
             </h3>
-            <p class="muted" style="margin:4px 0 0; font-size:12px;">Drag-and-drop pour changer le statut. Click un lead pour ouvrir le détail.</p>
+            <p class="muted" style="margin:4px 0 0; font-size:12px;">Drag-and-drop to change status. Click a lead to open the detail.</p>
           </div>
           <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
             <input type="search" id="kanban-search" placeholder="Filter leads…" class="input" style="font-size:12px; padding:6px 10px; max-width:180px;">
-            <select id="kanban-sort" class="input" title="Trier les cartes" style="font-size:12px; padding:6px 8px;">
-              <option value="recent">Tri : récence</option>
-              <option value="score">Tri : score</option>
-              <option value="price">Tri : prix ↑</option>
-              <option value="profit">Tri : profit</option>
+            <select id="kanban-sort" class="input" title="Sort cards" style="font-size:12px; padding:6px 8px;">
+              <option value="recent">Sort: recency</option>
+              <option value="score">Sort: score</option>
+              <option value="price">Sort: price ↑</option>
+              <option value="profit">Sort: profit</option>
             </select>
-            <select id="kanban-filter-grade" class="input" title="Filtrer par grade" style="font-size:12px; padding:6px 8px;">
-              <option value="">Grade : tous</option>
+            <select id="kanban-filter-grade" class="input" title="Filter by grade" style="font-size:12px; padding:6px 8px;">
+              <option value="">Grade: all</option>
               <option value="A">A</option><option value="B">B</option>
               <option value="C">C</option><option value="D">D</option><option value="F">F</option>
             </select>
-            <select id="kanban-filter-worth" class="input" title="Filtrer worth buying" style="font-size:12px; padding:6px 8px;">
-              <option value="">Achat : tous</option>
-              <option value="yes">✓ à acheter</option>
-              <option value="no">⚠ à éviter</option>
+            <select id="kanban-filter-worth" class="input" title="Filter worth buying" style="font-size:12px; padding:6px 8px;">
+              <option value="">Buy: all</option>
+              <option value="yes">✓ worth buying</option>
+              <option value="no">⚠ avoid</option>
             </select>
-            <button class="btn" id="kanban-add-col-btn" title="Ajouter une colonne">
+            <button class="btn" id="kanban-add-col-btn" title="Add a column">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><rect x="3" y="4" width="6" height="16" rx="1"/><path d="M15 9v6M18 12h-6" stroke-linecap="round"/></svg>
-              + Colonne
+              + Column
             </button>
             <button class="btn" id="kanban-add-from-deal">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M3 9h18M3 15h18M9 3v18M15 3v18" stroke-linecap="round"/></svg>
-              + Depuis un deal
+              + From a deal
             </button>
             <button class="btn primary" id="kanban-add-lead">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="14" height="14"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
@@ -1462,15 +1462,15 @@ https://app.ispeedtolead.com/deal-speed/property/...
         <div class="modal-content" style="max-width:680px;">
           <header style="display:flex; align-items:center; justify-content:space-between; padding:16px 20px; border-bottom:1px solid var(--divider);">
             <div>
-              <h3 style="margin:0; font-size:15px;">Ajouter un deal au kanban</h3>
-              <p class="muted" style="margin:4px 0 0; font-size:12px;">Sélectionne un deal existant — il sera ajouté à la colonne "🆕 New" du pipeline leads.</p>
+              <h3 style="margin:0; font-size:15px;">Add a deal to the kanban</h3>
+              <p class="muted" style="margin:4px 0 0; font-size:12px;">Select an existing deal — it will be added to the "🆕 New" column of the leads pipeline.</p>
             </div>
             <button class="btn ghost" id="kanban-picker-close" style="font-size:18px;">×</button>
           </header>
           <div style="padding:14px 20px; border-bottom:1px solid var(--divider); background:var(--surface-2);">
             <div class="search-bar" style="max-width:none; margin:0;">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg>
-              <input type="search" id="kanban-picker-search" placeholder="Filter par adresse, ville, ZIP…" autocomplete="off">
+              <input type="search" id="kanban-picker-search" placeholder="Filter by address, city, ZIP…" autocomplete="off">
             </div>
           </div>
           <div id="kanban-picker-list" style="max-height:500px; overflow-y:auto;"></div>
@@ -1490,29 +1490,29 @@ https://app.ispeedtolead.com/deal-speed/property/...
           </header>
           <div style="padding:16px 20px; max-height:68vh; overflow-y:auto;">
             <div class="form-grid" style="grid-template-columns:1fr 1fr auto; gap:12px; align-items:end;">
-              <label>Colonne / statut
+              <label>Column / status
                 <select id="lead-modal-status"></select>
               </label>
-              <label>📅 Date de relance
+              <label>📅 Follow-up date
                 <input type="date" id="lead-modal-follow" style="width:100%;">
               </label>
-              <a id="lead-modal-opendeal" class="btn" style="display:none;">Ouvrir le deal →</a>
+              <a id="lead-modal-opendeal" class="btn" style="display:none;">Open deal →</a>
             </div>
             <label style="display:block; margin-top:12px;">Notes
               <textarea id="lead-modal-notes" rows="3" style="width:100%; resize:vertical;"></textarea>
             </label>
             <div style="margin-top:16px; border-top:1px solid var(--divider); padding-top:12px;">
-              <h4 style="margin:0 0 10px; font-size:13px;">💬 Commentaires</h4>
+              <h4 style="margin:0 0 10px; font-size:13px;">💬 Comments</h4>
               <div id="lead-comments-list"></div>
               <div style="display:flex; gap:8px; margin-top:10px;">
-                <input id="lead-comment-input" placeholder="Ajouter un commentaire…" autocomplete="off" style="flex:1;">
-                <button class="btn primary" id="lead-comment-add-btn">Ajouter</button>
+                <input id="lead-comment-input" placeholder="Add a comment…" autocomplete="off" style="flex:1;">
+                <button class="btn primary" id="lead-comment-add-btn">Add</button>
               </div>
             </div>
           </div>
           <footer style="display:flex; justify-content:space-between; gap:10px; padding:14px 20px; border-top:1px solid var(--divider);">
-            <button class="btn danger" id="lead-modal-delete">Supprimer le lead</button>
-            <button class="btn primary" id="lead-modal-save">Enregistrer</button>
+            <button class="btn danger" id="lead-modal-delete">Delete lead</button>
+            <button class="btn primary" id="lead-modal-save">Save</button>
           </footer>
         </div>
       </div>
@@ -1553,31 +1553,31 @@ https://app.ispeedtolead.com/deal-speed/property/...
         </form>
         <label style="display:flex; align-items:center; gap:8px; font-size:13px; margin-top:8px;">
           <input type="checkbox" id="ai-auto-research" checked>
-          🤖 Auto-analyse à l'ajout — si un deal arrive sans ARV, lancer automatiquement la recherche ARV + rehab en arrière-plan (~$0.30-0.50/deal)
+          🤖 Auto-analyze on add — if a deal arrives without an ARV, automatically run the ARV + rehab research in the background (~$0.30-0.50/deal)
         </label>
         <label style="display:flex; align-items:center; gap:10px; font-size:13px; margin-top:12px;">
-          🎯 Marge cible
+          🎯 Target margin
           <select id="ai-target-margin" style="font-size:13px; padding:6px 10px;">
-            <option value="15">15 % (standard)</option>
-            <option value="20">20 % (prudent)</option>
-            <option value="25">25 % (conservateur)</option>
+            <option value="15">15% (standard)</option>
+            <option value="20">20% (cautious)</option>
+            <option value="25">25% (conservative)</option>
           </select>
-          <span class="muted" style="font-size:12px;">— pilote le « 🎯 Max à offrir » sur tous les deals</span>
+          <span class="muted" style="font-size:12px;">— drives the "🎯 Max offer" on all deals</span>
         </label>
         <div id="ai-status" class="status-line"></div>
 
         <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--divider);">
           <label style="display:block; font-weight:600; margin-bottom:4px;">📸 ScraperAPI key
-            <span style="font-weight:400; color:var(--muted); font-size:12px;">— pour les photos Zillow automatiques</span>
+            <span style="font-weight:400; color:var(--muted); font-size:12px;">— for automatic Zillow photos</span>
           </label>
           <p class="muted" style="font-size:12px; margin:0 0 8px;">
-            Zillow bloque le scraping direct (anti-bot). Avec une clé <strong>ScraperAPI</strong>
-            (gratuite, 1000 req/mois), chaque URL Zillow charge <strong>toutes les photos automatiquement</strong>.
-            Inscription 2 min : <a href="https://www.scraperapi.com/signup" target="_blank" style="color:var(--accent); font-weight:600;">scraperapi.com/signup</a>
-            → copie ta clé du dashboard.
+            Zillow blocks direct scraping (anti-bot). With a <strong>ScraperAPI</strong> key
+            (free, 1000 req/month), every Zillow URL loads <strong>all photos automatically</strong>.
+            2-min signup: <a href="https://www.scraperapi.com/signup" target="_blank" style="color:var(--accent); font-weight:600;">scraperapi.com/signup</a>
+            → copy your key from the dashboard.
           </p>
           <div style="display:flex; gap:8px; align-items:center;">
-            <input type="password" id="proxy-key-input" placeholder="clé ScraperAPI…" style="flex:1;">
+            <input type="password" id="proxy-key-input" placeholder="ScraperAPI key…" style="flex:1;">
             <button type="button" id="proxy-key-save" class="btn primary">Save</button>
           </div>
           <div id="proxy-status" class="status-line"></div>
@@ -1585,13 +1585,13 @@ https://app.ispeedtolead.com/deal-speed/property/...
 
         <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--divider);">
           <label style="display:block; font-weight:600; margin-bottom:4px;">Google Maps key
-            <span style="font-weight:400; color:var(--muted); font-size:12px;">— optionnel (photo extérieure de secours)</span>
+            <span style="font-weight:400; color:var(--muted); font-size:12px;">— optional (fallback exterior photo)</span>
           </label>
           <p class="muted" style="font-size:12px; margin:0 0 8px;">
-            Quand un site (Zillow…) bloque le scraping, on attache une <strong>photo Street View</strong>
-            de la maison à partir de l'adresse. Clé gratuite (tier généreux) :
+            When a site (Zillow…) blocks scraping, we attach a <strong>Street View photo</strong>
+            of the house from the address. Free key (generous tier):
             <a href="https://console.cloud.google.com/google/maps-apis/credentials" target="_blank" style="color:var(--accent); font-weight:600;">console.cloud.google.com</a>
-            — active <em>Street View Static API</em>.
+            — enable <em>Street View Static API</em>.
           </p>
           <div style="display:flex; gap:8px; align-items:center;">
             <input type="password" id="maps-key-input" placeholder="AIzaSy…" style="flex:1;">
@@ -1967,25 +1967,25 @@ https://app.ispeedtolead.com/deal-speed/property/...
     <div class="modal-backdrop" id="rehab-modal-backdrop"></div>
     <div class="modal-content" style="max-width:600px">
       <header class="modal-header">
-        <h2>🛠 Estimateur de travaux</h2>
+        <h2>🛠 Rehab estimator</h2>
         <button class="modal-close" id="rehab-modal-close">×</button>
       </header>
       <div class="modal-body">
         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px;">
           <button class="btn primary" id="rehab-ai-btn">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" stroke-linejoin="round"/></svg>
-            Estimer avec l'IA
+            Estimate with AI
           </button>
           <span id="rehab-ai-status" class="muted" style="font-size:12px;"></span>
         </div>
-        <label class="muted" style="display:block; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px;">Ajout rapide</label>
+        <label class="muted" style="display:block; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px;">Quick add</label>
         <div id="rehab-catalog" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px;"></div>
         <div id="rehab-items"></div>
-        <button class="btn ghost" id="rehab-add-line" style="margin-top:8px; font-size:12px;">+ Ajouter une ligne</button>
+        <button class="btn ghost" id="rehab-add-line" style="margin-top:8px; font-size:12px;">+ Add a line</button>
         <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:16px; border-top:1px solid var(--divider); padding-top:12px;">
           <label style="display:flex; align-items:center; gap:8px; font-size:13px; margin:0;">
             <input type="checkbox" id="rehab-contingency-on" checked style="width:16px;height:16px;">
-            Imprévus <input type="number" id="rehab-contingency-pct" value="15" min="0" max="50" style="width:54px; padding:4px 6px;">%
+            Contingency <input type="number" id="rehab-contingency-pct" value="15" min="0" max="50" style="width:54px; padding:4px 6px;">%
           </label>
           <div style="text-align:right;">
             <div class="muted" style="font-size:11px;">Total</div>
@@ -1994,8 +1994,8 @@ https://app.ispeedtolead.com/deal-speed/property/...
         </div>
       </div>
       <footer class="modal-footer">
-        <button class="btn" id="rehab-cancel">Annuler</button>
-        <button class="btn primary" id="rehab-apply">Appliquer au deal</button>
+        <button class="btn" id="rehab-cancel">Cancel</button>
+        <button class="btn primary" id="rehab-apply">Apply to deal</button>
       </footer>
     </div>
   </div>

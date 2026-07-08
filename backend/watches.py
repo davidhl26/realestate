@@ -73,7 +73,7 @@ class WatchesDB:
         data = self._read()
         w = {
             "id": uuid.uuid4().hex[:10],
-            "label": criteria.get("label") or criteria.get("location", "Veille"),
+            "label": criteria.get("label") or criteria.get("location", "Watch"),
             "location": (criteria.get("location") or "").strip(),
             "price_max": criteria.get("price_max"),
             "price_min": criteria.get("price_min"),

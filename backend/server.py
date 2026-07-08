@@ -155,7 +155,7 @@ def login(request: Request, payload: dict = Body(...)):
     if not pw:
         return {"ok": True, "required": False}
     if (payload.get("password") or "") != pw:
-        raise HTTPException(401, "Mot de passe incorrect")
+        raise HTTPException(401, "Incorrect password")
     resp = JSONResponse({"ok": True})
     resp.set_cookie("fb_auth", _auth_token(pw), httponly=True, samesite="lax",
                     max_age=60 * 60 * 24 * 30,
@@ -429,8 +429,8 @@ def create_deal(deal: dict = Body(...)):
     if not force_dup and not deal.get("id"):
         dup = db.find_duplicate(deal["address"])
         if dup:
-            raise HTTPException(409, f"Doublon possible : « {dup.get('address')} » "
-                                     f"existe déjà sur le board (id: {dup['id']}).")
+            raise HTTPException(409, f"Possible duplicate: \"{dup.get('address')}\" "
+                                     f"is already on the board (id: {dup['id']}).")
     if not deal.get("purchase_price"):
         deal["purchase_price"] = 0
     # Auto-compute score/grade/signal so they are stored
@@ -581,8 +581,8 @@ def deal_comps_map(deal_id: str):
             d["lat"], d["lng"] = loc
             db.upsert_deal(d)
         else:
-            return {"ok": False, "error": "Pas de coordonnées pour ce bien "
-                    "(adresse non géocodable)."}
+            return {"ok": False, "error": "No coordinates for this property "
+                    "(address could not be geocoded)."}
 
     # Collect comps: scraped first, then AI ARV comps.
     raw = []
@@ -1363,11 +1363,11 @@ def _run_auction_analysis(payload: dict) -> dict:
     note = ""
     if opening is not None and opening > 0:
         if opening > bid["max_bid"]:
-            verdict, note = "pass", "L'enchère de départ dépasse déjà ton max — passe."
+            verdict, note = "pass", "The opening bid already exceeds your max — pass."
         elif opening > bid["max_bid"] * 0.9:
-            verdict, note = "tight", "Marge serrée : peu de place avant ton max."
+            verdict, note = "tight", "Tight margin: little room left before your max."
         else:
-            verdict, note = "go", "De la marge sous ton enchère max."
+            verdict, note = "go", "Room to spare under your max bid."
     if not arv or (rehab and rehab > arv * 0.6):
         verdict = "caution" if verdict == "go" else verdict
 
@@ -1408,9 +1408,9 @@ def auction_analyze(payload: dict = Body(...)):
     has_override = payload.get("arv_override") not in (None, "") and payload.get("rehab_override") not in (None, "")
     if not payload.get("force") and not has_override and not _looks_like_address(address):
         return {"ok": False, "error": (
-            f"« {address} » ressemble à une ville, pas à une adresse précise. "
-            "Donne une adresse (rue), ex. « 3744 W 135th St, Cleveland, OH 44111 ». "
-            "Pour explorer une ville entière, utilise le module Search.")}
+            f"\"{address}\" looks like a city, not a specific address. "
+            "Enter a street address, e.g. \"3744 W 135th St, Cleveland, OH 44111\". "
+            "To explore an entire city, use the Search module.")}
     return _run_auction_analysis(payload)
 
 
@@ -1530,7 +1530,7 @@ def auction_recheck_all(payload: dict = Body(default={})):
             "opportunities": opportunities, "upcoming": upcoming}
 
 
-# ---- Zillow watches (veille) ----
+# ---- Zillow watches ----
 def _run_watch(watch_id: str) -> dict:
     """Run one watch: AI area search with the watch's criteria, then diff."""
     from . import ai_research
@@ -1557,7 +1557,7 @@ def watches_list():
 @app.post("/api/watches")
 def watches_create(payload: dict = Body(...)):
     if not (payload.get("location") or "").strip():
-        raise HTTPException(400, "location required (ville, zip ou état)")
+        raise HTTPException(400, "location required (city, zip or state)")
     w = watches_db.create(payload)
     return watches_db.summary(w)
 
@@ -1605,10 +1605,10 @@ def _watch_scheduler():
                 for wid in watches_db.due_watches():
                     try:
                         res = _run_watch(wid)
-                        log.info("veille %s: %s", wid,
+                        log.info("watch %s: %s", wid,
                                  {k: res.get(k) for k in ("ok", "new", "price_drops", "gone", "error")})
                     except Exception:
-                        log.exception("veille %s failed", wid)
+                        log.exception("watch %s failed", wid)
         except Exception:
             log.exception("watch scheduler tick failed")
         _t.sleep(_WATCH_TICK_SEC)
@@ -1626,7 +1626,7 @@ def _start_watch_scheduler():
 @app.post("/api/watches/run-stale")
 def watches_run_stale(payload: dict = Body(default={})):
     """Kick stale watches (last_run older than max_age_h) in a background
-    thread — called on app open so the veille refreshes itself daily without a
+    thread — called on app open so the watch refreshes itself daily without a
     server-side cron (Render free tier sleeps). Bounded to `limit` watches."""
     import threading
     from datetime import datetime as dt, timedelta, timezone as tz

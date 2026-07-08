@@ -18,7 +18,7 @@
     try {
       await API.login($("#login-password").value);
       location.reload();
-    } catch { err.textContent = "Mot de passe incorrect."; }
+    } catch { err.textContent = "Incorrect password."; }
   });
   (async () => {
     try {
@@ -62,7 +62,7 @@
     const g = d.risk_grade;
     if (!g) return "";
     const brk = (d.deal_breakers && d.deal_breakers.length) ? "⛔" : "";
-    return `<span class="risk-badge" style="background:${riskColor(g)}" title="Sécurité: note ${g}${brk ? " — deal-breaker" : ""}">${brk}🛡 ${g}</span>`;
+    return `<span class="risk-badge" style="background:${riskColor(g)}" title="Safety: grade ${g}${brk ? " — deal-breaker" : ""}">${brk}🛡 ${g}</span>`;
   }
   function dealBreakerStrip(d) {
     const n = (d.deal_breakers && d.deal_breakers.length) || 0;
@@ -73,10 +73,10 @@
   // (click → type once → it auto-increments daily). Views shown if set.
   function cardZillowLine(d) {
     const dom = (d.days_on_market != null && d.days_on_market !== "") ? d.days_on_market : "";
-    const daysChip = `📅 <span class="card-dom-edit" data-id="${escape(d.id)}" data-value="${dom}" title="Jours sur Zillow — clique pour saisir, puis ça s'incrémente seul chaque jour">${dom !== "" ? dom : "—"}</span> j sur Zillow`;
+    const daysChip = `📅 <span class="card-dom-edit" data-id="${escape(d.id)}" data-value="${dom}" title="Days on Zillow — click to enter, then it auto-increments each day">${dom !== "" ? dom : "—"}</span> days on Zillow`;
     let line = daysChip;
     if (d.page_view_count != null && d.page_view_count !== "")
-      line += ` · 👁 ${Number(d.page_view_count).toLocaleString("en-US")} vues`;
+      line += ` · 👁 ${Number(d.page_view_count).toLocaleString("en-US")} views`;
     return `<div class="deal-card-zillow">${line}</div>`;
   }
   // Inline edit of days-on-Zillow straight from a card (no need to open the deal)
@@ -170,11 +170,11 @@
                         auction: "auctions", skiptrace: "auctions" };
   const _GROUP_TABS = {
     sourcing: [
-      { v: "add", label: "➕ Ajouter" },
-      { v: "search", label: "🔎 Rechercher & veiller" },
+      { v: "add", label: "➕ Add" },
+      { v: "search", label: "🔎 Search & watch" },
     ],
     auctions: [
-      { v: "auction", label: "🏛 Enchères + enchère max" },
+      { v: "auction", label: "🏛 Auctions + max bid" },
       { v: "skiptrace", label: "📇 Skip Trace" },
     ],
   };
@@ -270,7 +270,7 @@
     const setCount = (id, n) => { const e = $(id); if (e) e.textContent = n ? `(${n})` : ""; };
     const empty = msg => `<p class="muted" style="font-size:13px; margin:6px 0 0;">${msg}</p>`;
 
-    // 1) À vérifier — deal-breakers or F/D risk
+    // 1) To review — deal-breakers or F/D risk
     const alerts = deals
       .filter(d => (d.deal_breakers && d.deal_breakers.length) || ["F", "D"].includes(d.risk_grade))
       .sort((a, b) => ((b.deal_breakers?.length ? 100 : 0) + (_RISK_RANK[b.risk_grade] || 0))
@@ -278,15 +278,15 @@
       .slice(0, 8);
     setCount("#dash-alerts-count", alerts.length);
     $("#dash-alerts").innerHTML = alerts.length ? alerts.map(d => {
-      const reason = (d.deal_breakers && d.deal_breakers[0]) || "Risque élevé";
+      const reason = (d.deal_breakers && d.deal_breakers[0]) || "High risk";
       return `<div class="cockpit-row" data-open="${escape(d.id)}">
         <span class="risk-badge" style="background:${riskColor(d.risk_grade)};">🛡 ${d.risk_grade || "?"}</span>
         <div class="cockpit-row-main"><div class="cockpit-row-title">${escape(d.address || "?")}</div>
           <div class="cockpit-row-sub">${escape(reason)}</div></div>
       </div>`;
-    }).join("") : empty("✅ Aucun deal à risque — rien à vérifier en urgence.");
+    }).join("") : empty("✅ No risky deals — nothing urgent to check.");
 
-    // 2) Meilleures opportunités — clean risk + high score
+    // 2) Best opportunities — clean risk + high score
     const opps = deals
       .filter(d => !(d.deal_breakers && d.deal_breakers.length) && ["A", "B"].includes(d.risk_grade || "A"))
       .sort((a, b) => (b.score || 0) - (a.score || 0))
@@ -297,9 +297,9 @@
         <span class="score-badge" style="background:${scoreColor(d.score)};">${d.score ?? "?"}</span>
         <div class="cockpit-row-main"><div class="cockpit-row-title">${escape(d.address || "?")}</div>
           <div class="cockpit-row-sub">${escape(d.signal || "")}${d.net_profit != null ? " · " + fmtMoney(d.net_profit, true) : ""}</div></div>
-      </div>`).join("") : empty("Ajoute des deals pour voir tes meilleures pistes ici.");
+      </div>`).join("") : empty("Add deals to see your best leads here.");
 
-    // 3) Enchères qui approchent (≤21 j)
+    // 3) Upcoming auctions (≤21 days)
     const soon = watchlist.map(w => {
       let dleft = null;
       if (w.auction_date) { const d = new Date(w.auction_date + "T00:00:00"); dleft = Math.round((d - today) / 86400000); }
@@ -308,10 +308,10 @@
     setCount("#dash-auctions-count", soon.length);
     $("#dash-auctions").innerHTML = soon.length ? soon.map(w => `
       <div class="cockpit-row" data-auction="1">
-        <span class="cockpit-jx ${w.dleft <= 7 ? "urgent" : ""}">J−${w.dleft}</span>
+        <span class="cockpit-jx ${w.dleft <= 7 ? "urgent" : ""}">${w.dleft}d</span>
         <div class="cockpit-row-main"><div class="cockpit-row-title">${escape(w.address || "?")}</div>
-          <div class="cockpit-row-sub">${w.max_bid ? "Enchère max " + fmtMoney(w.max_bid) : ""} · ${escape(w.auction_date || "")}</div></div>
-      </div>`).join("") : empty("Aucune enchère suivie dans les 21 jours.");
+          <div class="cockpit-row-sub">${w.max_bid ? "Max bid " + fmtMoney(w.max_bid) : ""} · ${escape(w.auction_date || "")}</div></div>
+      </div>`).join("") : empty("No tracked auctions in the next 21 days.");
 
     // 4) Relances dues
     const due = leads.filter(l => l.follow_up && l.follow_up <= todayISO)
@@ -321,8 +321,8 @@
       <div class="cockpit-row" data-crm="1">
         <span class="cockpit-jx urgent">📅</span>
         <div class="cockpit-row-main"><div class="cockpit-row-title">${escape(l.address || l.name || "Lead")}</div>
-          <div class="cockpit-row-sub">Relance prévue ${escape(l.follow_up)} · ${escape(l.status || "")}</div></div>
-      </div>`).join("") : empty("Aucune relance en retard. 👍");
+          <div class="cockpit-row-sub">Follow-up due ${escape(l.follow_up)} · ${escape(l.status || "")}</div></div>
+      </div>`).join("") : empty("No overdue follow-ups. 👍");
 
     // Wiring
     $$("#view-dashboard .cockpit-row").forEach(row => row.addEventListener("click", () => {
@@ -639,7 +639,7 @@
       .map(d => (d.city || "").trim()).filter(Boolean))]
       .sort((a, b) => a.localeCompare(b));
     const cur = state.cityFilter;
-    sel.innerHTML = `<option value="">🏙 Toutes les villes</option>` +
+    sel.innerHTML = `<option value="">🏙 All cities</option>` +
       cities.map(c => `<option value="${escape(c)}">${escape(c)}</option>`).join("");
     // Keep the current selection if it still exists, else reset.
     if (cur && cities.some(c => c.toLowerCase() === cur.toLowerCase())) sel.value = cur;
@@ -657,8 +657,8 @@
     if (btn) {
       btn.classList.toggle("active", _dealsSelectMode);
       btn.innerHTML = _dealsSelectMode
-        ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/></svg> Quitter sélection`
-        : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke-linecap="round" stroke-linejoin="round"/></svg> Mode sélection`;
+        ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M18 6L6 18M6 6l12 12" stroke-linecap="round"/></svg> Exit selection`
+        : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M9 11l3 3L22 4M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke-linecap="round" stroke-linejoin="round"/></svg> Selection mode`;
     }
     if (!_dealsSelectMode) _dealsSelected.clear();
     _updateBulkBar();
@@ -678,17 +678,17 @@
     const ids = Array.from(_dealsSelected);
     if (!ids.length) return;
     const confirmMsg =
-      `Supprimer ${ids.length} deal${ids.length > 1 ? 's' : ''} ?\n\n` +
-      `Cette action est irréversible.\n\n` +
+      `Delete ${ids.length} deal${ids.length > 1 ? 's' : ''}?\n\n` +
+      `This action cannot be undone.\n\n` +
       ids.slice(0, 8).map(id => {
         const d = (state.deals || []).find(x => x.id === id);
         return `• ${d?.address || id}`;
       }).join("\n") +
-      (ids.length > 8 ? `\n• ... et ${ids.length - 8} autres` : "");
+      (ids.length > 8 ? `\n• ... and ${ids.length - 8} more` : "");
     if (!confirm(confirmMsg)) return;
 
     const btn = $("#deals-bulk-delete");
-    if (btn) { btn.disabled = true; btn.textContent = "Suppression…"; }
+    if (btn) { btn.disabled = true; btn.textContent = "Deleting…"; }
     let okCount = 0, failCount = 0;
     for (const id of ids) {
       try {
@@ -700,12 +700,12 @@
       }
     }
     if (btn) { btn.disabled = false; btn.innerHTML =
-      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" stroke-linecap="round"/></svg> Supprimer`;
+      `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" stroke-linecap="round"/></svg> Delete`;
     }
     if (failCount === 0) {
-      toast(`✓ ${okCount} deal${okCount > 1 ? 's' : ''} supprimé${okCount > 1 ? 's' : ''}`, "success");
+      toast(`✓ ${okCount} deal${okCount > 1 ? 's' : ''} deleted`, "success");
     } else {
-      toast(`${okCount} supprimés, ${failCount} échec${failCount > 1 ? 's' : ''}`, "warn");
+      toast(`${okCount} deleted, ${failCount} failed`, "warn");
     }
     _dealsSelected.clear();
     _toggleSelectMode(false);
@@ -739,8 +739,8 @@
     if (!deals.length) {
       container.innerHTML = `<div class="card empty">
         <img src="/img/empty-state.png" alt="" style="width:150px; height:150px; object-fit:contain; margin:0 auto 6px; display:block; opacity:.92;">
-        <h3>Aucun deal ici</h3>
-        <p>Change ta recherche ou ajoute un deal via Sourcing.</p>
+        <h3>No deals here</h3>
+        <p>Adjust your search or add a deal via Sourcing.</p>
       </div>`;
       return;
     }
@@ -753,7 +753,7 @@
               <span class="score-badge" style="background:${scoreColor(d.score)}">${d.score}</span>
               <span class="pill ${signalPillClass(d.signal)}">${escape(d.signal)}</span>
               ${riskBadge(d)}
-              ${d.ai_auto === "running" ? '<span class="pill yellow" title="Analyse automatique en cours (ARV/photos)">🤖…</span>' : ""}
+              ${d.ai_auto === "running" ? '<span class="pill yellow" title="Automatic analysis in progress (ARV/photos)">🤖…</span>' : ""}
             </div>
           </div>
           <div class="deal-card-body">
@@ -776,8 +776,8 @@
               <span class="val">${fmtMoney(d.arv_base)}</span>
             </div>
             <div class="deal-card-row">
-              <span class="label">🎯 Max à offrir</span>
-              <span class="val ${d.max_offer_blocked ? "price-blocked" : ""}" style="font-weight:800; color:${d.max_offer_blocked ? "var(--red)" : "var(--green)"};" title="${d.max_offer_blocked ? "Bloqué — deal-breaker à lever" : (d.max_offer_gap != null ? (d.max_offer_gap >= 0 ? "Marge de " + fmtMoney(d.max_offer_gap) + " sous le prix demandé" : "Demandé " + fmtMoney(-d.max_offer_gap) + " au-dessus de ton max") : "")}">${d.max_offer != null ? fmtMoney(d.max_offer) : "—"}</span>
+              <span class="label">🎯 Max offer</span>
+              <span class="val ${d.max_offer_blocked ? "price-blocked" : ""}" style="font-weight:800; color:${d.max_offer_blocked ? "var(--red)" : "var(--green)"};" title="${d.max_offer_blocked ? "Blocked — deal-breaker to clear" : (d.max_offer_gap != null ? (d.max_offer_gap >= 0 ? fmtMoney(d.max_offer_gap) + " of margin below asking price" : "Asking " + fmtMoney(-d.max_offer_gap) + " above your max") : "")}">${d.max_offer != null ? fmtMoney(d.max_offer) : "—"}</span>
             </div>
             <div class="deal-card-row">
               <span class="label">Net profit (flip)</span>
@@ -792,9 +792,9 @@
               ${cardSourceBadge(d.source_url)}
             </div>
             <div class="deal-card-actions">
-              <button class="deal-card-delete" data-id="${d.id}" title="Supprimer ce deal">
+              <button class="deal-card-delete" data-id="${d.id}" title="Delete this deal">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" stroke-linecap="round"/></svg>
-                Supprimer
+                Delete
               </button>
             </div>
           </div>
@@ -832,14 +832,14 @@
         const id = btn.dataset.id;
         const deal = (state.deals || []).find(d => d.id === id);
         const label = deal?.address || id;
-        if (!confirm(`Supprimer "${label}" ?\n\nCette action est irréversible.`)) return;
+        if (!confirm(`Delete "${label}"?\n\nThis action cannot be undone.`)) return;
         btn.disabled = true;
         try {
           await API.deleteDeal(id);
-          toast(`✓ Deal supprimé: ${label}`, "success");
+          toast(`✓ Deal deleted: ${label}`, "success");
           await refreshDeals();
         } catch (err) {
-          toast("Échec: " + err.message, "error");
+          toast("Failed: " + err.message, "error");
           btn.disabled = false;
         }
       });
@@ -955,19 +955,19 @@
   $("#deals-dup-btn")?.addEventListener("click", async () => {
     const banner = $("#deals-dup-banner"); if (!banner) return;
     banner.style.display = "block";
-    banner.innerHTML = `<div class="card"><span class="spinner"></span> Recherche de doublons…</div>`;
+    banner.innerHTML = `<div class="card"><span class="spinner"></span> Searching for duplicates…</div>`;
     try {
       const groups = await API.dealsDuplicates();
       if (!groups.length) {
-        banner.innerHTML = `<div class="card" style="border-left:3px solid var(--green);">✅ Aucun doublon détecté. <button class="btn ghost" id="dup-close" style="font-size:12px; margin-left:8px;">Fermer</button></div>`;
+        banner.innerHTML = `<div class="card" style="border-left:3px solid var(--green);">✅ No duplicates found. <button class="btn ghost" id="dup-close" style="font-size:12px; margin-left:8px;">Close</button></div>`;
       } else {
         banner.innerHTML = `<div class="card" style="border-left:3px solid #e8a93b;">
-          <strong>👯 ${groups.length} groupe(s) de doublons possibles</strong>
+          <strong>👯 ${groups.length} possible duplicate group(s)</strong>
           ${groups.map(g => `<div style="margin-top:8px; font-size:13px;">${g.map(x =>
             `<div style="display:flex; gap:8px; align-items:center; padding:2px 0;">
                <a href="#" data-dup-open="${escape(x.id)}" style="font-weight:600;">${escape(x.address)}</a>
              </div>`).join("")}</div>`).join("")}
-          <p class="muted" style="font-size:12px; margin:8px 0 0;">Ouvre chaque fiche et supprime celle en trop (bouton Supprimer sur la carte). <button class="btn ghost" id="dup-close" style="font-size:12px;">Fermer</button></p>
+          <p class="muted" style="font-size:12px; margin:8px 0 0;">Open each card and delete the extra one (Delete button on the card). <button class="btn ghost" id="dup-close" style="font-size:12px;">Close</button></p>
         </div>`;
       }
       banner.querySelectorAll("[data-dup-open]").forEach(a => a.addEventListener("click", e => {
@@ -1037,7 +1037,7 @@
         const el = $(s); if (el) el.disabled = false;
       });
     } else {
-      cur.textContent = "Sélectionner un deal…";
+      cur.textContent = "Select a deal…";
       picker.classList.remove("has-deal");
       ["#gdb-open", "#gdb-chat", "#gdb-clear"].forEach(s => {
         const el = $(s); if (el) el.disabled = true;
@@ -1087,7 +1087,7 @@
     if (countEl) countEl.textContent = `${deals.length}/${(state.deals||[]).length}`;
 
     if (!deals.length) {
-      list.innerHTML = `<div class="gdb-empty">Aucun deal ne match "${escape(q)}"</div>`;
+      list.innerHTML = `<div class="gdb-empty">No deals match "${escape(q)}"</div>`;
       return;
     }
     list.innerHTML = deals.map((d, i) => {
@@ -1237,9 +1237,9 @@
   }
 
   const _DOC_VERDICT = {
-    good: ["var(--green)", "✅ BON"],
-    caution: ["#e8a93b", "⚠️ PRUDENCE"],
-    bad: ["var(--red)", "⛔ MAUVAIS"],
+    good: ["var(--green)", "✅ GOOD"],
+    caution: ["#e8a93b", "⚠️ CAUTION"],
+    bad: ["var(--red)", "⛔ BAD"],
   };
   function renderDealDocuments(data) {
     const d = data.deal || {};
@@ -1247,7 +1247,7 @@
     if (!list) return;
     const docs = d.documents || [];
     const D = v => (v == null || v === "") ? "—" : "$" + Math.round(v).toLocaleString("en-US");
-    const sevLbl = { minor: "mineur", moderate: "moyen", major: "majeur", safety: "sécurité" };
+    const sevLbl = { minor: "minor", moderate: "moderate", major: "major", safety: "safety" };
     list.innerHTML = docs.length ? docs.map(doc => {
       const a = doc.analysis || {};
       const vd = _DOC_VERDICT[a.verdict] || ["var(--muted)", "—"];
@@ -1267,23 +1267,23 @@
         ${a.summary ? `<p style="margin:8px 0; font-size:13px;">${escape(a.summary)}</p>` : ""}
         ${a.verdict_reason ? `<p style="margin:4px 0; font-size:13px; color:${vd[0]};">${escape(a.verdict_reason)}</p>` : ""}
         <div style="display:flex; gap:16px; flex-wrap:wrap; margin:8px 0; font-size:13px;">
-          ${a.total_repair_estimate ? `<span><strong>Réparations estimées :</strong> ${D(a.total_repair_estimate)}</span>` : ""}
-          ${a.suggested_rehab ? `<span><strong>Rehab suggéré :</strong> ${D(a.suggested_rehab)} <button class="btn ghost doc-apply" data-rehab="${a.suggested_rehab}" style="font-size:11px; padding:2px 8px;">appliquer</button></span>` : ""}
-          ${(a.key_numbers && a.key_numbers.appraised_value) ? `<span><strong>Valeur expertisée :</strong> ${D(a.key_numbers.appraised_value)}</span>` : ""}
+          ${a.total_repair_estimate ? `<span><strong>Estimated repairs:</strong> ${D(a.total_repair_estimate)}</span>` : ""}
+          ${a.suggested_rehab ? `<span><strong>Suggested rehab:</strong> ${D(a.suggested_rehab)} <button class="btn ghost doc-apply" data-rehab="${a.suggested_rehab}" style="font-size:11px; padding:2px 8px;">apply</button></span>` : ""}
+          ${(a.key_numbers && a.key_numbers.appraised_value) ? `<span><strong>Appraised value:</strong> ${D(a.key_numbers.appraised_value)}</span>` : ""}
         </div>
         ${breakers ? `<div style="margin:6px 0;"><strong style="color:var(--red); font-size:13px;">⛔ Deal-breakers</strong><ul style="margin:4px 0; padding-left:18px; font-size:13px;">${breakers}</ul></div>` : ""}
-        ${findings ? `<details style="margin-top:6px;"><summary style="cursor:pointer; font-size:13px; font-weight:600;">${(a.findings || []).length} constat(s)</summary><div style="margin-top:6px;">${findings}</div></details>` : ""}
+        ${findings ? `<details style="margin-top:6px;"><summary style="cursor:pointer; font-size:13px; font-weight:600;">${(a.findings || []).length} finding(s)</summary><div style="margin-top:6px;">${findings}</div></details>` : ""}
         <div style="display:flex; gap:8px; margin-top:10px; flex-wrap:wrap;">
-          <button class="btn doc-reapply" data-id="${escape(doc.id)}" style="font-size:12px;">🔄 Rafraîchir les données du deal</button>
-          <a class="btn ghost" href="${API.dealDocumentUrl(d.id, doc.id)}" target="_blank" rel="noopener" style="font-size:12px;">Ouvrir le PDF ↗</a>
-          <button class="btn ghost doc-delete" data-id="${escape(doc.id)}" style="font-size:12px;">🗑 Retirer</button>
+          <button class="btn doc-reapply" data-id="${escape(doc.id)}" style="font-size:12px;">🔄 Refresh deal data</button>
+          <a class="btn ghost" href="${API.dealDocumentUrl(d.id, doc.id)}" target="_blank" rel="noopener" style="font-size:12px;">Open PDF ↗</a>
+          <button class="btn ghost doc-delete" data-id="${escape(doc.id)}" style="font-size:12px;">🗑 Remove</button>
         </div>
       </div>`;
-    }).join("") : `<p class="muted" style="font-size:13px; margin:0;">Aucun document. Ajoute une inspection pour une analyse automatique.</p>`;
+    }).join("") : `<p class="muted" style="font-size:13px; margin:0;">No documents. Add an inspection for automatic analysis.</p>`;
 
     // Wire delete + apply-rehab
     list.querySelectorAll(".doc-delete").forEach(b => b.addEventListener("click", async () => {
-      if (!confirm("Retirer ce document ?")) return;
+      if (!confirm("Remove this document?")) return;
       try { await API.deleteDealDocument(d.id, b.dataset.id); openDeal(d.id); }
       catch (e) { toast(e.message, "error"); }
     }));
@@ -1292,12 +1292,12 @@
       try {
         const r = await API.reapplyDealDocument(d.id, b.dataset.id);
         const ap = r.applied || {};
-        toast(Object.keys(ap).length ? `Données rafraîchies (${Object.keys(ap).join(", ")})` : "Données déjà à jour", "success");
+        toast(Object.keys(ap).length ? `Data refreshed (${Object.keys(ap).join(", ")})` : "Data already up to date", "success");
         openDeal(d.id);
-      } catch (e) { b.disabled = false; b.textContent = "🔄 Rafraîchir les données du deal"; toast(e.message, "error"); }
+      } catch (e) { b.disabled = false; b.textContent = "🔄 Refresh deal data"; toast(e.message, "error"); }
     }));
     list.querySelectorAll(".doc-apply").forEach(b => b.addEventListener("click", async () => {
-      try { await API.patchDeal(d.id, { rehab_base: Number(b.dataset.rehab) }); toast("Rehab appliqué", "success"); openDeal(d.id); }
+      try { await API.patchDeal(d.id, { rehab_base: Number(b.dataset.rehab) }); toast("Rehab applied", "success"); openDeal(d.id); }
       catch (e) { toast(e.message, "error"); }
     }));
     // Wire the upload input (re-attached each render)
@@ -1306,19 +1306,19 @@
   }
   async function _uploadDealDoc(dealId, file) {
     const st = $("#doc-upload-status");
-    if (st) st.innerHTML = '<span class="spinner"></span> Lecture + analyse IA du document… (~30-60s)';
+    if (st) st.innerHTML = '<span class="spinner"></span> Reading + AI-analyzing the document… (~30-60s)';
     try {
       const r = await API.uploadDealDocument(dealId, file);
-      if (!r.ok) { if (st) st.innerHTML = `<span style="color:var(--red)">${escape(r.error || "Échec")}</span>`; return; }
+      if (!r.ok) { if (st) st.innerHTML = `<span style="color:var(--red)">${escape(r.error || "Failed")}</span>`; return; }
       const v = (r.document.analysis || {}).verdict;
-      if (st) st.innerHTML = `<span style="color:var(--green)">✓ Analysé — verdict : ${escape(v || "?")}</span>`;
+      if (st) st.innerHTML = `<span style="color:var(--green)">✓ Analyzed — verdict: ${escape(v || "?")}</span>`;
       openDeal(dealId);  // re-render with the new doc + updated risk/rehab
     } catch (e) { if (st) st.innerHTML = `<span style="color:var(--red)">${escape(e.message)}</span>`; }
   }
 
   function _fmtCommentTs(ts) {
     try {
-      return new Date(ts).toLocaleString("fr-FR", {
+      return new Date(ts).toLocaleString("en-US", {
         day: "2-digit", month: "2-digit", year: "numeric",
         hour: "2-digit", minute: "2-digit",
       });
@@ -1333,12 +1333,12 @@
       <div class="deal-comment">
         <div class="deal-comment-meta">
           <span>🕒 ${escape(_fmtCommentTs(c.created_at))}</span>
-          <button class="deal-comment-del" data-id="${escape(c.id)}" title="Supprimer">✕</button>
+          <button class="deal-comment-del" data-id="${escape(c.id)}" title="Delete">✕</button>
         </div>
         <div class="deal-comment-text">${escape(c.text).replace(/\n/g, "<br>")}</div>
-      </div>`).join("") : `<p class="muted" style="font-size:13px; margin:0;">Aucun commentaire pour l'instant.</p>`;
+      </div>`).join("") : `<p class="muted" style="font-size:13px; margin:0;">No comments yet.</p>`;
     list.querySelectorAll(".deal-comment-del").forEach(b => b.addEventListener("click", async () => {
-      if (!confirm("Supprimer ce commentaire ?")) return;
+      if (!confirm("Delete this comment?")) return;
       try { const r = await API.deleteDealComment(d.id, b.dataset.id); d.comments = r.comments; renderDealComments(data); }
       catch (e) { toast(e.message, "error"); }
     }));
@@ -1371,15 +1371,15 @@
         const r = await API.dealCompsMap(d.id);
         const list = (r.comps || []).map(c =>
           `<div class="risk-flag"><span style="font-weight:700;">$${Math.round((c.price || 0) / 1000)}K</span><span style="flex:1;">${escape(c.address || "?")}</span><span class="muted">${escape(String(c.date || ""))}</span></div>`).join("");
-        if (mapEl) mapEl.innerHTML = list || '<p class="muted" style="padding:12px;">Aucun comparable pour l\'instant.</p>';
+        if (mapEl) mapEl.innerHTML = list || '<p class="muted" style="padding:12px;">No comparables yet.</p>';
         if (mapEl) mapEl.style.height = "auto";
         const note = $("#detail-map-note");
-        if (note) note.textContent = "Carte indisponible (librairie bloquée) — comparables affichés en liste.";
+        if (note) note.textContent = "Map unavailable (library blocked) — comparables shown as a list.";
       } catch {}
       return;
     }
     const note = $("#detail-map-note");
-    if (note) note.textContent = "Chargement de la carte + comparables…";
+    if (note) note.textContent = "Loading map + comparables…";
     if (_dealMap) { try { _dealMap.remove(); } catch {} _dealMap = null; }
     const map = L.map("detail-map", { scrollWheelZoom: false });
     _dealMap = map;
@@ -1410,7 +1410,7 @@
       try {
         const r = await API.dealCompsMap(d.id);
         if (!r.ok) {
-          if (note) note.textContent = r.error || "Carte indisponible pour ce bien.";
+          if (note) note.textContent = r.error || "Map unavailable for this property.";
           if (!viewSet) map.setView([39.5, -98.35], 4);
           return;
         }
@@ -1420,9 +1420,9 @@
         const pts = [[s.lat, s.lng]];
         L.marker([s.lat, s.lng], { zIndexOffset: 1000, icon: L.divIcon({
             className: "", iconAnchor: [46, 16],
-            html: `<div class="map-subject-pin">🏠 CE BIEN ${s.price ? "· " + K(s.price) : ""}</div>` }) })
+            html: `<div class="map-subject-pin">🏠 THIS PROPERTY ${s.price ? "· " + K(s.price) : ""}</div>` }) })
           .addTo(pinLayer)
-          .bindPopup(`<strong>${escape(s.address)}</strong><br>Achat: ${s.price ? "$" + Number(s.price).toLocaleString("en-US") : "?"}${s.arv ? "<br>ARV: $" + Number(s.arv).toLocaleString("en-US") : ""}`);
+          .bindPopup(`<strong>${escape(s.address)}</strong><br>Purchase: ${s.price ? "$" + Number(s.price).toLocaleString("en-US") : "?"}${s.arv ? "<br>ARV: $" + Number(s.arv).toLocaleString("en-US") : ""}`);
         (r.comps || []).forEach(c => {
           pts.push([c.lat, c.lng]);
           const isComp = c.source !== "sold";
@@ -1433,21 +1433,21 @@
           const ppsf = (c.price && c.sqft) ? Math.round(Number(c.price) / Number(c.sqft)) : null;
           const deltaArv = (c.price && s.arv) ? Number(c.price) - Number(s.arv) : null;
           const explain = isComp
-            ? "💡 Comparable retenu pour estimer ton ARV (vente similaire proche)."
-            : "💡 Vente récente du quartier — donne le niveau de prix du marché autour.";
+            ? "💡 Comparable used to estimate your ARV (similar sale nearby)."
+            : "💡 Recent neighborhood sale — shows the local market price level.";
           L.marker([c.lat, c.lng], { icon: L.divIcon({
               className: "", iconAnchor: [22, 13],
               html: `<div class="comp-pill${isComp ? " comp-hl" : ""}">${K(c.price)}</div>` }) })
             .addTo(pinLayer)
             .bindPopup(`<strong>${escape(c.address || "?")}</strong><br>` +
-              `${c.price ? (c.source === "sold" ? "Vendu : <strong>$" : "Comparable : <strong>$") + Number(c.price).toLocaleString("en-US") + "</strong>" : ""}` +
+              `${c.price ? (c.source === "sold" ? "Sold: <strong>$" : "Comparable: <strong>$") + Number(c.price).toLocaleString("en-US") + "</strong>" : ""}` +
               `${c.date ? ` · ${escape(String(c.date))}` : ""}` +
-              `${c.beds ? `<br>${c.beds}ch${c.baths ? "/" + c.baths + "sdb" : ""}${c.sqft ? " · " + Number(c.sqft).toLocaleString("en-US") + " sf" : ""}` : ""}` +
+              `${c.beds ? `<br>${c.beds}bd${c.baths ? "/" + c.baths + "ba" : ""}${c.sqft ? " · " + Number(c.sqft).toLocaleString("en-US") + " sf" : ""}` : ""}` +
               `${ppsf ? `<br>≈ <strong>$${ppsf}/sqft</strong>` : ""}` +
-              `${deltaArv != null ? `<br>vs ton ARV ($${Math.round(s.arv / 1000)}K) : <strong style="color:${deltaArv >= 0 ? "#0fae6f" : "#e05353"};">${deltaArv >= 0 ? "+" : "−"}$${Math.abs(Math.round(deltaArv / 1000))}K</strong>` : ""}` +
-              `${c.distance_mi ? `<br>à ${Number(c.distance_mi).toFixed(1)} mi du bien` : ""}` +
+              `${deltaArv != null ? `<br>vs your ARV ($${Math.round(s.arv / 1000)}K): <strong style="color:${deltaArv >= 0 ? "#0fae6f" : "#e05353"};">${deltaArv >= 0 ? "+" : "−"}$${Math.abs(Math.round(deltaArv / 1000))}K</strong>` : ""}` +
+              `${c.distance_mi ? `<br>${Number(c.distance_mi).toFixed(1)} mi from property` : ""}` +
               `<br><span style="font-size:11px; color:#667;">${explain}</span>` +
-              `<br><a href="${zUrl}" target="_blank" rel="noopener" style="display:inline-block; margin-top:6px; font-weight:700;">Voir sur Zillow ↗</a>`,
+              `<br><a href="${zUrl}" target="_blank" rel="noopener" style="display:inline-block; margin-top:6px; font-weight:700;">View on Zillow ↗</a>`,
               { maxWidth: 280 });
         });
         // Initial framing: the immediate neighborhood (like Zillow), not the
@@ -1463,57 +1463,57 @@
         }
         const n = (r.comps || []).length;
         const nSold = (r.comps || []).filter(c => c.source === "sold").length;
-        const droppedTxt = r.dropped_far ? ` · ${r.dropped_far} écarté(s) (adresse introuvable près du bien)` : "";
-        const geoTxt = r.ungeocoded ? ` · géocodage en cours (${r.ungeocoded} restants)…` : "";
+        const droppedTxt = r.dropped_far ? ` · ${r.dropped_far} dropped (address not found near the property)` : "";
+        const geoTxt = r.ungeocoded ? ` · geocoding in progress (${r.ungeocoded} remaining)…` : "";
         if (note) note.textContent = n
-          ? `${n} pin(s) — ${nSold} vente(s) du quartier, ${n - nSold} comparable(s)${droppedTxt}${geoTxt} Clique un prix pour le détail.`
-          : "Aucun pin pour l'instant — « 📍 Ventes du quartier » remplit la carte comme sur Zillow (~45 s, ~$0.40) ; « 🤖 Trouver les comparables » cible les meilleurs comps ARV.";
+          ? `${n} pin(s) — ${nSold} neighborhood sale(s), ${n - nSold} comparable(s)${droppedTxt}${geoTxt} Click a price for details.`
+          : "No pins yet — “📍 Neighborhood sales” fills the map like Zillow (~45 s, ~$0.40); “🤖 Find comparables” targets the best ARV comps.";
         const findBtn = $("#map-find-comps");
         if (findBtn) {
           findBtn.style.display = n ? "none" : "inline-flex";
           findBtn.disabled = false;
-          findBtn.textContent = "🤖 Trouver les comparables (IA)";
+          findBtn.textContent = "🤖 Find comparables (AI)";
           findBtn.onclick = async () => {
             findBtn.disabled = true;
-            findBtn.innerHTML = '<span class="spinner"></span> Recherche…';
+            findBtn.innerHTML = '<span class="spinner"></span> Searching…';
             try {
               const rr = await API.aiRun("arv", d.id);
-              if (!rr.ok) { toast(rr.error || "Échec de la recherche", "error"); findBtn.disabled = false; findBtn.textContent = "🤖 Trouver les comparables (IA)"; return; }
-              toast(`✓ ARV + ${((rr.result || {}).comparables || []).length} comparable(s) trouvés`, "success");
+              if (!rr.ok) { toast(rr.error || "Search failed", "error"); findBtn.disabled = false; findBtn.textContent = "🤖 Find comparables (AI)"; return; }
+              toast(`✓ ARV + ${((rr.result || {}).comparables || []).length} comparable(s) found`, "success");
               openDeal(d.id);
             } catch (e) {
               toast(e.message, "error");
-              findBtn.disabled = false; findBtn.textContent = "🤖 Trouver les comparables (IA)";
+              findBtn.disabled = false; findBtn.textContent = "🤖 Find comparables (AI)";
             }
           };
         }
         if (r.ungeocoded > 0 && attempt < 6) setTimeout(() => loadPins(attempt + 1), 1500);
       } catch (e) {
-        if (note) note.textContent = "Comparables indisponibles : " + e.message;
+        if (note) note.textContent = "Comparables unavailable: " + e.message;
       }
     };
     loadPins();
 
-    // 📍 Ventes du quartier — the Zillow-style sold layer (AI web search)
+    // 📍 Neighborhood sales — the Zillow-style sold layer (AI web search)
     const salesBtn = $("#map-load-sales");
     if (salesBtn) {
       salesBtn.disabled = false;
       salesBtn.textContent = (d.area_sales && d.area_sales.length)
-        ? "📍 Actualiser les ventes" : "📍 Ventes du quartier";
+        ? "📍 Refresh sales" : "📍 Neighborhood sales";
       salesBtn.onclick = async () => {
         salesBtn.disabled = true;
-        salesBtn.innerHTML = '<span class="spinner"></span> Recherche des ventes… (~45 s)';
-        if (note) note.textContent = "L'IA cherche les ventes récentes autour du bien (Zillow sold, Redfin, registres)…";
+        salesBtn.innerHTML = '<span class="spinner"></span> Searching for sales… (~45 s)';
+        if (note) note.textContent = "AI is searching for recent sales around the property (Zillow sold, Redfin, records)…";
         try {
           const rr = await API.dealAreaSales(d.id);
-          if (!rr.ok) { toast(rr.error || "Échec", "error"); }
-          else toast(`✓ ${rr.count} vente(s) trouvée(s) — géocodage en cours…`, "success");
+          if (!rr.ok) { toast(rr.error || "Failed", "error"); }
+          else toast(`✓ ${rr.count} sale(s) found — geocoding in progress…`, "success");
           salesBtn.disabled = false;
-          salesBtn.textContent = "📍 Actualiser les ventes";
+          salesBtn.textContent = "📍 Refresh sales";
           loadPins();
         } catch (e) {
           toast(e.message, "error");
-          salesBtn.disabled = false; salesBtn.textContent = "📍 Ventes du quartier";
+          salesBtn.disabled = false; salesBtn.textContent = "📍 Neighborhood sales";
         }
       };
     }
@@ -1532,13 +1532,13 @@
     if (!breakers.length && !flags.length && !mvOffer.length && !mvClose.length) {
       host.innerHTML = `<div class="card risk-block"><div style="display:flex;align-items:center;gap:8px;">
         <span class="risk-badge" style="background:${riskColor(risk.risk_grade || 'A')}">🛡 ${risk.risk_grade || 'A'}</span>
-        <span style="font-weight:600;">${escape(risk.risk_summary || 'Aucun signal de risque évident')}</span></div>
-        <p class="muted" style="margin:6px 0 0;font-size:12.5px;">Lance « Analyse complète » pour une vérif IA approfondie (titre, liens, historique).</p></div>`;
+        <span style="font-weight:600;">${escape(risk.risk_summary || 'No obvious risk signals')}</span></div>
+        <p class="muted" style="margin:6px 0 0;font-size:12.5px;">Run “Full analysis” for a deep AI check (title, liens, history).</p></div>`;
       return;
     }
     const danger = breakers.length > 0;
     const flagRows = flags.map(f =>
-      `<div class="risk-flag"><span class="risk-sev ${f.severity}">${f.severity === 'high' ? 'élevé' : f.severity === 'medium' ? 'moyen' : 'faible'}</span><span>${escape(f.label)}</span></div>`).join("");
+      `<div class="risk-flag"><span class="risk-sev ${f.severity}">${f.severity === 'high' ? 'high' : f.severity === 'medium' ? 'medium' : 'low'}</span><span>${escape(f.label)}</span></div>`).join("");
     const breakerRows = breakers.map(b =>
       `<div class="risk-flag"><span class="risk-sev deal_breaker">deal-breaker</span><span><strong>${escape(b)}</strong></span></div>`).join("");
     const checklist = (title, items) => items.length
@@ -1546,14 +1546,14 @@
       : "";
     host.innerHTML = `<div class="card risk-block ${danger ? 'danger' : ''}">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-        <span class="risk-badge" style="background:${riskColor(risk.risk_grade)};font-size:13px;padding:4px 10px;">🛡 Sécurité ${risk.risk_grade}</span>
+        <span class="risk-badge" style="background:${riskColor(risk.risk_grade)};font-size:13px;padding:4px 10px;">🛡 Safety ${risk.risk_grade}</span>
         <strong style="font-size:14px;">${escape(risk.risk_summary || '')}</strong>
       </div>
-      ${danger ? `<p style="margin:8px 0 4px;color:#b91c1c;font-weight:600;">⛔ Deal-breaker(s) — à éviter sauf vérification approfondie. Le prix max est bloqué tant que ce n'est pas levé.</p>` : ""}
+      ${danger ? `<p style="margin:8px 0 4px;color:#b91c1c;font-weight:600;">⛔ Deal-breaker(s) — avoid unless thoroughly verified. Max price stays blocked until this is cleared.</p>` : ""}
       <div style="margin-top:8px;">${breakerRows}${flagRows}</div>
-      ${checklist("✅ À vérifier AVANT de faire une offre", mvOffer)}
-      ${checklist("✅ À vérifier AVANT le closing", mvClose)}
-      ${(!mvOffer.length && !mvClose.length) ? `<p class="muted" style="margin:10px 0 0;font-size:12px;">Pré-screen automatique (gratuit). Lance « Analyse complète » pour la vérif IA du titre/liens/historique + la checklist détaillée.</p>` : ""}
+      ${checklist("✅ Verify BEFORE making an offer", mvOffer)}
+      ${checklist("✅ Verify BEFORE closing", mvClose)}
+      ${(!mvOffer.length && !mvClose.length) ? `<p class="muted" style="margin:10px 0 0;font-size:12px;">Automatic pre-screen (free). Run “Full analysis” for the AI title/liens/history check + the detailed checklist.</p>` : ""}
     </div>`;
   }
 
@@ -1583,9 +1583,9 @@
     // Days on Zillow — editable: enter it once, then it auto-increments daily
     // (the backend anchors the listing date and recomputes the count each day).
     const _domVal = (d.days_on_market != null && d.days_on_market !== "") ? d.days_on_market : "";
-    const sinceChip = `<span class="zchip" title="Jours sur Zillow — clique pour saisir, puis ça s'incrémente seul chaque jour">📅 <span class="editable-count" data-count-field="days_on_market" data-value="${_domVal}">${_domVal !== "" ? _domVal : "—"}</span> j sur Zillow</span>`;
-    const viewsChip = `<span class="zchip" title="Vues Zillow (clique pour saisir)">👁 <span class="editable-count" data-count-field="page_view_count" data-value="${d.page_view_count ?? ""}">${_cnt(d.page_view_count)}</span> views</span>`;
-    const savesChip = `<span class="zchip" title="Saves Zillow (clique pour saisir)">♥ <span class="editable-count" data-count-field="favorite_count" data-value="${d.favorite_count ?? ""}">${_cnt(d.favorite_count)}</span> saves</span>`;
+    const sinceChip = `<span class="zchip" title="Days on Zillow — click to enter, then it auto-increments each day">📅 <span class="editable-count" data-count-field="days_on_market" data-value="${_domVal}">${_domVal !== "" ? _domVal : "—"}</span> days on Zillow</span>`;
+    const viewsChip = `<span class="zchip" title="Zillow views (click to enter)">👁 <span class="editable-count" data-count-field="page_view_count" data-value="${d.page_view_count ?? ""}">${_cnt(d.page_view_count)}</span> views</span>`;
+    const savesChip = `<span class="zchip" title="Zillow saves (click to enter)">♥ <span class="editable-count" data-count-field="favorite_count" data-value="${d.favorite_count ?? ""}">${_cnt(d.favorite_count)}</span> saves</span>`;
     const zLine = `<div class="detail-hero-zillow">${sinceChip}${viewsChip}${savesChip}</div>`;
     hero.innerHTML = `
       <div class="detail-hero-img" id="hero-img"
@@ -1622,13 +1622,13 @@
             </span>
           </div>
           <div class="detail-hero-stat">
-            <span class="lbl">Rehab <span style="font-weight:500; color:var(--accent); text-transform:none; letter-spacing:0;">🛠 estimer</span></span>
+            <span class="lbl">Rehab <span style="font-weight:500; color:var(--accent); text-transform:none; letter-spacing:0;">🛠 estimate</span></span>
             <span class="val">
-              <button class="rehab-open-btn" data-rehab-open="${escape(d.id)}" title="Ouvrir l'estimateur de travaux">${fmtMoney(d.rehab_base)}</button>
+              <button class="rehab-open-btn" data-rehab-open="${escape(d.id)}" title="Open the rehab estimator">${fmtMoney(d.rehab_base)}</button>
             </span>
           </div>
           <div class="detail-hero-stat">
-            <span class="lbl">🎯 Max à offrir ${data.max_offer?.basis === "auction" ? "(enchère)" : ""}</span>
+            <span class="lbl">🎯 Max offer ${data.max_offer?.basis === "auction" ? "(auction)" : ""}</span>
             <span class="val ${data.max_offer?.blocked ? "price-blocked" : ""}" style="color:${data.max_offer?.blocked ? "var(--red)" : "var(--green)"}; font-weight:800;">
               ${data.max_offer?.max_offer != null ? fmtMoney(data.max_offer.max_offer) : "—"}
             </span>
@@ -2769,19 +2769,19 @@
   // Run full analysis = parallel research tier + verdict (one backend call)
   $("#ai-run-research")?.addEventListener("click", async () => {
     if (!state.currentDealId) return;
-    if (!confirm(`Analyse complète IA — l'essentiel du flip :\nARV, Rehab, Historique (titre/liens), Risques + Photos, Red flags, Verdict.\n~10-20 s · coût ~$0.80-$1.30 (÷2 vs avant).\n\nRent comps / Quartier / Taxes ne sont plus inclus par défaut — lance-les depuis leur onglet si besoin.`)) return;
+    if (!confirm(`Full AI analysis — the flip essentials:\nARV, Rehab, History (title/liens), Risks + Photos, Red flags, Verdict.\n~10-20 s · cost ~$0.80-$1.30 (½ vs before).\n\nRent comps / Neighborhood / Taxes are no longer included by default — run them from their own tab if needed.`)) return;
     const btn = $("#ai-run-research");
     btn.disabled = true;
-    btn.innerHTML = `<span class="spinner"></span> Analyse parallèle en cours…`;
+    btn.innerHTML = `<span class="spinner"></span> Parallel analysis in progress…`;
     try {
       const r = await API.aiRunAll(state.currentDealId);
       const ok = Object.values(r.results || {}).filter(x => x.ok).length;
       const tot = Object.keys(r.results || {}).length;
-      toast(`✓ Analyse complète : ${ok}/${tot} recherches + verdict · ${r.total_web_searches || 0} web searches`, "success");
+      toast(`✓ Full analysis: ${ok}/${tot} research tasks + verdict · ${r.total_web_searches || 0} web searches`, "success");
       // Refresh the deal detail so all new insights + verdict show.
       if (typeof openDeal === "function") await openDeal(state.currentDealId);
     } catch (e) {
-      toast("Échec analyse : " + e.message, "error");
+      toast("Analysis failed: " + e.message, "error");
     } finally {
       btn.disabled = false;
       btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" stroke-linejoin="round"/></svg> Run full analysis`;
@@ -2824,7 +2824,7 @@
     const btn = $("#prequal-btn");
     const orig = btn.innerHTML;
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span> Génération…';
+    btn.innerHTML = '<span class="spinner"></span> Generating…';
     try {
       const resp = await fetch(API.prequalLetterUrl(state.currentDealId));
       if (!resp.ok) throw new Error("HTTP " + resp.status);
@@ -2835,7 +2835,7 @@
       await downloadPdfBulletproof(blobUrl, `PreQualification-Letter-${addr}.pdf`);
       setTimeout(() => URL.revokeObjectURL(blobUrl), 4000);
     } catch (e) {
-      toast("Échec génération lettre : " + e.message, "error");
+      toast("Letter generation failed: " + e.message, "error");
     } finally {
       btn.disabled = false;
       btn.innerHTML = orig;
@@ -2922,18 +2922,18 @@
 
   async function runSearch() {
     const { input, payload } = _gatherSearch();
-    if (!input) { toast("Entre une URL de recherche Zillow ou une ville", "warn"); return; }
+    if (!input) { toast("Enter a Zillow search URL or a city", "warn"); return; }
     const st = $("#search-status"), btn = $("#search-run");
     btn.disabled = true;
-    st.innerHTML = '<span class="spinner"></span> Recherche IA + web en cours… (~30-60s)';
+    st.innerHTML = '<span class="spinner"></span> AI + web search in progress… (~30-60s)';
     $("#search-results").innerHTML = ""; $("#search-controls").style.display = "none";
     try {
       if (!state.deals || !state.deals.length) { try { state.deals = await API.listDeals(); } catch {} }
       const res = await API.searchListings(payload);
-      if (!res.ok) { st.innerHTML = `<span style="color:var(--red)">${escape(res.error || "Échec de la recherche")}</span>`; return; }
+      if (!res.ok) { st.innerHTML = `<span style="color:var(--red)">${escape(res.error || "Search failed")}</span>`; return; }
       _searchListings = res.listings || [];
       _searchAreaLabel = res.area_label || "";
-      st.textContent = `✓ ${_searchListings.length} annonce(s)${res.area_label ? " — " + res.area_label : ""}`;
+      st.textContent = `✓ ${_searchListings.length} listing(s)${res.area_label ? " — " + res.area_label : ""}`;
       $("#search-controls").style.display = _searchListings.length ? "flex" : "none";
       renderSearchResults();
     } catch (e) { st.innerHTML = `<span style="color:var(--red)">${escape(e.message)}</span>`; }
@@ -2943,7 +2943,7 @@
 
   function renderSearchResults() {
     const box = $("#search-results");
-    if (!_searchListings.length) { box.innerHTML = `<div class="card"><p class="muted">Aucune annonce trouvée.</p></div>`; return; }
+    if (!_searchListings.length) { box.innerHTML = `<div class="card"><p class="muted">No listings found.</p></div>`; return; }
     const seen = _seenSet();
     const newOnly = $("#search-newonly")?.checked, hideBoard = $("#search-hideboard")?.checked;
     let list = _searchListings.map((l, i) => ({ l, i, fin: _searchFin(l), isNew: !seen.has(_seenKey(l)), ob: _onBoard(l.address) }));
@@ -2957,12 +2957,12 @@
       reno: (a, b) => (b.l.last_renovated || 0) - (a.l.last_renovated || 0),
     }[sort];
     if (cmp) list.sort(cmp);
-    $("#search-count-label").textContent = `${list.length} affichée(s)${_searchAreaLabel ? " · " + _searchAreaLabel : ""}`;
+    $("#search-count-label").textContent = `${list.length} shown${_searchAreaLabel ? " · " + _searchAreaLabel : ""}`;
     const yr = new Date().getFullYear();
     box.innerHTML = `<div class="deals-grid">${list.map(({ l, i, fin, isNew, ob }) => {
       const price = fin.price != null ? `$${Math.round(fin.price / 1000)}K` : "—";
-      const age = l.year_built ? `${l.year_built} (${yr - l.year_built} ans)` : "année ?";
-      const reno = l.last_renovated ? `réno ${l.last_renovated}` : "réno ?";
+      const age = l.year_built ? `${l.year_built} (${yr - l.year_built} yrs)` : "year ?";
+      const reno = l.last_renovated ? `reno ${l.last_renovated}` : "reno ?";
       let profitTag = "";
       if (fin.profit != null) {
         const col = fin.margin >= 20 ? "var(--green)" : fin.margin >= 10 ? "#e8a93b" : "var(--red)";
@@ -2980,7 +2980,7 @@
         <div style="font-size:12px; margin-top:3px;">${arvLine}</div>
         ${profitTag}
         <div style="display:flex; gap:8px; margin-top:10px;">
-          <button class="btn ${ob ? "" : "primary"} search-add" data-i="${i}" ${ob ? "disabled" : ""}>${ob ? "✓ Sur le board" : "+ Ajouter"}</button>
+          <button class="btn ${ob ? "" : "primary"} search-add" data-i="${i}" ${ob ? "disabled" : ""}>${ob ? "✓ On board" : "+ Add"}</button>
           ${l.url ? `<a class="btn ghost" href="${escape(l.url)}" target="_blank" rel="noopener">Zillow ↗</a>` : ""}
         </div>
       </div>`;
@@ -3004,13 +3004,13 @@
         arv_base: l.arv_estimate || 0, rehab_base: l.rehab_estimate || 0,
         arv_confidence: "Low",
         source: "search", source_url: zl, status: "evaluating",
-        notes: `[Importé via Search]${l.last_renovated ? "\nDernière rénovation: " + l.last_renovated : ""}\n${zl}`,
+        notes: `[Imported via Search]${l.last_renovated ? "\nLast renovation: " + l.last_renovated : ""}\n${zl}`,
       });
       const deal = r.deal || r;
       (state.deals = state.deals || []).push(deal);
-      btn.textContent = "✓ Ajouté"; btn.classList.add("added"); btn.classList.remove("primary");
+      btn.textContent = "✓ Added"; btn.classList.add("added"); btn.classList.remove("primary");
       if ($("#search-analyze")?.checked) {
-        btn.textContent = "🤖 analyse…";
+        btn.textContent = "🤖 analyzing…";
         try {
           const rr = await API.rehabEstimate(deal.id);
           if (rr.ok && rr.items?.length) {
@@ -3018,9 +3018,9 @@
             await API.patchDeal(deal.id, { rehab_base: total, rehab_items: rr.items, rehab_contingency_pct: 15 });
           }
         } catch {}
-        btn.textContent = "✓ Ajouté + analysé";
+        btn.textContent = "✓ Added + analyzed";
       }
-    } catch (e) { btn.disabled = false; btn.textContent = "+ Ajouter"; toast(e.message, "error"); }
+    } catch (e) { btn.disabled = false; btn.textContent = "+ Add"; toast(e.message, "error"); }
   }
 
   // Saved searches (localStorage)
@@ -3028,7 +3028,7 @@
     const box = $("#search-saved"); if (!box) return;
     const saved = _ls(_SEARCH_SAVED, []);
     box.innerHTML = saved.length
-      ? `<span class="muted" style="font-size:11px; align-self:center;">★ Sauvées :</span>` + saved.map((s, i) =>
+      ? `<span class="muted" style="font-size:11px; align-self:center;">★ Saved:</span>` + saved.map((s, i) =>
           `<span class="pill gray" style="cursor:pointer;"><span data-saved="${i}">${escape(s.label || s.input)}</span> <span data-saved-del="${i}" style="cursor:pointer; opacity:.6;">×</span></span>`).join("")
       : "";
     box.querySelectorAll("[data-saved]").forEach(el => el.addEventListener("click", () => {
@@ -3052,28 +3052,28 @@
   $("#search-hideboard")?.addEventListener("change", renderSearchResults);
   $("#search-mark-seen")?.addEventListener("click", () => {
     const seen = _seenSet(); _searchListings.forEach(l => seen.add(_seenKey(l)));
-    _lsSet(_SEARCH_SEEN, [...seen].slice(-3000)); renderSearchResults(); toast("Marquées comme vues", "success");
+    _lsSet(_SEARCH_SEEN, [...seen].slice(-3000)); renderSearchResults(); toast("Marked as seen", "success");
   });
   $("#search-add-all")?.addEventListener("click", async () => {
     for (const b of [...$("#search-results").querySelectorAll(".search-add")].filter(x => !x.disabled)) {
       await _insertSearchDeal(_searchListings[+b.dataset.i], b);
     }
-    toast("Annonces ajoutées au board", "success");
+    toast("Listings added to board", "success");
   });
   $("#search-save")?.addEventListener("click", () => {
     const { input, payload } = _gatherSearch();
-    if (!input) { toast("Rien à enregistrer", "warn"); return; }
-    const label = prompt("Nom de la recherche :", input.length > 30 ? input.slice(0, 30) + "…" : input);
+    if (!input) { toast("Nothing to save", "warn"); return; }
+    const label = prompt("Search name:", input.length > 30 ? input.slice(0, 30) + "…" : input);
     if (!label) return;
     const saved = _ls(_SEARCH_SAVED, []); saved.push({ label, input, ...payload }); _lsSet(_SEARCH_SAVED, saved);
-    _renderSavedSearches(); toast("Recherche enregistrée", "success");
+    _renderSavedSearches(); toast("Search saved", "success");
   });
   _renderSavedSearches();
 
-  // --- Fusion Recherche → Veille : transforme les critères courants en veille permanente ---
+  // --- Search → Watch fusion: turns the current criteria into a permanent watch ---
   $("#search-to-watch")?.addEventListener("click", async () => {
     const { input, payload } = _gatherSearch();
-    if (!input) { toast("Renseigne d'abord une ville ou une URL de recherche", "warn"); return; }
+    if (!input) { toast("First enter a city or a search URL", "warn"); return; }
     const p = { max_listings: payload.max_listings || 15,
                 interval_min: Number($("#search-watch-interval")?.value ?? 1440) };
     if (payload.url) p.url = payload.url; else p.location = payload.location;
@@ -3083,15 +3083,15 @@
     if (payload.property_type) p.property_type = payload.property_type;
     const btn = $("#search-to-watch"); btn.disabled = true;
     const st = $("#search-status");
-    if (st) st.innerHTML = '<span class="spinner"></span> Création de la veille…';
+    if (st) st.innerHTML = '<span class="spinner"></span> Creating watch…';
     try {
       const w = await API.watchCreate(p);
-      if (st) st.textContent = "✓ Veille créée — premier passage en cours…";
+      if (st) st.textContent = "✓ Watch created — first run in progress…";
       renderSearchWatches();
       try { await API.watchRun(w.id); } catch {}
-      if (st) st.textContent = "✓ Veille active. Les nouvelles annonces arriveront analysées dans le flux.";
+      if (st) st.textContent = "✓ Watch active. New listings will arrive analyzed in the feed.";
       renderSearchWatches();
-      toast("🔭 Veille créée", "success");
+      toast("🔭 Watch created", "success");
     } catch (e) { toast(e.message, "error"); if (st) st.textContent = ""; }
     finally { btn.disabled = false; }
   });
@@ -3104,26 +3104,26 @@
     if (!watches.length) { box.style.display = "none"; box.innerHTML = ""; return; }
     box.style.display = "block";
     const fmtAgo = ts => {
-      if (!ts) return "jamais lancée";
+      if (!ts) return "never run";
       const mins = Math.max(0, Math.round((Date.now() - new Date(ts).getTime()) / 60000));
-      if (mins < 60) return `il y a ${mins} min`;
-      const h = Math.round(mins / 60); return h < 24 ? `il y a ${h} h` : `il y a ${Math.round(h / 24)} j`;
+      if (mins < 60) return `${mins} min ago`;
+      const h = Math.round(mins / 60); return h < 24 ? `${h} h ago` : `${Math.round(h / 24)} d ago`;
     };
-    const fmtFreq = m => m >= 1440 ? "1×/j" : (m >= 60 ? "toutes les " + Math.round(m / 60) + " h" : "toutes les " + m + " min");
+    const fmtFreq = m => m >= 1440 ? "1×/day" : (m >= 60 ? "every " + Math.round(m / 60) + " h" : "every " + m + " min");
     box.innerHTML = `
       <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px;">
-        <strong style="font-size:14px;">🔭 Veilles actives (${watches.length})</strong>
-        <button class="btn ghost" id="search-manage-watches" style="font-size:12px;">⚙️ Gérer</button>
+        <strong style="font-size:14px;">🔭 Active watches (${watches.length})</strong>
+        <button class="btn ghost" id="search-manage-watches" style="font-size:12px;">⚙️ Manage</button>
       </div>
       <div style="display:flex; flex-direction:column; gap:6px;">
         ${watches.map(w => {
-          const crit = w.label || w.location || "Veille";
+          const crit = w.label || w.location || "Watch";
           const nb = w.tracked || 0;
           return `<div style="display:flex; align-items:center; gap:10px; font-size:13px; flex-wrap:wrap;">
             <span style="font-weight:600;">${escape(crit.length > 40 ? crit.slice(0, 40) + "…" : crit)}</span>
             <span class="muted" style="font-size:12px;">· ${fmtFreq(w.interval_min || 60)} · ${fmtAgo(w.last_run)}</span>
-            ${nb ? `<span class="pill green" style="font-size:11px;">${nb} suivi${nb > 1 ? "s" : ""}</span>` : ""}
-            <button class="btn ghost sw-run" data-id="${escape(w.id)}" style="font-size:11px; margin-left:auto;">↻ Lancer</button>
+            ${nb ? `<span class="pill green" style="font-size:11px;">${nb} tracked</span>` : ""}
+            <button class="btn ghost sw-run" data-id="${escape(w.id)}" style="font-size:11px; margin-left:auto;">↻ Run</button>
             <button class="btn ghost sw-del" data-id="${escape(w.id)}" style="font-size:11px;">🗑</button>
           </div>`;
         }).join("")}
@@ -3131,11 +3131,11 @@
     box.querySelector("#search-manage-watches")?.addEventListener("click", () => showView("watch"));
     box.querySelectorAll(".sw-run").forEach(b => b.addEventListener("click", async () => {
       b.disabled = true; b.textContent = "…";
-      try { await API.watchRun(b.dataset.id); toast("Veille relancée", "success"); renderSearchWatches(); }
-      catch (e) { toast(e.message, "error"); b.disabled = false; b.textContent = "↻ Lancer"; }
+      try { await API.watchRun(b.dataset.id); toast("Watch re-run", "success"); renderSearchWatches(); }
+      catch (e) { toast(e.message, "error"); b.disabled = false; b.textContent = "↻ Run"; }
     }));
     box.querySelectorAll(".sw-del").forEach(b => b.addEventListener("click", async () => {
-      if (!confirm("Supprimer cette veille ?")) return;
+      if (!confirm("Delete this watch?")) return;
       try { await API.watchDelete(b.dataset.id); renderSearchWatches(); } catch (e) { toast(e.message, "error"); }
     }));
   }
@@ -3144,7 +3144,7 @@
   // Batch importer reachable from the Add view (declutters the sub-tabs).
   $("#add-open-batch")?.addEventListener("click", (e) => { e.preventDefault(); showView("batch"); });
 
-  // ============== ZILLOW WATCH (veille) ==============
+  // ============== ZILLOW WATCH ==============
   async function refreshWatchView() {
     const box = $("#watch-list"); if (!box) return;
     let watches = [];
@@ -3152,22 +3152,22 @@
     catch (e) { box.innerHTML = `<div class="card">${escape(e.message)}</div>`; return; }
     if (!state.deals || !state.deals.length) { try { state.deals = await API.listDeals(); } catch {} }
     if (!watches.length) {
-      box.innerHTML = `<div class="card"><p class="muted" style="margin:0;">Aucune veille. Crée la première ci-dessus — ex. « Cleveland, OH » sous $120K.</p></div>`;
+      box.innerHTML = `<div class="card"><p class="muted" style="margin:0;">No watches. Create your first one above — e.g. “Cleveland, OH” under $120K.</p></div>`;
       return;
     }
     const D = v => (v == null || v === "") ? "—" : "$" + Number(v).toLocaleString("en-US");
     const ago = ts => {
-      if (!ts) return "jamais";
+      if (!ts) return "never";
       const h = Math.round((Date.now() - new Date(ts).getTime()) / 3600000);
-      return h < 1 ? "il y a <1 h" : h < 48 ? `il y a ${h} h` : `il y a ${Math.round(h / 24)} j`;
+      return h < 1 ? "<1 h ago" : h < 48 ? `${h} h ago` : `${Math.round(h / 24)} d ago`;
     };
     const evBadge = {
-      new: '<span class="pill green">🆕 NOUVEAU</span>',
-      price_drop: '<span class="pill yellow">📉 BAISSE</span>',
-      gone: '<span class="pill gray">❌ PARTI</span>',
+      new: '<span class="pill green">🆕 NEW</span>',
+      price_drop: '<span class="pill yellow">📉 PRICE DROP</span>',
+      gone: '<span class="pill gray">❌ GONE</span>',
     };
     box.innerHTML = watches.map(w => {
-      const crit = [w.price_max ? "< " + D(w.price_max) : "", w.beds_min ? w.beds_min + "ch+" : "",
+      const crit = [w.price_max ? "< " + D(w.price_max) : "", w.beds_min ? w.beds_min + "bd+" : "",
                     w.property_type || ""].filter(Boolean).join(" · ");
       const events = (w.events || []).slice(0, 25).map((e, i) => {
         const price = e.type === "price_drop"
@@ -3185,53 +3185,53 @@
         </div>`;
       }).join("");
       const iv = Number(w.interval_min ?? 60);
-      const ivLabel = { 0: "manuel", 60: "⏱ toutes les heures", 180: "⏱ toutes les 3 h", 360: "⏱ toutes les 6 h", 1440: "⏱ 1×/jour" }[iv] || `⏱ toutes les ${iv} min`;
+      const ivLabel = { 0: "manual", 60: "⏱ every hour", 180: "⏱ every 3 h", 360: "⏱ every 6 h", 1440: "⏱ 1×/day" }[iv] || `⏱ every ${iv} min`;
       let nextTxt = "";
       if (iv > 0 && w.last_run) {
         const next = new Date(new Date(w.last_run).getTime() + iv * 60000);
-        nextTxt = next > new Date() ? ` · prochaine ~${next.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}` : " · imminente";
+        nextTxt = next > new Date() ? ` · next ~${next.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}` : " · imminent";
       }
       return `<div class="card" style="margin-bottom:14px;">
         <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:10px; flex-wrap:wrap;">
           <div>
             <div style="font-weight:700; font-size:15px;">🔭 ${escape(w.label || w.location)}</div>
-            <div class="muted" style="font-size:12px;">${escape(crit)}${crit ? " · " : ""}${w.tracked} bien(s) suivis · actualisée ${ago(w.last_run)} · ${w.run_count} run(s)</div>
+            <div class="muted" style="font-size:12px;">${escape(crit)}${crit ? " · " : ""}${w.tracked} property(ies) tracked · updated ${ago(w.last_run)} · ${w.run_count} run(s)</div>
             <div style="font-size:12px; font-weight:600; color:${iv > 0 ? "var(--green)" : "var(--muted)"};">${ivLabel}${nextTxt}</div>
           </div>
           <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
-            <select class="watch-interval-sel" data-id="${escape(w.id)}" title="Fréquence automatique" style="font-size:12px; padding:5px 6px;">
+            <select class="watch-interval-sel" data-id="${escape(w.id)}" title="Automatic frequency" style="font-size:12px; padding:5px 6px;">
               <option value="60" ${iv === 60 ? "selected" : ""}>1 h</option>
               <option value="180" ${iv === 180 ? "selected" : ""}>3 h</option>
               <option value="360" ${iv === 360 ? "selected" : ""}>6 h</option>
               <option value="1440" ${iv === 1440 ? "selected" : ""}>24 h</option>
-              <option value="0" ${iv === 0 ? "selected" : ""}>Manuel</option>
+              <option value="0" ${iv === 0 ? "selected" : ""}>Manual</option>
             </select>
-            <button class="btn primary watch-run" data-id="${escape(w.id)}" style="font-size:12px;">🔄 Actualiser</button>
+            <button class="btn primary watch-run" data-id="${escape(w.id)}" style="font-size:12px;">🔄 Refresh</button>
             <button class="btn ghost watch-del" data-id="${escape(w.id)}" style="font-size:12px;">🗑</button>
           </div>
         </div>
-        <div style="margin-top:10px;">${events || '<p class="muted" style="font-size:13px;">Pas encore d\'événements — clique « Actualiser » pour le premier passage.</p>'}</div>
+        <div style="margin-top:10px;">${events || '<p class="muted" style="font-size:13px;">No events yet — click “Refresh” for the first run.</p>'}</div>
       </div>`;
     }).join("");
 
     box.querySelectorAll(".watch-run").forEach(b => b.addEventListener("click", async () => {
-      b.disabled = true; b.innerHTML = '<span class="spinner"></span> IA…';
+      b.disabled = true; b.innerHTML = '<span class="spinner"></span> AI…';
       try {
         const r = await API.watchRun(b.dataset.id);
-        if (!r.ok) { toast(r.error || "Échec", "error"); }
-        else toast(`✓ ${r.found} annonce(s) — ${r.new} nouveauté(s), ${r.price_drops} baisse(s)${r.gone ? ", " + r.gone + " parti(s)" : ""}`, "success");
+        if (!r.ok) { toast(r.error || "Failed", "error"); }
+        else toast(`✓ ${r.found} listing(s) — ${r.new} new, ${r.price_drops} price drop(s)${r.gone ? ", " + r.gone + " gone" : ""}`, "success");
         refreshWatchView();
-      } catch (e) { toast(e.message, "error"); b.disabled = false; b.textContent = "🔄 Actualiser"; }
+      } catch (e) { toast(e.message, "error"); b.disabled = false; b.textContent = "🔄 Refresh"; }
     }));
     box.querySelectorAll(".watch-del").forEach(b => b.addEventListener("click", async () => {
-      if (!confirm("Supprimer cette veille (et son historique) ?")) return;
+      if (!confirm("Delete this watch (and its history)?")) return;
       try { await API.watchDelete(b.dataset.id); refreshWatchView(); } catch (e) { toast(e.message, "error"); }
     }));
     box.querySelectorAll(".watch-interval-sel").forEach(sel => sel.addEventListener("change", async () => {
       const iv = Number(sel.value);
       try {
         await API.watchPatch(sel.dataset.id, { interval_min: iv });
-        toast(iv === 0 ? "Veille passée en manuel" : `Veille automatique : toutes les ${iv >= 60 ? (iv / 60) + " h" : iv + " min"}`, "success");
+        toast(iv === 0 ? "Watch set to manual" : `Automatic watch: every ${iv >= 60 ? (iv / 60) + " h" : iv + " min"}`, "success");
         refreshWatchView();
       } catch (e) { toast(e.message, "error"); }
     }));
@@ -3247,10 +3247,10 @@
           beds: e.beds || null, baths: e.baths || null, sqft: e.sqft || null, year_built: e.year_built || null,
           purchase_price: e.price || 0, arv_base: e.arv_estimate || 0, rehab_base: e.rehab_estimate || 0,
           arv_confidence: "Low", source: "watch", source_url: e.url || "", status: "evaluating",
-          notes: `[Veille Zillow — ${w.label || w.location}]` + (e.type === "price_drop" ? `\nBaisse de prix: −$${Number(e.drop).toLocaleString("en-US")}` : ""),
+          notes: `[Zillow watch — ${w.label || w.location}]` + (e.type === "price_drop" ? `\nPrice drop: −$${Number(e.drop).toLocaleString("en-US")}` : ""),
         });
         (state.deals = state.deals || []).push(r.deal || r);
-        b.textContent = "✓ Board"; toast("Deal ajouté", "success");
+        b.textContent = "✓ Board"; toast("Deal added", "success");
       } catch (err) {
         b.disabled = false; b.textContent = "+ Board";
         toast(err.message, "error");
@@ -3259,7 +3259,7 @@
   }
   $("#watch-create")?.addEventListener("click", async () => {
     const loc = ($("#watch-location")?.value || "").trim();
-    if (!loc) { toast("Entre une ville, un zip ou un état", "warn"); return; }
+    if (!loc) { toast("Enter a city, zip, or state", "warn"); return; }
     const p = { location: loc, max_listings: Number($("#watch-count")?.value) || 15,
                 interval_min: Number($("#watch-interval")?.value ?? 60) };
     const n = id => { const v = Number($(id)?.value); return v > 0 ? v : null; };
@@ -3270,15 +3270,15 @@
     try {
       const w = await API.watchCreate(p);
       $("#watch-location").value = "";
-      if (st) st.textContent = "✓ Veille créée — premier passage en cours…";
+      if (st) st.textContent = "✓ Watch created — first run in progress…";
       refreshWatchView();
       // First run right away so the watch starts with a baseline.
       try { await API.watchRun(w.id); } catch {}
-      if (st) st.textContent = "✓ Veille créée et initialisée.";
+      if (st) st.textContent = "✓ Watch created and initialized.";
       refreshWatchView();
     } catch (e) { toast(e.message, "error"); }
   });
-  // Kick stale watches (>20 h) in the background at app open — the "veille".
+  // Kick stale watches (>20 h) in the background at app open — the watch feature.
   setTimeout(() => { API.watchesRunStale?.().catch(() => {}); }, 4000);
 
   // ===== Auto-update: reload when a new version is deployed (stale-SPA killer) =====
@@ -3294,7 +3294,7 @@
           const last = Number(localStorage.getItem("fb-autoreload-ts") || 0);
           if (Date.now() - last > 120000) {   // guard against reload loops
             localStorage.setItem("fb-autoreload-ts", String(Date.now()));
-            toast("Nouvelle version — rechargement…", "success");
+            toast("New version — reloading…", "success");
             setTimeout(() => location.reload(), 800);
           }
         }
@@ -3341,14 +3341,14 @@
     const payload = _gatherAuction();
     if (force) payload.force = true;
     const st = $("#auc-status"), btn = $("#auc-run");
-    if (!payload.address) { toast("Colle d'abord l'adresse du bien", "warn"); return; }
+    if (!payload.address) { toast("First paste the property address", "warn"); return; }
     const hasOverride = payload.arv_override && payload.rehab_override;
     if (!force && !hasOverride && !_looksLikeAddress(payload.address)) {
-      st.innerHTML = `<span style="color:#e8a93b">⚠️ « ${escape(payload.address)} » ressemble à une ville, pas à une adresse précise.</span>`;
+      st.innerHTML = `<span style="color:#e8a93b">⚠️ “${escape(payload.address)}” looks like a city, not a specific address.</span>`;
       $("#auc-result").innerHTML = `<div class="card" style="border-left:3px solid #e8a93b;">
-        <p style="margin:0 0 6px;"><strong>L'outil Auction analyse UN bien précis</strong> — idéalement une adresse complète, ex. <code>3744 W 135th St, Cleveland, OH 44111</code>.</p>
-        <p style="margin:0 0 10px;" class="muted">Pour explorer <strong>toute une ville</strong>, utilise plutôt le module <a href="#" id="auc-goto-search" style="font-weight:600;">🔎 Search</a>.</p>
-        <button class="btn" id="auc-force">Analyser quand même cette adresse →</button>
+        <p style="margin:0 0 6px;"><strong>The Auction tool analyzes ONE specific property</strong> — ideally a full address, e.g. <code>3744 W 135th St, Cleveland, OH 44111</code>.</p>
+        <p style="margin:0 0 10px;" class="muted">To explore <strong>a whole city</strong>, use the <a href="#" id="auc-goto-search" style="font-weight:600;">🔎 Search</a> module instead.</p>
+        <button class="btn" id="auc-force">Analyze this address anyway →</button>
       </div>`;
       $("#auc-goto-search")?.addEventListener("click", (e) => { e.preventDefault(); showView("search"); const si = $("#search-input"); if (si) si.value = payload.address; });
       $("#auc-force")?.addEventListener("click", () => runAuction(true));
@@ -3356,13 +3356,13 @@
     }
     btn.disabled = true;
     const ai = !(payload.arv_override && payload.rehab_override);
-    st.innerHTML = ai ? '<span class="spinner"></span> Analyse IA + comps en cours… (~30-60s)' : '<span class="spinner"></span> Calcul…';
+    st.innerHTML = ai ? '<span class="spinner"></span> AI + comps analysis in progress… (~30-60s)' : '<span class="spinner"></span> Calculating…';
     $("#auc-result").innerHTML = "";
     try {
       if (!state.deals || !state.deals.length) { try { state.deals = await API.listDeals(); } catch {} }
       const r = await API.auctionAnalyze(payload);
-      if (!r.ok) { st.innerHTML = `<span style="color:var(--red)">${escape(r.error || "Échec de l'analyse")}</span>`; return; }
-      _aucLast = r; st.textContent = "✓ Analyse terminée";
+      if (!r.ok) { st.innerHTML = `<span style="color:var(--red)">${escape(r.error || "Analysis failed")}</span>`; return; }
+      _aucLast = r; st.textContent = "✓ Analysis complete";
       renderAuctionResult(r);
     } catch (e) { st.innerHTML = `<span style="color:var(--red)">${escape(e.message)}</span>`; }
     finally { btn.disabled = false; }
@@ -3371,62 +3371,62 @@
     const K = v => v == null ? "—" : "$" + Math.round(v / 1000) + "K";
     const D = v => v == null ? "—" : "$" + Math.round(v).toLocaleString("en-US");
     const verdict = {
-      go: ["var(--green)", "✅ GO", "De la marge sous ton enchère max."],
-      tight: ["#e8a93b", "⚠️ SERRÉ", "Marge fine — discipline absolue."],
-      pass: ["var(--red)", "⛔ PASSE", "L'enchère de départ dépasse déjà ton max."],
-      caution: ["#e8a93b", "⚠️ PRUDENCE", "Rehab lourd vs ARV — vérifie l'état."],
+      go: ["var(--green)", "✅ GO", "Margin under your max bid."],
+      tight: ["#e8a93b", "⚠️ TIGHT", "Thin margin — strict discipline required."],
+      pass: ["var(--red)", "⛔ PASS", "The opening bid already exceeds your max."],
+      caution: ["#e8a93b", "⚠️ CAUTION", "Heavy rehab vs ARV — verify condition."],
     }[r.verdict] || ["var(--muted)", "—", ""];
     const margin = r.arv ? Math.round(r.profit_at_max / r.arv * 100) : null;
     const openLine = r.opening_bid != null
-      ? `<div style="font-size:13px;">Enchère de départ : <strong>${D(r.opening_bid)}</strong> · ${r.opening_bid <= r.max_bid ? `<span style="color:var(--green)">marge de ${D(r.max_bid - r.opening_bid)} sous ton max</span>` : `<span style="color:var(--red)">déjà ${D(r.opening_bid - r.max_bid)} au-dessus de ton max</span>`}</div>`
+      ? `<div style="font-size:13px;">Opening bid: <strong>${D(r.opening_bid)}</strong> · ${r.opening_bid <= r.max_bid ? `<span style="color:var(--green)">${D(r.max_bid - r.opening_bid)} of margin under your max</span>` : `<span style="color:var(--red)">already ${D(r.opening_bid - r.max_bid)} above your max</span>`}</div>`
       : "";
-    const risks = (r.risks || []).length ? `<div style="margin-top:10px;"><div style="font-weight:600; font-size:13px; margin-bottom:4px;">⚠️ Risques enchère</div><ul style="margin:0; padding-left:18px; font-size:13px; line-height:1.5;">${r.risks.map(x => `<li>${escape(x)}</li>`).join("")}</ul></div>` : "";
+    const risks = (r.risks || []).length ? `<div style="margin-top:10px;"><div style="font-weight:600; font-size:13px; margin-bottom:4px;">⚠️ Auction risks</div><ul style="margin:0; padding-left:18px; font-size:13px; line-height:1.5;">${r.risks.map(x => `<li>${escape(x)}</li>`).join("")}</ul></div>` : "";
     $("#auc-result").innerHTML = `
       <div class="card" style="display:grid; gap:16px;">
         <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
           <div>
             <div style="font-weight:700; font-size:16px;">${escape(r.address)}</div>
-            <div class="muted" style="font-size:12px;">${r.ai_used ? `Estimé par l'IA · confiance ARV : ${escape(r.arv_confidence || "—")}` : "Valeurs manuelles"}</div>
+            <div class="muted" style="font-size:12px;">${r.ai_used ? `AI-estimated · ARV confidence: ${escape(r.arv_confidence || "—")}` : "Manual values"}</div>
           </div>
           <span class="pill" style="background:${verdict[0]}1a; color:${verdict[0]}; font-weight:700; font-size:14px; padding:6px 14px;">${verdict[1]}</span>
         </div>
 
         <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px;">
-          <div class="auc-stat"><div class="auc-stat-l">ARV estimé</div><div class="auc-stat-v">${D(r.arv)}</div></div>
-          <div class="auc-stat"><div class="auc-stat-l">Rehab estimé</div><div class="auc-stat-v">${D(r.rehab)}</div></div>
+          <div class="auc-stat"><div class="auc-stat-l">Estimated ARV</div><div class="auc-stat-v">${D(r.arv)}</div></div>
+          <div class="auc-stat"><div class="auc-stat-l">Estimated rehab</div><div class="auc-stat-v">${D(r.rehab)}</div></div>
           <div class="auc-stat" style="background:var(--green)15; border:1px solid var(--green);">
-            <div class="auc-stat-l" style="color:var(--green); font-weight:700;">🎯 ENCHÈRE MAX</div>
+            <div class="auc-stat-l" style="color:var(--green); font-weight:700;">🎯 MAX BID</div>
             <div class="auc-stat-v" style="color:var(--green); font-size:26px;">${D(r.max_bid)}</div>
           </div>
-          <div class="auc-stat"><div class="auc-stat-l">Profit à ce max</div><div class="auc-stat-v">${D(r.profit_at_max)}${margin != null ? ` <span class="muted" style="font-size:12px;">(${margin}%)</span>` : ""}</div></div>
+          <div class="auc-stat"><div class="auc-stat-l">Profit at this max</div><div class="auc-stat-v">${D(r.profit_at_max)}${margin != null ? ` <span class="muted" style="font-size:12px;">(${margin}%)</span>` : ""}</div></div>
         </div>
 
         ${openLine}
         ${verdict[2] ? `<div style="font-size:13px; color:${verdict[0]};">${verdict[2]}${r.verdict_note && r.verdict_note !== verdict[2] ? " " + escape(r.verdict_note) : ""}</div>` : ""}
 
         <details style="font-size:13px;">
-          <summary style="cursor:pointer; font-weight:600;">Détail du calcul</summary>
+          <summary style="cursor:pointer; font-weight:600;">Calculation breakdown</summary>
           <div style="margin-top:8px; display:grid; grid-template-columns:1fr 1fr; gap:4px 18px; max-width:480px;">
             <span>ARV</span><span style="text-align:right;">${D(r.arv)}</span>
             <span>− Rehab</span><span style="text-align:right;">−${D(r.rehab)}</span>
-            <span>− Frais de vente (8%)</span><span style="text-align:right;">−${D(r.selling_costs)}</span>
-            <span>− Portage</span><span style="text-align:right;">−${D(r.holding)}</span>
-            <span>− Clôture</span><span style="text-align:right;">−${D(r.closing)}</span>
-            <span>− Marge cible (${r.target_margin_pct}%)</span><span style="text-align:right;">−${D(r.target_profit)}</span>
-            <span style="font-weight:600; border-top:1px solid var(--border); padding-top:4px;">= Enchère max (÷ ${1 + r.premium_pct / 100} prime ${r.premium_pct}%)</span><span style="text-align:right; font-weight:600; border-top:1px solid var(--border); padding-top:4px;">${D(r.max_bid)}</span>
-            <span class="muted">Réf. règle des 70% (ARV×0.70 − rehab)</span><span class="muted" style="text-align:right;">${D(r.mao70)}</span>
-            <span class="muted">Tout compris à l'achat</span><span class="muted" style="text-align:right;">${D(r.all_in_at_max)}</span>
+            <span>− Selling costs (8%)</span><span style="text-align:right;">−${D(r.selling_costs)}</span>
+            <span>− Holding</span><span style="text-align:right;">−${D(r.holding)}</span>
+            <span>− Closing</span><span style="text-align:right;">−${D(r.closing)}</span>
+            <span>− Target margin (${r.target_margin_pct}%)</span><span style="text-align:right;">−${D(r.target_profit)}</span>
+            <span style="font-weight:600; border-top:1px solid var(--border); padding-top:4px;">= Max bid (÷ ${1 + r.premium_pct / 100} ${r.premium_pct}% premium)</span><span style="text-align:right; font-weight:600; border-top:1px solid var(--border); padding-top:4px;">${D(r.max_bid)}</span>
+            <span class="muted">Ref. 70% rule (ARV×0.70 − rehab)</span><span class="muted" style="text-align:right;">${D(r.mao70)}</span>
+            <span class="muted">All-in at purchase</span><span class="muted" style="text-align:right;">${D(r.all_in_at_max)}</span>
           </div>
-          <p class="muted" style="margin-top:8px; font-size:12px;">Prime acheteur auction.com ~${r.premium_pct}% appliquée sur l'enchère. ${r.summary ? escape(r.summary) : ""}</p>
+          <p class="muted" style="margin-top:8px; font-size:12px;">auction.com buyer premium ~${r.premium_pct}% applied to the bid. ${r.summary ? escape(r.summary) : ""}</p>
         </details>
 
-        ${r.condition_summary ? `<div style="font-size:13px;"><strong>État :</strong> ${escape(r.condition_summary)}</div>` : ""}
+        ${r.condition_summary ? `<div style="font-size:13px;"><strong>Condition:</strong> ${escape(r.condition_summary)}</div>` : ""}
         ${risks}
 
         <div style="display:flex; gap:10px; flex-wrap:wrap;">
-          <button class="btn primary" id="auc-add-board">+ Ajouter au board</button>
-          <button class="btn" id="auc-watch">⭐ Suivre cette enchère</button>
-          ${($("#auc-url")?.value || "").trim() ? `<a class="btn ghost" href="${escape($("#auc-url").value.trim())}" target="_blank" rel="noopener">Voir la fiche ↗</a>` : ""}
+          <button class="btn primary" id="auc-add-board">+ Add to board</button>
+          <button class="btn" id="auc-watch">⭐ Track this auction</button>
+          ${($("#auc-url")?.value || "").trim() ? `<a class="btn ghost" href="${escape($("#auc-url").value.trim())}" target="_blank" rel="noopener">View listing ↗</a>` : ""}
         </div>
       </div>`;
     $("#auc-add-board")?.addEventListener("click", _auctionAddDeal);
@@ -3437,10 +3437,10 @@
     const btn = e.currentTarget; btn.disabled = true; btn.textContent = "…";
     try {
       await API.auctionWatch({ ..._gatherAuction(), ..._aucLast });
-      btn.textContent = "⭐ Suivie"; btn.disabled = true;
-      toast("Ajoutée aux enchères suivies", "success");
+      btn.textContent = "⭐ Tracked"; btn.disabled = true;
+      toast("Added to tracked auctions", "success");
       renderWatchlist();
-    } catch (err) { btn.disabled = false; btn.textContent = "⭐ Suivre cette enchère"; toast(err.message, "error"); }
+    } catch (err) { btn.disabled = false; btn.textContent = "⭐ Track this auction"; toast(err.message, "error"); }
   }
   async function _auctionAddDeal(e) {
     const r = _aucLast; if (!r) return;
@@ -3455,18 +3455,18 @@
         arv_base: r.arv || 0, rehab_base: r.rehab || 0,
         arv_confidence: r.arv_confidence || "Low",
         source: "auction", source_url: p.url || "", status: "evaluating",
-        notes: `[Auction] Enchère max recommandée: $${(r.max_bid || 0).toLocaleString("en-US")}\n`
-          + (r.opening_bid ? `Enchère de départ: $${r.opening_bid.toLocaleString("en-US")}\n` : "")
-          + `Profit estimé à max: $${(r.profit_at_max || 0).toLocaleString("en-US")}\n`
-          + (r.condition_summary ? `État: ${r.condition_summary}\n` : "")
-          + ((r.risks || []).length ? `Risques: ${r.risks.join("; ")}\n` : "")
-          + (p.comments ? `\nCommentaires fiche:\n${p.comments}` : ""),
+        notes: `[Auction] Recommended max bid: $${(r.max_bid || 0).toLocaleString("en-US")}\n`
+          + (r.opening_bid ? `Opening bid: $${r.opening_bid.toLocaleString("en-US")}\n` : "")
+          + `Estimated profit at max: $${(r.profit_at_max || 0).toLocaleString("en-US")}\n`
+          + (r.condition_summary ? `Condition: ${r.condition_summary}\n` : "")
+          + ((r.risks || []).length ? `Risks: ${r.risks.join("; ")}\n` : "")
+          + (p.comments ? `\nListing comments:\n${p.comments}` : ""),
       });
       const deal = res.deal || res;
       (state.deals = state.deals || []).push(deal);
-      btn.textContent = "✓ Ajouté au board"; btn.classList.remove("primary");
-      toast("Deal ajouté", "success");
-    } catch (err) { btn.disabled = false; btn.textContent = "+ Ajouter au board"; toast(err.message, "error"); }
+      btn.textContent = "✓ Added to board"; btn.classList.remove("primary");
+      toast("Deal added", "success");
+    } catch (err) { btn.disabled = false; btn.textContent = "+ Add to board"; toast(err.message, "error"); }
   }
   $("#auc-run")?.addEventListener("click", () => runAuction());
 
@@ -3476,7 +3476,7 @@
     const v = id => ($(id)?.value || "").trim();
     const n = id => { const x = Number(v(id)); return x > 0 ? x : null; };
     const location = v("#aucf-location");
-    if (!location) { toast("Entre une ville ou un état", "warn"); return; }
+    if (!location) { toast("Enter a city or state", "warn"); return; }
     const payload = { location, max_listings: Number(v("#aucf-count")) || 10 };
     if (n("#aucf-pricemax")) payload.price_max = n("#aucf-pricemax");
     if (n("#aucf-bedsmin")) payload.beds_min = n("#aucf-bedsmin");
@@ -3484,24 +3484,24 @@
     if (Number(v("#aucf-holding")) >= 0 && v("#aucf-holding")) payload.holding = Number(v("#aucf-holding"));
     const st = $("#aucf-status"), btn = $("#aucf-run");
     btn.disabled = true;
-    st.innerHTML = '<span class="spinner"></span> Recherche IA + web des enchères… (~30-60s)';
+    st.innerHTML = '<span class="spinner"></span> AI + web auction search… (~30-60s)';
     $("#aucf-results").innerHTML = "";
     try {
       if (!state.deals || !state.deals.length) { try { state.deals = await API.listDeals(); } catch {} }
       const r = await API.auctionFind(payload);
-      if (!r.ok) { st.innerHTML = `<span style="color:var(--red)">${escape(r.error || "Échec de la recherche")}</span>`; return; }
+      if (!r.ok) { st.innerHTML = `<span style="color:var(--red)">${escape(r.error || "Search failed")}</span>`; return; }
       _aucFindResults = r.listings || [];
-      st.innerHTML = `✓ ${_aucFindResults.length} enchère(s)${r.area_label ? " — " + escape(r.area_label) : ""}${r.notes ? `<br><span class="muted" style="font-size:11.5px;">${escape(r.notes)}</span>` : ""}`;
+      st.innerHTML = `✓ ${_aucFindResults.length} auction(s)${r.area_label ? " — " + escape(r.area_label) : ""}${r.notes ? `<br><span class="muted" style="font-size:11.5px;">${escape(r.notes)}</span>` : ""}`;
       renderAuctionFindResults();
     } catch (e) { st.innerHTML = `<span style="color:var(--red)">${escape(e.message)}</span>`; }
     finally { btn.disabled = false; }
   }
   function renderAuctionFindResults() {
     const box = $("#aucf-results");
-    if (!_aucFindResults.length) { box.innerHTML = `<div class="card"><p class="muted" style="margin:0;">Aucune enchère trouvée pour cette zone.</p></div>`; return; }
+    if (!_aucFindResults.length) { box.innerHTML = `<div class="card"><p class="muted" style="margin:0;">No auctions found for this area.</p></div>`; return; }
     const D = v => (v == null || v === "") ? "—" : "$" + Math.round(v).toLocaleString("en-US");
     const vcol = { go: "var(--green)", tight: "#e8a93b", pass: "var(--red)", unknown: "var(--muted)" };
-    const vlbl = { go: "GO", tight: "SERRÉ", pass: "PASSE", unknown: "?" };
+    const vlbl = { go: "GO", tight: "TIGHT", pass: "PASS", unknown: "?" };
     const today = new Date(); today.setHours(0, 0, 0, 0);
     box.innerHTML = `<div class="deals-grid">${_aucFindResults.map((l, i) => {
       let dateTag = "";
@@ -3509,7 +3509,7 @@
         const d = new Date(l.auction_date + "T00:00:00");
         const days = Math.round((d - today) / 86400000);
         const col = isNaN(days) ? "var(--muted)" : days < 0 ? "var(--muted)" : days <= 7 ? "var(--red)" : days <= 14 ? "#e8a93b" : "var(--muted)";
-        dateTag = `<span style="color:${col}; font-weight:600;">📅 ${escape(l.auction_date)}${!isNaN(days) && days >= 0 ? ` (J−${days})` : ""}</span>`;
+        dateTag = `<span style="color:${col}; font-weight:600;">📅 ${escape(l.auction_date)}${!isNaN(days) && days >= 0 ? ` (${days}d left)` : ""}</span>`;
       }
       const col = vcol[l.verdict] || "var(--muted)";
       const onBoard = _onBoard ? _onBoard(l.address) : false;
@@ -3519,15 +3519,15 @@
           <span class="pill" style="background:${col}1a; color:${col}; font-weight:700; white-space:nowrap;">${vlbl[l.verdict] || "?"}</span>
         </div>
         <div class="muted" style="font-size:12px;">${escape([l.city, l.state, l.zip].filter(Boolean).join(" "))}${l.source ? " · " + escape(l.source) : ""}</div>
-        <div style="font-size:12.5px; display:flex; gap:12px; flex-wrap:wrap;">${dateTag}${l.opening_bid ? `<span class="muted">départ ${D(l.opening_bid)}</span>` : ""}</div>
+        <div style="font-size:12.5px; display:flex; gap:12px; flex-wrap:wrap;">${dateTag}${l.opening_bid ? `<span class="muted">opening ${D(l.opening_bid)}</span>` : ""}</div>
         <div style="font-size:12px;" class="muted">ARV ${D(l.arv_estimate)} · Rehab ${D(l.rehab_estimate)}${l.beds ? ` · ${l.beds}bd/${l.baths || "?"}ba` : ""}</div>
         <div style="display:flex; justify-content:space-between; align-items:baseline; margin-top:2px;">
-          <span style="font-size:11px; color:var(--muted); text-transform:uppercase;">Enchère max</span>
+          <span style="font-size:11px; color:var(--muted); text-transform:uppercase;">Max bid</span>
           <span style="font-weight:700; font-size:18px; color:${col};">${D(l.max_bid)}</span>
         </div>
         <div style="display:flex; gap:6px; margin-top:6px; flex-wrap:wrap;">
-          <button class="btn ghost aucf-detail" data-i="${i}" style="font-size:12px;" title="Analyse IA détaillée">🔬 Détail</button>
-          <button class="btn ghost aucf-watch" data-i="${i}" style="font-size:12px;">⭐ Suivre</button>
+          <button class="btn ghost aucf-detail" data-i="${i}" style="font-size:12px;" title="Detailed AI analysis">🔬 Details</button>
+          <button class="btn ghost aucf-watch" data-i="${i}" style="font-size:12px;">⭐ Track</button>
           <button class="btn ${onBoard ? "" : "ghost"} aucf-add" data-i="${i}" style="font-size:12px;" ${onBoard ? "disabled" : ""}>${onBoard ? "✓ Board" : "+ Board"}</button>
         </div>
       </div>`;
@@ -3536,7 +3536,7 @@
     box.querySelectorAll(".aucf-watch").forEach(b => b.addEventListener("click", () => _aucfWatch(_aucFindResults[+b.dataset.i], b)));
     box.querySelectorAll(".aucf-add").forEach(b => b.addEventListener("click", () => _aucfAdd(_aucFindResults[+b.dataset.i], b)));
   }
-  // "Détail" → prefill the single-address form (section ②) and run the deep analysis
+  // "Details" → prefill the single-address form (section ②) and run the deep analysis
   function _aucfDetail(l) {
     if (!l) return;
     const full = [l.address, l.city, `${l.state || ""} ${l.zip || ""}`.trim()].filter(s => s && s.trim()).join(", ");
@@ -3559,10 +3559,10 @@
         mao70: l.mao70, profit_at_max: l.profit_at_max, verdict: l.verdict,
         target_margin_pct: l.target_margin_pct,
       });
-      btn.textContent = "⭐ Suivie";
-      toast("Ajoutée aux enchères suivies", "success");
+      btn.textContent = "⭐ Tracked";
+      toast("Added to tracked auctions", "success");
       renderWatchlist();
-    } catch (e) { btn.disabled = false; btn.textContent = "⭐ Suivre"; toast(e.message, "error"); }
+    } catch (e) { btn.disabled = false; btn.textContent = "⭐ Track"; toast(e.message, "error"); }
   }
   async function _aucfAdd(l, btn) {
     if (!l) return;
@@ -3576,15 +3576,15 @@
         purchase_price: l.max_bid || l.opening_bid || 0,
         arv_base: l.arv_estimate || 0, rehab_base: l.rehab_estimate || 0, arv_confidence: "Low",
         source: "auction", source_url: l.url || "", status: "evaluating",
-        notes: `[Auction — trouvé par zone]\nEnchère max: $${(l.max_bid || 0).toLocaleString("en-US")}`
-          + (l.opening_bid ? `\nDépart: $${Number(l.opening_bid).toLocaleString("en-US")}` : "")
-          + (l.auction_date ? `\nDate enchère: ${l.auction_date}` : "")
+        notes: `[Auction — found by area]\nMax bid: $${(l.max_bid || 0).toLocaleString("en-US")}`
+          + (l.opening_bid ? `\nOpening: $${Number(l.opening_bid).toLocaleString("en-US")}` : "")
+          + (l.auction_date ? `\nAuction date: ${l.auction_date}` : "")
           + (l.source ? `\nSource: ${l.source}` : ""),
       });
       const deal = res.deal || res;
       (state.deals = state.deals || []).push(deal);
       btn.textContent = "✓ Board"; btn.disabled = true; btn.classList.remove("primary");
-      toast("Deal ajouté", "success");
+      toast("Deal added", "success");
     } catch (e) { btn.disabled = false; btn.textContent = "+ Board"; toast(e.message, "error"); }
   }
   $("#aucf-run")?.addEventListener("click", runAuctionFind);
@@ -3594,10 +3594,10 @@
     const box = $("#auc-watchlist"); if (!box) return;
     let items = [];
     try { items = await API.auctionWatchlist(); } catch { box.innerHTML = ""; return; }
-    if (!items.length) { box.innerHTML = `<div class="card"><p class="muted" style="margin:0;">Aucune enchère suivie. Analyse un bien puis clique « ⭐ Suivre ».</p></div>`; return; }
+    if (!items.length) { box.innerHTML = `<div class="card"><p class="muted" style="margin:0;">No tracked auctions. Analyze a property, then click “⭐ Track”.</p></div>`; return; }
     const D = v => v == null ? "—" : "$" + Math.round(v).toLocaleString("en-US");
     const vcol = { go: "var(--green)", tight: "#e8a93b", caution: "#e8a93b", pass: "var(--red)" };
-    const vlbl = { go: "GO", tight: "SERRÉ", caution: "PRUDENCE", pass: "PASSE" };
+    const vlbl = { go: "GO", tight: "TIGHT", caution: "CAUTION", pass: "PASS" };
     const today = new Date(); today.setHours(0, 0, 0, 0);
     box.innerHTML = `<div style="display:grid; gap:10px;">${items.map(it => {
       let dateTag = "";
@@ -3605,7 +3605,7 @@
         const d = new Date(it.auction_date + "T00:00:00");
         const days = Math.round((d - today) / 86400000);
         const col = days < 0 ? "var(--muted)" : days <= 7 ? "var(--red)" : days <= 14 ? "#e8a93b" : "var(--muted)";
-        dateTag = `<span style="color:${col}; font-weight:600;">📅 ${it.auction_date}${days >= 0 ? ` (J−${days})` : " (passée)"}</span>`;
+        dateTag = `<span style="color:${col}; font-weight:600;">📅 ${it.auction_date}${days >= 0 ? ` (${days}d left)` : " (past)"}</span>`;
       } else dateTag = `<span class="muted">📅 date ?</span>`;
       const col = vcol[it.verdict] || "var(--muted)";
       return `<div class="card" style="padding:12px 14px; display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
@@ -3617,44 +3617,44 @@
           </div>
         </div>
         <div style="text-align:right;">
-          <div style="font-size:11px; color:var(--muted); text-transform:uppercase;">Enchère max</div>
+          <div style="font-size:11px; color:var(--muted); text-transform:uppercase;">Max bid</div>
           <div style="font-weight:700; font-size:18px; color:var(--green);">${D(it.max_bid)}</div>
         </div>
         <span class="pill" style="background:${col}1a; color:${col}; font-weight:700;">${vlbl[it.verdict] || "—"}</span>
         <div style="display:flex; gap:6px;">
-          <button class="btn ghost wl-recheck" data-id="${escape(it.id)}" title="Ré-analyser" style="font-size:12px;">🔄</button>
-          <button class="btn ghost wl-remove" data-id="${escape(it.id)}" title="Retirer" style="font-size:12px;">🗑</button>
+          <button class="btn ghost wl-recheck" data-id="${escape(it.id)}" title="Re-analyze" style="font-size:12px;">🔄</button>
+          <button class="btn ghost wl-remove" data-id="${escape(it.id)}" title="Remove" style="font-size:12px;">🗑</button>
         </div>
       </div>`;
     }).join("")}</div>`;
     box.querySelectorAll(".wl-recheck").forEach(b => b.addEventListener("click", async () => {
       b.disabled = true; b.textContent = "…";
-      try { await API.auctionRecheck(b.dataset.id); toast("Ré-analysée", "success"); renderWatchlist(); }
+      try { await API.auctionRecheck(b.dataset.id); toast("Re-analyzed", "success"); renderWatchlist(); }
       catch (e) { b.disabled = false; b.textContent = "🔄"; toast(e.message, "error"); }
     }));
     box.querySelectorAll(".wl-remove").forEach(b => b.addEventListener("click", async () => {
-      if (!confirm("Retirer cette enchère du suivi ?")) return;
+      if (!confirm("Remove this auction from tracking?")) return;
       try { await API.auctionUnwatch(b.dataset.id); renderWatchlist(); } catch (e) { toast(e.message, "error"); }
     }));
   }
   $("#auc-recheck-all")?.addEventListener("click", async () => {
-    const btn = $("#auc-recheck-all"); btn.disabled = true; btn.textContent = "🔄 Analyse en cours…";
+    const btn = $("#auc-recheck-all"); btn.disabled = true; btn.textContent = "🔄 Analyzing…";
     try {
       const res = await API.auctionRecheckAll();
       const opp = (res.opportunities || []).length, up = (res.upcoming || []).length;
-      toast(`${res.checked || 0} ré-analysée(s) · ${opp} opportunité(s) · ${up} bientôt`, "success");
+      toast(`${res.checked || 0} re-analyzed · ${opp} opportunity(ies) · ${up} soon`, "success");
       renderWatchlist();
     } catch (e) { toast(e.message, "error"); }
-    finally { btn.disabled = false; btn.textContent = "🔄 Tout ré-analyser"; }
+    finally { btn.disabled = false; btn.textContent = "🔄 Re-analyze all"; }
   });
   document.querySelector('[data-view="auction"]')?.addEventListener("click", () => { setTimeout(renderWatchlist, 50); });
 
   // ============== REHAB ESTIMATOR ==============
   const REHAB_CATALOG = [
-    ["Cuisine", 12000], ["Salle de bain", 6000], ["Sols", 4000], ["Peinture", 3500],
-    ["Toiture", 8000], ["Chauffage / Clim", 6000], ["Électricité", 4000],
-    ["Plomberie", 3500], ["Fenêtres", 5000], ["Extérieur", 3000],
-    ["Cloisons / plâtre", 3000], ["Chauffe-eau", 1500],
+    ["Kitchen", 12000], ["Bathroom", 6000], ["Flooring", 4000], ["Paint", 3500],
+    ["Roof", 8000], ["HVAC", 6000], ["Electrical", 4000],
+    ["Plumbing", 3500], ["Windows", 5000], ["Exterior", 3000],
+    ["Drywall / plaster", 3000], ["Water heater", 1500],
   ];
   let _rehabItems = [];   // [{label, cost}]
   let _rehabDealId = null;
@@ -3691,12 +3691,12 @@
     const box = $("#rehab-items");
     box.innerHTML = _rehabItems.length ? _rehabItems.map((it, i) => `
       <div class="rehab-row" style="display:flex; gap:8px; align-items:center; margin-bottom:6px;">
-        <input class="rehab-label" data-i="${i}" value="${escape(it.label)}" placeholder="Poste de travaux" style="flex:1;">
+        <input class="rehab-label" data-i="${i}" value="${escape(it.label)}" placeholder="Work item" style="flex:1;">
         <span style="color:var(--muted);">$</span>
         <input class="rehab-cost" data-i="${i}" type="number" value="${it.cost}" style="width:100px;">
-        <button class="btn ghost rehab-del" data-i="${i}" title="Retirer" style="padding:4px 8px;">×</button>
+        <button class="btn ghost rehab-del" data-i="${i}" title="Remove" style="padding:4px 8px;">×</button>
       </div>`).join("")
-      : `<div class="muted" style="font-size:12.5px; padding:6px 0;">Aucun poste. Ajoute via les boutons ci-dessus ou l'IA.</div>`;
+      : `<div class="muted" style="font-size:12.5px; padding:6px 0;">No items. Add via the buttons above or with AI.</div>`;
     box.querySelectorAll(".rehab-label").forEach(inp => inp.addEventListener("input", e => { _rehabItems[+e.target.dataset.i].label = e.target.value; }));
     box.querySelectorAll(".rehab-cost").forEach(inp => inp.addEventListener("input", e => { _rehabItems[+e.target.dataset.i].cost = Number(e.target.value) || 0; _updateRehabTotal(); }));
     box.querySelectorAll(".rehab-del").forEach(b => b.addEventListener("click", e => { _rehabItems.splice(+e.target.dataset.i, 1); _renderRehabItems(); }));
@@ -3714,13 +3714,13 @@
   $("#rehab-ai-btn")?.addEventListener("click", async () => {
     if (!_rehabDealId) return;
     const btn = $("#rehab-ai-btn"), st = $("#rehab-ai-status");
-    btn.disabled = true; st.textContent = "Analyse en cours…";
+    btn.disabled = true; st.textContent = "Analyzing…";
     try {
       const r = await API.rehabEstimate(_rehabDealId);
-      if (!r.ok) { st.textContent = r.error || "Échec"; return; }
+      if (!r.ok) { st.textContent = r.error || "Failed"; return; }
       _rehabItems = (r.items || []).map(i => ({ label: i.label, cost: Number(i.cost) || 0 }));
       _renderRehabItems();
-      st.textContent = r.summary ? `✓ ${r.summary}` : "✓ Estimation IA appliquée";
+      st.textContent = r.summary ? `✓ ${r.summary}` : "✓ AI estimate applied";
     } catch (e) { st.textContent = e.message; }
     finally { btn.disabled = false; }
   });
@@ -3737,7 +3737,7 @@
       });
       const i = (state.deals || []).findIndex(d => d.id === _rehabDealId);
       if (i >= 0) state.deals[i] = updated.deal || updated;
-      toast(`Rehab mis à jour : ${fmtMoney(total)}`, "success");
+      toast(`Rehab updated: ${fmtMoney(total)}`, "success");
       closeRehabModal();
       if (state.currentDealId === _rehabDealId || true) openDeal(state.currentDealId);
     } catch (e) { toast(e.message, "error"); }
@@ -4132,14 +4132,14 @@
       openDeal(state.currentDealId);
     } catch (e) {
       // Duplicate address → offer to open the existing deal or force-create.
-      if (/Doublon possible/.test(e.message)) {
+      if (/duplicate/i.test(e.message)) {
         const m = e.message.match(/id:\s*([a-z0-9-]+)/i);
-        if (confirm(e.message + "\n\nOK = ouvrir le deal existant\nAnnuler = créer quand même un doublon")) {
+        if (confirm(e.message + "\n\nOK = open the existing deal\nCancel = create a duplicate anyway")) {
           if (m) { openDeal(m[1]); return; }
         } else {
           try {
             const data = await API.createDeal({ ...obj, force_duplicate: true });
-            toast("Deal créé (doublon assumé)", "success");
+            toast("Deal created (duplicate accepted)", "success");
             state.currentDealId = data.deal.id; state.formDealId = data.deal.id;
             openDeal(state.currentDealId); return;
           } catch (e2) { toast(e2.message, "error"); return; }
@@ -4181,9 +4181,9 @@
       // Native save (most reliable in WebKit)
       if (window.pywebview && window.pywebview.api && window.pywebview.api.save_pdf) {
         const r = await window.pywebview.api.save_pdf(url, filename);
-        if (r.ok) toast(`✓ Enregistré : ${r.path}`, "success");
-        else if (r.cancelled) toast("Annulé", "info");
-        else toast("Échec : " + (r.error || "?"), "error");
+        if (r.ok) toast(`✓ Saved: ${r.path}`, "success");
+        else if (r.cancelled) toast("Cancelled", "info");
+        else toast("Failed: " + (r.error || "?"), "error");
       } else {
         // Fallback: open URL in new tab so user can save manually
         const a = document.createElement("a");
@@ -4299,11 +4299,11 @@
         });
         const result = await window.pywebview.api.save_pdf_blob(b64, filename);
         if (result.ok) {
-          toast(`✓ Enregistré : ${result.path}`, "success");
+          toast(`✓ Saved: ${result.path}`, "success");
         } else if (result.cancelled) {
-          toast("Annulé", "info");
+          toast("Cancelled", "info");
         } else {
-          toast("Sauvegarde échouée : " + (result.error || "?"), "error");
+          toast("Save failed: " + (result.error || "?"), "error");
         }
         return;
       } catch (e) {
@@ -4318,7 +4318,7 @@
     document.body.appendChild(a);
     a.click();
     setTimeout(() => a.remove(), 100);
-    toast("Téléchargement lancé (vérifie ton dossier Downloads)", "info");
+    toast("Download started (check your Downloads folder)", "info");
   }
 
   $("#pdf-download")?.addEventListener("click", async (e) => {
@@ -4327,7 +4327,7 @@
     const blobUrl = btn?.dataset.blobUrl;
     const filename = btn?.dataset.filename || "report.pdf";
     if (!blobUrl) {
-      toast("Génère d'abord le PDF (bouton 'Generate PDF')", "warn");
+      toast("Generate the PDF first (the 'Generate PDF' button)", "warn");
       return;
     }
     btn.disabled = true;
@@ -4461,7 +4461,7 @@
       if (ar) {
         ar.checked = cfg.auto_research !== false;
         ar.onchange = async () => {
-          try { await API.saveAiConfig({ auto_research: ar.checked }); toast(ar.checked ? "Auto-analyse activée" : "Auto-analyse désactivée", "success"); }
+          try { await API.saveAiConfig({ auto_research: ar.checked }); toast(ar.checked ? "Auto-analysis enabled" : "Auto-analysis disabled", "success"); }
           catch (e) { toast(e.message, "error"); }
         };
       }
@@ -4469,7 +4469,7 @@
       if (tm) {
         tm.value = String(cfg.target_margin_pct || 15);
         tm.onchange = async () => {
-          try { await API.saveAiConfig({ target_margin_pct: Number(tm.value) }); toast(`Marge cible → ${tm.value}% (max à offrir recalculé)`, "success"); }
+          try { await API.saveAiConfig({ target_margin_pct: Number(tm.value) }); toast(`Target margin → ${tm.value}% (max offer recomputed)`, "success"); }
           catch (e) { toast(e.message, "error"); }
         };
       }
@@ -4482,11 +4482,11 @@
       const ps = $("#proxy-status");
       if (pk) pk.placeholder = cfg.proxy_configured
         ? `Configured (${cfg.proxy_key_preview}) — re-enter to update`
-        : "clé ScraperAPI…";
+        : "ScraperAPI key…";
       if (ps) {
         ps.textContent = cfg.proxy_configured
-          ? "✓ Photos Zillow automatiques activées — colle une URL, toutes les photos arrivent."
-          : "Sans clé : Zillow bloque, seule l'adresse est récupérée (+ Street View si clé Maps).";
+          ? "✓ Automatic Zillow photos enabled — paste a URL and all photos come in."
+          : "Without a key: Zillow blocks scraping, only the address is retrieved (+ Street View if a Maps key is set).";
         ps.className = cfg.proxy_configured ? "status-line success" : "status-line";
       }
       // Maps key status
@@ -4497,28 +4497,28 @@
         : "AIzaSy…";
       if (ms) {
         ms.textContent = cfg.maps_configured
-          ? "✓ Street View activé — photo extérieure quand un listing est bloqué."
-          : "Optionnel — sans clé, pas de photo de secours.";
+          ? "✓ Street View enabled — exterior photo when a listing is blocked."
+          : "Optional — without a key, no fallback photo.";
         ms.className = cfg.maps_configured ? "status-line success" : "status-line";
       }
     } catch {}
   }
   $("#proxy-key-save")?.addEventListener("click", async () => {
     const key = ($("#proxy-key-input")?.value || "").trim();
-    if (!key) { toast("Colle ta clé ScraperAPI", "warn"); return; }
+    if (!key) { toast("Paste your ScraperAPI key", "warn"); return; }
     try {
       await API.saveAiConfig({ scraper_api_key: key });
-      toast("Clé ScraperAPI enregistrée — photos Zillow automatiques activées", "success");
+      toast("ScraperAPI key saved — automatic Zillow photos enabled", "success");
       $("#proxy-key-input").value = "";
       refreshAiConfig();
     } catch (err) { toast(err.message, "error"); }
   });
   $("#maps-key-save")?.addEventListener("click", async () => {
     const key = ($("#maps-key-input")?.value || "").trim();
-    if (!key) { toast("Colle une clé Google Maps", "warn"); return; }
+    if (!key) { toast("Paste a Google Maps key", "warn"); return; }
     try {
       await API.saveAiConfig({ google_maps_key: key });
-      toast("Clé Google Maps enregistrée — Street View activé", "success");
+      toast("Google Maps key saved — Street View enabled", "success");
       $("#maps-key-input").value = "";
       refreshAiConfig();
     } catch (err) { toast(err.message, "error"); }
@@ -4696,7 +4696,7 @@
           handlePdfFile(file);
         }, 200);
       } else {
-        toast(`Fichier non supporté: "${file.name}". Seuls les PDF sont acceptés.`, "warn");
+        toast(`Unsupported file: "${file.name}". Only PDFs are accepted.`, "warn");
       }
       return;
     }
@@ -4745,25 +4745,25 @@
       <div class="stat-card">
         <div class="stat-label">Total deals (board)</div>
         <div class="stat-value">${data.total_deals || 0}</div>
-        <div class="stat-sub">${data.total_states_with_deals} états couverts</div>
+        <div class="stat-sub">${data.total_states_with_deals} states covered</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">Top potentiel marché</div>
+        <div class="stat-label">Top market potential</div>
         <div class="stat-value">${topState?.code || '?'}</div>
         <div class="stat-sub">${topState?.name || ''} · ${topState?.market_grade || ''}</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">Profit potentiel cumulé</div>
+        <div class="stat-label">Total profit potential</div>
         <div class="stat-value ${(data.total_profit_potential >= 0) ? 'good' : 'bad'}">
           ${data.total_profit_potential >= 0 ? '+' : '-'}$${Math.abs(Math.round(data.total_profit_potential / 1000))}K
         </div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">État #1 (tes deals)</div>
+        <div class="stat-label">#1 state (your deals)</div>
         <div class="stat-value">${
           stateWithDeals.sort((a,b) => (b.my_avg_score||0) - (a.my_avg_score||0))[0]?.code || '—'
         }</div>
-        <div class="stat-sub">par score moyen</div>
+        <div class="stat-sub">by average score</div>
       </div>
     `;
   }
@@ -4781,11 +4781,11 @@
     const el = $("#usamap-legend");
     if (!el) return;
     const labels = {
-      market_score:    ["Faible (15)", "Excellent (95)"],
+      market_score:    ["Low (15)", "Excellent (95)"],
       yoy_pct:         ["-3%", "+6%"],
       median_price:    ["$160K", "$820K"],
       my_deals_count:  ["0", `${Math.max(...(_usamapData.states.map(s=>s.my_deals_count)))} deals`],
-      my_total_profit: ["Perte", "Profit max"],
+      my_total_profit: ["Loss", "Max profit"],
     };
     const [lo, hi] = labels[_usamapMetric] || ["Low", "High"];
     el.innerHTML = `
@@ -4793,7 +4793,7 @@
       <div class="usamap-legend-bar"></div>
       <span class="usamap-legend-label">${escape(hi)}</span>
       <span style="margin-left:auto; color:var(--muted); font-size:11px;">
-        ⚪ pastille = nombre de tes deals dans l'état
+        ⚪ dot = number of your deals in the state
       </span>
     `;
   }
@@ -4810,43 +4810,43 @@
           ${escape(s.name)}
         </h4>
         <div class="usamap-state-row">
-          <span class="label">Région</span>
+          <span class="label">Region</span>
           <span class="val">${escape(s.region || '?')}</span>
         </div>
         <div class="usamap-state-row">
-          <span class="label">Grade marché</span>
+          <span class="label">Market grade</span>
           <span class="val"><span class="grade-pill ${gradeClass}">${escape(s.market_grade)}</span> (${s.market_score}/100)</span>
         </div>
         <div class="usamap-state-row">
-          <span class="label">Prix médian (2026)</span>
+          <span class="label">Median price (2026)</span>
           <span class="val">$${(s.median_price/1000).toFixed(0)}K</span>
         </div>
         <div class="usamap-state-row">
-          <span class="label">Croissance YoY</span>
+          <span class="label">YoY growth</span>
           <span class="val ${yoyClass}">${s.yoy_pct >= 0 ? '+' : ''}${s.yoy_pct.toFixed(1)}%</span>
         </div>
         <div class="usamap-state-row">
-          <span class="label">Rang national</span>
-          <span class="val">#${s.rank} sur 51</span>
+          <span class="label">National rank</span>
+          <span class="val">#${s.rank} of 51</span>
         </div>
       </div>
     `;
     if (s.my_deals_count > 0) {
       html += `
         <div class="usamap-state-card">
-          <h4>📍 Tes deals dans cet état (${s.my_deals_count})</h4>
+          <h4>📍 Your deals in this state (${s.my_deals_count})</h4>
           <div class="usamap-state-row">
-            <span class="label">Score moyen</span>
+            <span class="label">Average score</span>
             <span class="val">${s.my_avg_score || '?'}/100</span>
           </div>
           <div class="usamap-state-row">
-            <span class="label">Profit potentiel cumulé</span>
+            <span class="label">Total profit potential</span>
             <span class="val ${(s.my_total_profit >= 0) ? 'good' : 'bad'}">
               ${s.my_total_profit >= 0 ? '+$' : '-$'}${Math.abs(Math.round(s.my_total_profit/1000))}K
             </span>
           </div>
           <div class="usamap-state-deals">
-            <h5>Tes deals</h5>
+            <h5>Your deals</h5>
             ${(s.my_deals || []).map(d => `
               <div class="usamap-mini-deal" data-id="${escape(d.id)}">
                 <div class="mini-score" style="background:${scoreColor(d.score)}; color:white;">${d.score ?? '?'}</div>
@@ -4862,11 +4862,11 @@
     } else {
       html += `
         <div class="usamap-state-card" style="background: rgba(245,158,11,0.08); border-left: 3px solid #f59e0b;">
-          <strong style="font-size:13px;">🎯 Aucun deal dans cet état</strong>
+          <strong style="font-size:13px;">🎯 No deals in this state</strong>
           <p class="muted" style="font-size:12px; margin-top:4px;">
             ${s.market_grade && s.market_grade[0] === 'A'
-              ? `Excellent marché — explore ! Median ${'$'+(s.median_price/1000).toFixed(0)}K, YoY ${s.yoy_pct >= 0 ? '+' : ''}${s.yoy_pct.toFixed(1)}%`
-              : `Marché moyen — autres états sont plus prometteurs.`}
+              ? `Excellent market — explore it! Median ${'$'+(s.median_price/1000).toFixed(0)}K, YoY ${s.yoy_pct >= 0 ? '+' : ''}${s.yoy_pct.toFixed(1)}%`
+              : `Average market — other states are more promising.`}
           </p>
         </div>
       `;
@@ -6166,11 +6166,11 @@
 
   // ============== DEALS PIPELINE (track deals to closing) ==============
   const _DP_COLS = [
-    ["evaluating", "🔎 En évaluation", "#3b82f6"],
-    ["under_contract", "📝 Sous contrat", "#f59e0b"],
-    ["closed", "✅ Closé", "#10b981"],
-    ["sold", "💰 Revendu", "#8b5cf6"],
-    ["passed", "⛔ Passé", "#9ca3af"],
+    ["evaluating", "🔎 Evaluating", "#3b82f6"],
+    ["under_contract", "📝 Under contract", "#f59e0b"],
+    ["closed", "✅ Closed", "#10b981"],
+    ["sold", "💰 Sold", "#8b5cf6"],
+    ["passed", "⛔ Passed", "#9ca3af"],
   ];
   async function renderDealsPipeline() {
     const host = $("#deals-pipeline"); if (!host) return;
@@ -6178,7 +6178,7 @@
     try { deals = await API.listDeals(); state.deals = deals; }
     catch (e) { host.innerHTML = `<p class="muted">${escape(e.message)}</p>`; return; }
     if (!deals.length) {
-      host.innerHTML = `<p class="muted" style="font-size:13px; margin:0;">Aucun deal — ajoute-en depuis Sourcing.</p>`;
+      host.innerHTML = `<p class="muted" style="font-size:13px; margin:0;">No deals — add some from Sourcing.</p>`;
       return;
     }
     const D = v => (v == null || v === "") ? "—" : "$" + Math.round(Number(v) / 1000) + "K";
@@ -6187,20 +6187,20 @@
       const cards = items.map(d => `
         <div class="dp-card" data-id="${escape(d.id)}">
           <div class="dp-card-top">
-            <span class="dp-addr" data-open="${escape(d.id)}" title="Ouvrir le deal">${escape(d.address || "?")}</span>
+            <span class="dp-addr" data-open="${escape(d.id)}" title="Open the deal">${escape(d.address || "?")}</span>
             ${riskBadge(d)}
           </div>
           <div class="dp-meta">
             🎯 ${D(d.max_offer)}${d.max_offer_blocked ? " ⛔" : ""} · profit ${D(d.net_profit)}
           </div>
-          <select class="dp-status" data-id="${escape(d.id)}" title="Changer le statut">
+          <select class="dp-status" data-id="${escape(d.id)}" title="Change status">
             ${_DP_COLS.map(([k, l]) => `<option value="${k}" ${k === key ? "selected" : ""}>${l}</option>`).join("")}
           </select>
           ${key === "under_contract" ? `
-            <label class="dp-close-label">Closing prévu
+            <label class="dp-close-label">Expected closing
               <input type="date" class="dp-closing" data-id="${escape(d.id)}" value="${escape(d.closing_date || "")}">
             </label>
-            ${(d.deal_breakers && d.deal_breakers.length) ? `<div class="dp-warn">⛔ ${d.deal_breakers.length} deal-breaker(s) non levé(s)</div>` : ""}` : ""}
+            ${(d.deal_breakers && d.deal_breakers.length) ? `<div class="dp-warn">⛔ ${d.deal_breakers.length} unresolved deal-breaker(s)</div>` : ""}` : ""}
         </div>`).join("");
       return `<div class="dp-col">
         <div class="dp-col-head" style="border-top:3px solid ${color};">${label} <span class="dp-count">${items.length}</span></div>
@@ -6218,12 +6218,12 @@
       const deal = deals.find(x => x.id === id);
       const engaging = ["under_contract", "closed"].includes(target);
       if (engaging && deal && deal.deal_breakers && deal.deal_breakers.length) {
-        const ok = confirm(`⛔ « ${deal.address} » a ${deal.deal_breakers.length} deal-breaker(s) NON levé(s) :\n\n- ${deal.deal_breakers.join("\n- ")}\n\nT'engager quand même sur « ${target === "under_contract" ? "sous contrat" : "closé"} » ?`);
+        const ok = confirm(`⛔ “${deal.address}” has ${deal.deal_breakers.length} UNRESOLVED deal-breaker(s):\n\n- ${deal.deal_breakers.join("\n- ")}\n\nCommit anyway to “${target === "under_contract" ? "under contract" : "closed"}”?`);
         if (!ok) { renderDealsPipeline(); return; }
       }
       try {
         await API.patchDeal(id, { status: target });
-        toast(`Statut → ${target}`, "success");
+        toast(`Status → ${target}`, "success");
         renderDealsPipeline();
       } catch (e) { toast(e.message, "error"); renderDealsPipeline(); }
     }));
@@ -6231,7 +6231,7 @@
     host.querySelectorAll(".dp-closing").forEach(inp => inp.addEventListener("change", async () => {
       try {
         await API.patchDeal(inp.dataset.id, { closing_date: inp.value || null });
-        toast(inp.value ? `Closing prévu le ${inp.value}` : "Date de closing retirée", "success");
+        toast(inp.value ? `Closing set for ${inp.value}` : "Closing date removed", "success");
       } catch (e) { toast(e.message, "error"); }
     }));
   }
@@ -6299,11 +6299,11 @@
     try {
       _kanbanColumns = await API.kanbanSetColumns(_kanbanColumns);
       renderLeadsKanban();
-    } catch (e) { toast("Échec sauvegarde colonnes: " + e.message, "error"); }
+    } catch (e) { toast("Failed to save columns: " + e.message, "error"); }
   }
 
   function _addKanbanColumn() {
-    const label = prompt("Nom de la nouvelle colonne :", "");
+    const label = prompt("New column name:", "");
     if (!label || !label.trim()) return;
     _kanbanColumns = [..._kanbanColumns, { label: label.trim() }];
     _saveKanbanColumns();
@@ -6311,18 +6311,18 @@
   function _renameKanbanColumn(key) {
     const col = _kanbanColumns.find(c => c.key === key);
     if (!col) return;
-    const label = prompt("Renommer la colonne :", col.label);
+    const label = prompt("Rename column:", col.label);
     if (!label || !label.trim()) return;
     col.label = label.trim();
     _saveKanbanColumns();
   }
   function _deleteKanbanColumn(key) {
-    if (_kanbanColumns.length <= 1) { toast("Garde au moins une colonne.", "warn"); return; }
+    if (_kanbanColumns.length <= 1) { toast("Keep at least one column.", "warn"); return; }
     const col = _kanbanColumns.find(c => c.key === key);
     const n = _kanbanLeadsCache.filter(l => (l.status || "new") === key).length;
     const msg = n > 0
-      ? `Supprimer "${col.label}" ? Ses ${n} lead(s) iront dans la 1ʳᵉ colonne.`
-      : `Supprimer la colonne "${col.label}" ?`;
+      ? `Delete "${col.label}"? Its ${n} lead(s) will move to the first column.`
+      : `Delete the "${col.label}" column?`;
     if (!confirm(msg)) return;
     _kanbanColumns = _kanbanColumns.filter(c => c.key !== key);
     _saveKanbanColumns();
@@ -6383,27 +6383,27 @@
       return `
         <div class="kanban-col" data-status="${escape(s.key)}" style="border-top-color:${escape(s.color || '#6b7280')};">
           <div class="kanban-col-header">
-            <span class="kanban-col-grip" draggable="true" data-col-grip="${escape(s.key)}" title="Glisser pour réordonner">⠿</span>
-            <button class="kanban-col-swatch" data-col-color="${escape(s.key)}" style="background:${escape(s.color || '#6b7280')}" title="Changer la couleur"></button>
+            <span class="kanban-col-grip" draggable="true" data-col-grip="${escape(s.key)}" title="Drag to reorder">⠿</span>
+            <button class="kanban-col-swatch" data-col-color="${escape(s.key)}" style="background:${escape(s.color || '#6b7280')}" title="Change color"></button>
             <span class="kanban-col-title" title="${escape(s.label)}">${escape(s.label)}</span>
             <span class="col-count">${leads.length}</span>
             <span class="kanban-col-tools">
-              <button class="kanban-col-btn" data-col-rename="${escape(s.key)}" title="Renommer">✎</button>
-              <button class="kanban-col-btn" data-col-delete="${escape(s.key)}" title="Supprimer la colonne">×</button>
+              <button class="kanban-col-btn" data-col-rename="${escape(s.key)}" title="Rename">✎</button>
+              <button class="kanban-col-btn" data-col-delete="${escape(s.key)}" title="Delete column">×</button>
             </span>
           </div>
           ${totals}
           <div class="kanban-col-body">
             ${leads.length === 0
-              ? `<div class="kanban-empty">Glisse un lead ici</div>`
+              ? `<div class="kanban-empty">Drag a lead here</div>`
               : leads.map(l => _renderKanbanCard(l)).join("")}
           </div>
           <button class="kanban-add-btn" data-add-status="${escape(s.key)}">+ Add lead here</button>
         </div>
       `;
     }).join("")
-    + `<button class="kanban-add-col" id="kanban-add-col" title="Ajouter une colonne">
-         <span>＋</span><span class="kanban-add-col-label">Colonne</span>
+    + `<button class="kanban-add-col" id="kanban-add-col" title="Add a column">
+         <span>＋</span><span class="kanban-add-col-label">Column</span>
        </button>`;
     _wireKanbanEvents();
   }
@@ -6427,26 +6427,26 @@
     if (fin.profit != null) {
       const k = Math.round(fin.profit / 1000);
       const roi = fin.roi != null ? ` · ${Math.round(fin.roi)}%` : "";
-      profitTag = `<span class="kanban-card-profit ${fin.profit >= 0 ? 'money' : 'risk'}" title="Profit potentiel (ARV − prix − rehab − 8% frais de vente)">▲ ${k >= 0 ? '$' + k : '-$' + Math.abs(k)}K${roi}</span>`;
+      profitTag = `<span class="kanban-card-profit ${fin.profit >= 0 ? 'money' : 'risk'}" title="Profit potential (ARV − price − rehab − 8% selling costs)">▲ ${k >= 0 ? '$' + k : '-$' + Math.abs(k)}K${roi}</span>`;
     }
 
     // B — days in stage + follow-up
     const days = _daysSince(lead.status_changed_at || lead.added_at);
-    let ageCls = "", ageTitle = "Jours dans cette étape";
+    let ageCls = "", ageTitle = "Days in this stage";
     if (days != null && days >= 30) ageCls = "stale-hot";
     else if (days != null && days >= 14) ageCls = "stale";
-    const ageTag = days != null ? `<span class="kanban-card-age ${ageCls}" title="${ageTitle}">${days}j</span>` : "";
+    const ageTag = days != null ? `<span class="kanban-card-age ${ageCls}" title="${ageTitle}">${days}d</span>` : "";
     let followTag = "";
     if (lead.follow_up) {
       const fd = _daysSince(lead.follow_up);
       const overdue = fd != null && fd >= 0;  // date in the past (or today)
-      followTag = `<span class="kanban-card-follow ${overdue ? 'overdue' : ''}" title="Relance prévue">📅 ${escape(lead.follow_up)}</span>`;
+      followTag = `<span class="kanban-card-follow ${overdue ? 'overdue' : ''}" title="Follow-up scheduled">📅 ${escape(lead.follow_up)}</span>`;
     }
 
     const selected = _kanbanSelected.has(lead.id);
     return `
       <div class="kanban-card${selected ? ' selected' : ''}" draggable="true" data-id="${escape(lead.id)}"${deal ? ` data-deal="${escape(deal.id)}"` : ""}>
-        <input type="checkbox" class="kanban-card-check" data-check="${escape(lead.id)}" ${selected ? "checked" : ""} title="Sélectionner">
+        <input type="checkbox" class="kanban-card-check" data-check="${escape(lead.id)}" ${selected ? "checked" : ""} title="Select">
         ${thumb}
         <div class="kanban-card-main">
           <div class="kanban-card-title">${escape(addr)}</div>
@@ -6456,15 +6456,15 @@
             ${grade ? `<span class="${gradeCls}">${escape(grade)}</span>` : ''}
             ${worthBuying === false ? '<span class="risk">⚠</span>' : ''}
             ${worthBuying === true ? '<span class="money">✓</span>' : ''}
-            ${nComments ? `<span class="kanban-card-comments" title="${nComments} commentaire(s)">💬 ${nComments}</span>` : ''}
+            ${nComments ? `<span class="kanban-card-comments" title="${nComments} comment(s)">💬 ${nComments}</span>` : ''}
             ${ageTag}
             ${followTag}
-            ${deal ? '<span class="kanban-card-link" title="Voir le deal">↗</span>' : ''}
+            ${deal ? '<span class="kanban-card-link" title="View the deal">↗</span>' : ''}
           </div>
         </div>
         <div class="kanban-card-actions">
           <button class="kanban-card-menu" data-menu="${escape(lead.id)}" title="Actions">⋮</button>
-          <button class="kanban-card-edit" data-edit="${escape(lead.id)}" title="Notes &amp; statut">✎</button>
+          <button class="kanban-card-edit" data-edit="${escape(lead.id)}" title="Notes &amp; status">✎</button>
         </div>
       </div>
     `;
@@ -6624,9 +6624,9 @@
     _closePopovers();
     const pop = document.createElement("div");
     pop.className = "kanban-popover kanban-menu";
-    pop.innerHTML = `<div class="kanban-menu-head">Déplacer vers</div>`
+    pop.innerHTML = `<div class="kanban-menu-head">Move to</div>`
       + _kanbanColumns.map(c => `<button class="kanban-menu-item" data-move="${escape(c.key)}">→ ${escape(c.label)}</button>`).join("")
-      + `<button class="kanban-menu-item danger" data-del="1">🗑 Supprimer</button>`;
+      + `<button class="kanban-menu-item danger" data-del="1">🗑 Delete</button>`;
     document.body.appendChild(pop);
     const r = anchor.getBoundingClientRect();
     pop.style.left = Math.min(r.left, window.innerWidth - 210) + "px";
@@ -6642,8 +6642,8 @@
     }));
     pop.querySelector("[data-del]")?.addEventListener("click", async () => {
       _closePopovers();
-      if (!confirm("Supprimer ce lead ?")) return;
-      try { await API.leadDelete(id); _kanbanSelected.delete(id); renderLeadsKanban(); toast("Lead supprimé", "success"); }
+      if (!confirm("Delete this lead?")) return;
+      try { await API.leadDelete(id); _kanbanSelected.delete(id); renderLeadsKanban(); toast("Lead deleted", "success"); }
       catch (e) { toast(e.message, "error"); }
     });
   }
@@ -6660,24 +6660,24 @@
       document.body.appendChild(bar);
     }
     const opts = _kanbanColumns.map(c => `<option value="${escape(c.key)}">${escape(c.label)}</option>`).join("");
-    bar.innerHTML = `<span><b>${n}</b> sélectionné(s)</span>
+    bar.innerHTML = `<span><b>${n}</b> selected</span>
       <select id="bulk-move-sel">${opts}</select>
-      <button class="btn primary" id="bulk-move-btn">Déplacer</button>
-      <button class="btn danger" id="bulk-del-btn">Supprimer</button>
-      <button class="btn ghost" id="bulk-clear-btn">Annuler</button>`;
+      <button class="btn primary" id="bulk-move-btn">Move</button>
+      <button class="btn danger" id="bulk-del-btn">Delete</button>
+      <button class="btn ghost" id="bulk-clear-btn">Cancel</button>`;
     $("#bulk-move-btn").onclick = async () => {
       const st = $("#bulk-move-sel").value, ids = [..._kanbanSelected];
       ids.forEach(id => { const l = _kanbanLeadsCache.find(x => x.id === id); if (l) l.status = st; });
       _kanbanSelected.clear(); _updateBulkBar(); _renderKanbanColumns();
       for (const id of ids) { try { await API.leadPatch(id, { status: st }); } catch {} }
-      toast(`${ids.length} lead(s) déplacé(s)`, "success");
+      toast(`${ids.length} lead(s) moved`, "success");
     };
     $("#bulk-del-btn").onclick = async () => {
       const ids = [..._kanbanSelected];
-      if (!confirm(`Supprimer ${ids.length} lead(s) ?`)) return;
+      if (!confirm(`Delete ${ids.length} lead(s)?`)) return;
       for (const id of ids) { try { await API.leadDelete(id); } catch {} }
       _kanbanSelected.clear(); _updateBulkBar(); renderLeadsKanban();
-      toast(`${ids.length} lead(s) supprimé(s)`, "success");
+      toast(`${ids.length} lead(s) deleted`, "success");
     };
     $("#bulk-clear-btn").onclick = () => _clearSelection();
   }
@@ -6706,7 +6706,7 @@
   }
   function _fmtCommentDate(iso) {
     try {
-      return new Date(iso).toLocaleString("fr-FR",
+      return new Date(iso).toLocaleString("en-US",
         { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
     } catch { return ""; }
   }
@@ -6745,10 +6745,10 @@
             <div class="lead-comment-text">${escape(c.text)}</div>
             <div class="lead-comment-foot">
               <span>${_fmtCommentDate(c.created_at)}</span>
-              <button class="lead-comment-del" data-cid="${escape(c.id)}" title="Supprimer">×</button>
+              <button class="lead-comment-del" data-cid="${escape(c.id)}" title="Delete">×</button>
             </div>
           </div>`).join("")
-      : `<div class="muted" style="font-size:12px;">Aucun commentaire pour l'instant.</div>`;
+      : `<div class="muted" style="font-size:12px;">No comments yet.</div>`;
     list.querySelectorAll(".lead-comment-del").forEach(b =>
       b.addEventListener("click", async () => {
         try {
@@ -6782,21 +6782,21 @@
         follow_up: $("#lead-modal-follow")?.value || "",
       });
       _patchLeadCache(updated);
-      toast("Lead enregistré", "success");
+      toast("Lead saved", "success");
       closeLeadModal(); renderLeadsKanban();
     } catch (e) { toast(e.message, "error"); }
   });
   $("#lead-modal-delete")?.addEventListener("click", async () => {
     if (!_leadModalId) return;
-    if (!confirm("Supprimer ce lead ?")) return;
+    if (!confirm("Delete this lead?")) return;
     try {
       await API.leadDelete(_leadModalId);
-      toast("Lead supprimé", "success");
+      toast("Lead deleted", "success");
       closeLeadModal(); renderLeadsKanban();
     } catch (e) { toast(e.message, "error"); }
   });
 
-  // ---- "+ Depuis un deal" → modal picker to convert a deal into a lead ----
+  // ---- "+ From a deal" → modal picker to convert a deal into a lead ----
   function openKanbanDealPicker() {
     const modal = $("#kanban-deal-picker-modal");
     if (!modal) return;
@@ -6830,8 +6830,8 @@
     if (!deals.length) {
       list.innerHTML = `<div class="gdb-empty">
         ${(state.deals || []).length === existing.size
-          ? "Tous tes deals sont déjà dans le kanban."
-          : `Aucun deal ne match "${escape(q)}".`}
+          ? "All your deals are already in the kanban."
+          : `No deals match "${escape(q)}".`}
       </div>`;
       return;
     }
@@ -6854,7 +6854,7 @@
             </div>
           </div>
           ${d.signal ? `<span class="gdb-item-signal ${sigCls}">${escape(d.signal)}</span>` : ''}
-          <button class="btn primary" style="font-size:11px; padding:5px 10px;">+ Ajouter</button>
+          <button class="btn primary" style="font-size:11px; padding:5px 10px;">+ Add</button>
         </div>
       `;
     }).join("");
@@ -6869,7 +6869,7 @@
 
   async function addDealToKanban(dealId) {
     const d = (state.deals || []).find(x => x.id === dealId);
-    if (!d) { toast("Deal introuvable", "error"); return; }
+    if (!d) { toast("Deal not found", "error"); return; }
     // Build a lead payload from the deal
     const leadPayload = {
       source: "deal_promotion",
@@ -6892,10 +6892,10 @@
       signal: d.signal,
       image: d.image || (d.image_gallery && d.image_gallery[0]) || "",
       description: (
-        `[Importé depuis le board des deals]\n\n` +
+        `[Imported from the deals board]\n\n` +
         `Deal ID: ${d.id}\n` +
         `Score: ${d.score ?? '?'}/100 (${d.grade ?? '?'}, ${d.signal ?? '?'})\n` +
-        (d.purchase_price ? `Prix: $${d.purchase_price.toLocaleString()}\n` : '') +
+        (d.purchase_price ? `Price: $${d.purchase_price.toLocaleString()}\n` : '') +
         (d.arv_base ? `ARV: $${d.arv_base.toLocaleString()}\n` : '') +
         (d.notes ? `\nNotes:\n${d.notes}` : '')
       ),
@@ -6906,12 +6906,12 @@
     try {
       const saved = await API.leadCreate(leadPayload);
       const col = _kanbanColumns.find(s => s.key === leadPayload.status);
-      toast(`✓ "${d.address}" ajouté à la colonne "${col?.label || leadPayload.status}"`, "success");
+      toast(`✓ "${d.address}" added to the "${col?.label || leadPayload.status}" column`, "success");
       closeKanbanDealPicker();
       _newLeadInitialStatus = "new";  // reset
       await renderLeadsKanban();
     } catch (e) {
-      toast("Échec ajout: " + e.message, "error");
+      toast("Failed to add: " + e.message, "error");
     }
   }
 
@@ -7201,7 +7201,7 @@
   function openChatBulletproof() {
     const panel = $("#chat-panel");
     if (!panel) {
-      toast("❌ Bug: panneau chat introuvable dans le DOM", "error");
+      toast("❌ Bug: chat panel not found in the DOM", "error");
       return;
     }
     if (!state.currentDealId) {
@@ -7214,7 +7214,7 @@
         openDeal(top.id).then(() => openChat());
         return;
       } else {
-        toast("Pas de deal sélectionné — ouvre un deal d'abord", "warn");
+        toast("No deal selected — open a deal first", "warn");
         return;
       }
     }
@@ -7232,13 +7232,13 @@
       try {
         const deals = await API.listDeals();
         if (!deals.length) {
-          toast("Crée d'abord un deal pour pouvoir discuter avec l'IA dessus", "warn");
+          toast("Create a deal first so you can chat with the AI about it", "warn");
           return;
         }
         deals.sort((a, b) => (b.score || 0) - (a.score || 0));
         const top = deals[0];
         const ok = confirm(
-          `Aucun deal sélectionné. Ouvrir le chat sur le deal top-score:\n\n"${top.address || top.id}" (score ${top.score || '?'}) ?`
+          `No deal selected. Open the chat on the top-scoring deal:\n\n"${top.address || top.id}" (score ${top.score || '?'})?`
         );
         if (!ok) return;
         state.currentDealId = top.id;
@@ -7417,7 +7417,7 @@
   let _pdfXhr = null;
   let _pdfTimer = null;
   let _pdfStartTime = 0;
-  let _pdfPendingFile = null;  // File waiting for user to click "Analyser"
+  let _pdfPendingFile = null;  // File waiting for user to click "Analyze"
 
   function pdfDbg(msg) {
     console.log("[pdf-debug]", msg);
@@ -7433,15 +7433,15 @@
   // Format relative time like "il y a 2h"
   function _fmtAge(mtimeSec) {
     const ageSec = Date.now() / 1000 - mtimeSec;
-    if (ageSec < 60)          return "à l'instant";
-    if (ageSec < 3600)        return `il y a ${Math.floor(ageSec / 60)}min`;
-    if (ageSec < 86400)       return `il y a ${Math.floor(ageSec / 3600)}h`;
-    if (ageSec < 7 * 86400)   return `il y a ${Math.floor(ageSec / 86400)}j`;
+    if (ageSec < 60)          return "just now";
+    if (ageSec < 3600)        return `${Math.floor(ageSec / 60)}min ago`;
+    if (ageSec < 86400)       return `${Math.floor(ageSec / 3600)}h ago`;
+    if (ageSec < 7 * 86400)   return `${Math.floor(ageSec / 86400)}d ago`;
     const d = new Date(mtimeSec * 1000);
-    return d.toLocaleDateString("fr-FR");
+    return d.toLocaleDateString("en-US");
   }
 
-  // ---- Persistent "Analyse en cours" notification ----
+  // ---- Persistent "Analysis in progress" notification ----
   // Floats at the top of the screen, stays visible even when navigating views
   let _pdfNotifTimer = null;
 
@@ -7485,9 +7485,9 @@
     banner.innerHTML = `
       <div class="spinner-circ"></div>
       <div style="flex:1;">
-        <div style="font-size:12px; opacity:0.85; text-transform:uppercase; letter-spacing:0.05em;">Analyse en cours</div>
+        <div style="font-size:12px; opacity:0.85; text-transform:uppercase; letter-spacing:0.05em;">Analysis in progress</div>
         <div id="pdf-notif-file" style="font-size:14px;">${escape(filename)}</div>
-        <div id="pdf-notif-stage" style="font-size:11.5px; opacity:0.85; margin-top:2px;">Démarrage…</div>
+        <div id="pdf-notif-stage" style="font-size:11.5px; opacity:0.85; margin-top:2px;">Starting…</div>
       </div>
       <div id="pdf-notif-elapsed" style="font-size:12px; opacity:0.85; font-variant-numeric:tabular-nums;">0s</div>
     `;
@@ -7509,8 +7509,8 @@
       banner.innerHTML = `
         <div style="font-size:22px;">✅</div>
         <div style="flex:1;">
-          <div style="font-size:12px; opacity:0.9; text-transform:uppercase; letter-spacing:0.05em;">Terminé</div>
-          <div style="font-size:14px;">${escape(summary || "Analyse réussie")}</div>
+          <div style="font-size:12px; opacity:0.9; text-transform:uppercase; letter-spacing:0.05em;">Done</div>
+          <div style="font-size:14px;">${escape(summary || "Analysis succeeded")}</div>
         </div>
       `;
       setTimeout(() => { banner.style.display = "none"; }, 3500);
@@ -7519,15 +7519,15 @@
       banner.innerHTML = `
         <div style="font-size:22px;">❌</div>
         <div style="flex:1;">
-          <div style="font-size:12px; opacity:0.9; text-transform:uppercase; letter-spacing:0.05em;">Échec</div>
-          <div style="font-size:14px;">${escape(summary || "Analyse échouée")}</div>
+          <div style="font-size:12px; opacity:0.9; text-transform:uppercase; letter-spacing:0.05em;">Failed</div>
+          <div style="font-size:14px;">${escape(summary || "Analysis failed")}</div>
         </div>
       `;
       setTimeout(() => { banner.style.display = "none"; }, 5000);
     }
   }
 
-  // ---- Click "Analyser →" on a PDF → start analysis immediately ----
+  // ---- Click "Analyze →" on a PDF → start analysis immediately ----
   async function analyzePdfDirectly(path, filename) {
     const name = filename || path.split("/").pop() || path;
     pdfDbg(`analyzePdfDirectly("${path}")`);
@@ -7542,41 +7542,41 @@
       updatePdfNotification(null, sec);
     }, 1000);
 
-    toast(`🔄 Analyse de ${name} démarrée…`, "info");
-    updatePdfNotification("📤 Envoi du chemin au backend…", 0);
+    toast(`🔄 Analysis of ${name} started…`, "info");
+    updatePdfNotification("📤 Sending the path to the backend…", 0);
 
     try {
-      updatePdfNotification("📖 Lecture du PDF (extraction texte)…");
+      updatePdfNotification("📖 Reading the PDF (text extraction)…");
       // Tiny delay so user sees the stage change
       await new Promise(r => setTimeout(r, 200));
 
-      updatePdfNotification("🧠 Claude Opus 4.7 analyse le document (20-60s)…");
+      updatePdfNotification("🧠 Claude Opus 4.7 is analyzing the document (20-60s)…");
       const r = await API.importPdfAnalyzeFromPath(path);
 
       if (!r.ok) {
         if (_pdfNotifTimer) { clearInterval(_pdfNotifTimer); _pdfNotifTimer = null; }
-        hidePdfNotification(false, r.error || "Analyse échouée");
-        toast("Échec: " + (r.error || "?"), "error");
+        hidePdfNotification(false, r.error || "Analysis failed");
+        toast("Failed: " + (r.error || "?"), "error");
         return;
       }
 
       const props = r.properties || [];
       if (props.length === 0) {
         if (_pdfNotifTimer) { clearInterval(_pdfNotifTimer); _pdfNotifTimer = null; }
-        hidePdfNotification(false, "Aucune propriété trouvée dans ce PDF");
-        toast("Aucune propriété trouvée", "warn");
+        hidePdfNotification(false, "No properties found in this PDF");
+        toast("No properties found", "warn");
         return;
       }
 
-      updatePdfNotification(`💾 Création de ${props.length} deals…`);
+      updatePdfNotification(`💾 Creating ${props.length} deals…`);
       const commit = await API.importPdfCommit(props, target, r.doc_type, name);
       const s = commit.summary;
       const totalCreated = s.deals + s.leads + s.auctions;
 
       if (_pdfNotifTimer) { clearInterval(_pdfNotifTimer); _pdfNotifTimer = null; }
       hidePdfNotification(true,
-        `${totalCreated} ${target}${totalCreated > 1 ? 's' : ''} créé${totalCreated > 1 ? 's' : ''} depuis ${name}`);
-      toast(`✓ ${totalCreated} ${target}${totalCreated > 1 ? 's' : ''} créé${totalCreated > 1 ? 's' : ''}`, "success");
+        `${totalCreated} ${target}${totalCreated > 1 ? 's' : ''} created from ${name}`);
+      toast(`✓ ${totalCreated} ${target}${totalCreated > 1 ? 's' : ''} created`, "success");
 
       // Redirect to the relevant view
       setTimeout(() => {
@@ -7587,22 +7587,22 @@
     } catch (e) {
       if (_pdfNotifTimer) { clearInterval(_pdfNotifTimer); _pdfNotifTimer = null; }
       hidePdfNotification(false, e.message);
-      toast("Erreur: " + e.message, "error");
+      toast("Error: " + e.message, "error");
     }
   }
 
   async function loadRecentPdfs() {
     const list = $("#pdf-recent-list");
     if (!list) return;
-    list.innerHTML = `<div class="muted" style="text-align:center; padding:20px; font-size:12px;">Chargement…</div>`;
+    list.innerHTML = `<div class="muted" style="text-align:center; padding:20px; font-size:12px;">Loading…</div>`;
     try {
       const r = await API.importPdfRecent();
       const pdfs = r.pdfs || [];
       if (!pdfs.length) {
         list.innerHTML = `<div class="empty" style="padding:30px;">
           <div class="empty-ico">📭</div>
-          <h4>Aucun PDF trouvé</h4>
-          <p class="muted">Place un PDF dans Downloads / Desktop / Documents puis clique Rafraîchir.</p>
+          <h4>No PDFs found</h4>
+          <p class="muted">Put a PDF in Downloads / Desktop / Documents, then click Refresh.</p>
         </div>`;
         return;
       }
@@ -7618,12 +7618,12 @@
             </div>
           </div>
           <button type="button" class="btn primary" data-act="analyze" style="font-size:12px; padding:6px 12px; flex-shrink:0;">
-            Analyser →
+            Analyze →
           </button>
         </div>
       `).join("");
 
-      // Wire up clicks — direct analysis, skip the "Fichier reçu" panel
+      // Wire up clicks — direct analysis, skip the "File received" panel
       list.querySelectorAll(".cmp-deal-card").forEach(card => {
         const path = card.dataset.path;
         const name = card.dataset.name;
@@ -7635,7 +7635,7 @@
         });
       });
     } catch (e) {
-      list.innerHTML = `<div class="muted" style="padding:20px; color:var(--red); font-size:12px;">Erreur: ${escape(e.message)}</div>`;
+      list.innerHTML = `<div class="muted" style="padding:20px; color:var(--red); font-size:12px;">Error: ${escape(e.message)}</div>`;
     }
   }
 
@@ -7671,29 +7671,29 @@
     if (el) el.textContent = `${s}s`;
   }
 
-  // ---- STAGE 1: file dropped/picked → show "Fichier reçu" + Analyser button ----
+  // ---- STAGE 1: file dropped/picked → show "File received" + Analyze button ----
   function handlePdfFile(file) {
     console.log("[pdf-importer] handlePdfFile called with:", file);
     if (!file) { toast("handlePdfFile called with no file", "error"); return; }
     // Immediate visible feedback BEFORE any further processing
-    toast(`📥 ${file.name} sélectionné (${(file.size/1024).toFixed(0)} KB)`, "info");
-    // Make sure we're on the Add Deal view (so the "Fichier reçu" panel is visible)
+    toast(`📥 ${file.name} selected (${(file.size/1024).toFixed(0)} KB)`, "info");
+    // Make sure we're on the Add Deal view (so the "File received" panel is visible)
     if (typeof showView === "function") showView("add");
     if (!file.name.toLowerCase().endsWith(".pdf") && file.type !== "application/pdf") {
-      toast(`Fichier non supporté: "${file.name}" doit être un .pdf (type: ${file.type || "inconnu"})`, "error");
+      toast(`Unsupported file: "${file.name}" must be a .pdf (type: ${file.type || "unknown"})`, "error");
       return;
     }
     if (file.size === 0) {
-      toast("Fichier vide", "error"); return;
+      toast("Empty file", "error"); return;
     }
     if (file.size > 25 * 1024 * 1024) {
-      toast(`PDF trop gros: ${(file.size/1024/1024).toFixed(1)} MB (max 25 MB)`, "error");
+      toast(`PDF too large: ${(file.size/1024/1024).toFixed(1)} MB (max 25 MB)`, "error");
       return;
     }
     _pdfPendingFile = file;
     _pdfFilename = file.name;
 
-    // Show "Fichier reçu" panel with Analyser button
+    // Show "File received" panel with Analyze button
     $("#pdf-drop-zone").style.display = "none";
     $("#pdf-analyzing").style.display = "none";
     $("#pdf-result").style.display = "none";
@@ -7701,13 +7701,13 @@
     $("#pdf-received-name").textContent = file.name;
     $("#pdf-received-meta").textContent =
       `${(file.size/1024).toFixed(0)} KB · ${file.type || "application/pdf"}`;
-    toast(`✓ Fichier reçu: ${file.name}`, "success");
+    toast(`✓ File received: ${file.name}`, "success");
   }
 
-  // ---- STAGE 2: user clicked "Analyser" → start XHR upload + Claude ----
+  // ---- STAGE 2: user clicked "Analyze" → start XHR upload + Claude ----
   function startPdfAnalysis() {
     const file = _pdfPendingFile;
-    if (!file) { toast("Aucun fichier à analyser", "warn"); return; }
+    if (!file) { toast("No file to analyze", "warn"); return; }
     const target = $("#pdf-received-target")?.value || "deal";
 
     // Switch from "received" → "analyzing"
@@ -7717,7 +7717,7 @@
     ["upload", "extract", "claude", "render"].forEach(s => setPdfStep(s, "pending"));
     setPdfStep("upload", "active");
     const sizeStr = file.size ? `${(file.size/1024).toFixed(0)} KB` : `path`;
-    setPdfProgress(0, "Préparation…", `${file.name} · ${sizeStr} · cible: ${target}s`);
+    setPdfProgress(0, "Preparing…", `${file.name} · ${sizeStr} · target: ${target}s`);
 
     _pdfStartTime = Date.now();
     if (_pdfTimer) clearInterval(_pdfTimer);
@@ -7728,8 +7728,8 @@
     if (file._path) {
       setPdfStep("upload", "done");
       setPdfStep("extract", "active");
-      setPdfProgress(30, "Lecture du PDF (mode natif, pas d'upload)…",
-        `Backend lit ${file._path}`);
+      setPdfProgress(30, "Reading the PDF (native mode, no upload)…",
+        `Backend reads ${file._path}`);
       const creep = setInterval(() => {
         const bar = $("#pdf-progress-bar");
         if (!bar) return;
@@ -7740,8 +7740,8 @@
       setTimeout(() => {
         setPdfStep("extract", "done");
         setPdfStep("claude", "active");
-        setPdfProgress(55, "Claude Opus 4.7 analyse le PDF…",
-          "Claude lit chaque page. 20-60 secondes.");
+        setPdfProgress(55, "Claude Opus 4.7 is analyzing the PDF…",
+          "Claude reads each page. 20-60 seconds.");
       }, 2000);
 
       (async () => {
@@ -7750,7 +7750,7 @@
           clearInterval(creep);
           if (!r.ok) {
             setPdfStep("claude", "failed");
-            toast("Échec analyse: " + (r.error || "?"), "error");
+            toast("Analysis failed: " + (r.error || "?"), "error");
             if (_pdfTimer) { clearInterval(_pdfTimer); _pdfTimer = null; }
             setTimeout(resetPdfImporter, 3000);
             return;
@@ -7759,23 +7759,23 @@
           const props = r.properties || [];
           if (props.length === 0) {
             setPdfStep("render", "failed");
-            toast("Aucune propriété trouvée dans ce PDF", "warn");
+            toast("No properties found in this PDF", "warn");
             if (_pdfTimer) { clearInterval(_pdfTimer); _pdfTimer = null; }
             setTimeout(resetPdfImporter, 3500);
             return;
           }
           setPdfStep("render", "active");
           setPdfProgress(85,
-            `Création de ${props.length} ${target}${props.length > 1 ? 's' : ''}…`,
-            "Insertion dans la base…");
+            `Creating ${props.length} ${target}${props.length > 1 ? 's' : ''}…`,
+            "Inserting into the database…");
           const commit = await API.importPdfCommit(props, target, r.doc_type, _pdfFilename);
           const s = commit.summary;
           setPdfStep("render", "done");
-          setPdfProgress(100, "Terminé!",
+          setPdfProgress(100, "Done!",
             `${s.deals} deals · ${s.leads} leads · ${s.auctions} auctions · ${s.skipped} skipped`);
           if (_pdfTimer) { clearInterval(_pdfTimer); _pdfTimer = null; }
           const totalCreated = s.deals + s.leads + s.auctions;
-          toast(`✓ ${totalCreated} ${target}${totalCreated > 1 ? 's' : ''} créé${totalCreated > 1 ? 's' : ''} depuis le PDF`, "success");
+          toast(`✓ ${totalCreated} ${target}${totalCreated > 1 ? 's' : ''} created from the PDF`, "success");
           setTimeout(() => {
             resetPdfImporter();
             if (s.deals)         showView("deals");
@@ -7785,7 +7785,7 @@
         } catch (e) {
           clearInterval(creep);
           setPdfStep("claude", "failed");
-          toast("Échec: " + e.message, "error");
+          toast("Failed: " + e.message, "error");
           if (_pdfTimer) { clearInterval(_pdfTimer); _pdfTimer = null; }
           setTimeout(resetPdfImporter, 3000);
         }
@@ -7807,7 +7807,7 @@
     xhr.upload.addEventListener("progress", e => {
       if (e.lengthComputable) {
         const pct = (e.loaded / e.total) * 30;
-        setPdfProgress(pct, "Upload du fichier…",
+        setPdfProgress(pct, "Uploading the file…",
           `${(e.loaded/1024).toFixed(0)} / ${(e.total/1024).toFixed(0)} KB`);
       }
     });
@@ -7816,15 +7816,15 @@
     xhr.upload.addEventListener("load", () => {
       setPdfStep("upload", "done");
       setPdfStep("extract", "active");
-      setPdfProgress(35, "Extraction du texte du PDF…",
-        "Le backend lit le PDF avec pdfplumber. ~1-3 secondes.");
+      setPdfProgress(35, "Extracting text from the PDF…",
+        "The backend reads the PDF with pdfplumber. ~1-3 seconds.");
       // After ~2 sec assume we're in Claude territory
       setTimeout(() => {
         if (_pdfXhr !== xhr) return;  // cancelled
         setPdfStep("extract", "done");
         setPdfStep("claude", "active");
-        setPdfProgress(55, "Claude Opus 4.7 analyse le PDF…",
-          "Claude lit chaque page et identifie toutes les propriétés. Cette étape prend 20 à 60 secondes selon la taille du PDF.");
+        setPdfProgress(55, "Claude Opus 4.7 is analyzing the PDF…",
+          "Claude reads each page and identifies every property. This step takes 20 to 60 seconds depending on the PDF size.");
       }, 2500);
     });
 
@@ -7842,7 +7842,7 @@
         let msg = `HTTP ${xhr.status}`;
         try { msg = JSON.parse(xhr.responseText).detail || msg; } catch {}
         setPdfStep("claude", "failed");
-        toast("Échec analyse: " + msg, "error");
+        toast("Analysis failed: " + msg, "error");
         if (_pdfTimer) { clearInterval(_pdfTimer); _pdfTimer = null; }
         setTimeout(resetPdfImporter, 3500);
         return;
@@ -7850,16 +7850,16 @@
       let r = null;
       try { r = JSON.parse(xhr.responseText); }
       catch (e) {
-        toast("Réponse invalide du serveur", "error");
+        toast("Invalid response from server", "error");
         resetPdfImporter(); return;
       }
       if (!r.ok) {
         setPdfStep("claude", "failed");
-        toast("Échec analyse: " + (r.error || "inconnu"), "error");
+        toast("Analysis failed: " + (r.error || "unknown"), "error");
         if (r.raw_text_excerpt) {
           $("#pdf-analyzing").style.display = "none";
           $("#pdf-result").style.display = "block";
-          $("#pdf-result-doctype").textContent = "TEXTE BRUT (impossible à parser)";
+          $("#pdf-result-doctype").textContent = "RAW TEXT (could not be parsed)";
           $("#pdf-result-summary").textContent = r.error || "Parse failed";
           $("#pdf-properties-list").innerHTML =
             `<pre style="white-space:pre-wrap; font-size:11px; padding:12px; background:var(--surface-2); border-radius:6px; max-height:400px; overflow-y:auto;">${escape(r.raw_text_excerpt)}</pre>`;
@@ -7877,9 +7877,9 @@
 
       if (nFound === 0) {
         setPdfStep("render", "failed");
-        setPdfProgress(100, "Aucune propriété trouvée",
-          "Claude n'a pas pu extraire de propriété de ce PDF.");
-        toast("Aucune propriété trouvée dans ce PDF", "warn");
+        setPdfProgress(100, "No properties found",
+          "Claude couldn't extract any property from this PDF.");
+        toast("No properties found in this PDF", "warn");
         if (_pdfTimer) { clearInterval(_pdfTimer); _pdfTimer = null; }
         setTimeout(resetPdfImporter, 3500);
         return;
@@ -7887,8 +7887,8 @@
 
       // Add a new "commit" step so the user sees we're creating deals
       setPdfStep("render", "active");
-      setPdfProgress(85, `Création automatique de ${nFound} ${targetType}s…`,
-        `Insertion dans la base…`);
+      setPdfProgress(85, `Automatically creating ${nFound} ${targetType}s…`,
+        `Inserting into the database…`);
 
       // Auto-commit all properties
       (async () => {
@@ -7898,12 +7898,12 @@
           );
           const s = commit.summary;
           setPdfStep("render", "done");
-          setPdfProgress(100, "Terminé!",
+          setPdfProgress(100, "Done!",
             `${s.deals} deals · ${s.leads} leads · ${s.auctions} auctions · ${s.skipped} skipped`);
           if (_pdfTimer) { clearInterval(_pdfTimer); _pdfTimer = null; }
           const totalCreated = s.deals + s.leads + s.auctions;
           toast(
-            `✓ ${totalCreated} ${targetType}${totalCreated > 1 ? 's' : ''} créé${totalCreated > 1 ? 's' : ''} depuis le PDF`,
+            `✓ ${totalCreated} ${targetType}${totalCreated > 1 ? 's' : ''} created from the PDF`,
             "success"
           );
           // Navigate to the right view after a short pause
@@ -7915,7 +7915,7 @@
           }, 1500);
         } catch (e) {
           setPdfStep("render", "failed");
-          toast("Création échouée: " + e.message, "error");
+          toast("Creation failed: " + e.message, "error");
           if (_pdfTimer) { clearInterval(_pdfTimer); _pdfTimer = null; }
           // Fallback: show the review list so user can retry manually
           setTimeout(() => renderPdfResult(r), 800);
@@ -7926,7 +7926,7 @@
     xhr.onerror = () => {
       clearInterval(creepInterval);
       setPdfStep("upload", "failed");
-      toast("Erreur réseau pendant l'upload", "error");
+      toast("Network error during upload", "error");
       if (_pdfTimer) { clearInterval(_pdfTimer); _pdfTimer = null; }
       setTimeout(resetPdfImporter, 3000);
     };
@@ -7934,7 +7934,7 @@
     xhr.ontimeout = () => {
       clearInterval(creepInterval);
       setPdfStep("claude", "failed");
-      toast("Timeout: l'analyse a dépassé 5 minutes", "error");
+      toast("Timeout: analysis exceeded 5 minutes", "error");
       if (_pdfTimer) { clearInterval(_pdfTimer); _pdfTimer = null; }
       setTimeout(resetPdfImporter, 3000);
     };
@@ -7945,7 +7945,7 @@
   function cancelPdfUpload() {
     if (_pdfXhr) { _pdfXhr.abort(); _pdfXhr = null; }
     if (_pdfTimer) { clearInterval(_pdfTimer); _pdfTimer = null; }
-    toast("Annulé", "info");
+    toast("Cancelled", "info");
     resetPdfImporter();
   }
 
@@ -8091,16 +8091,16 @@
   // ============= PIE: native picker via HTTP backend (most reliable) =============
   async function pickPdfNative() {
     console.log("[pdf-importer] pickPdfNative → calling backend native picker…");
-    toast("📂 Ouverture du sélecteur natif…", "info");
+    toast("📂 Opening the native picker…", "info");
     try {
       const r = await API.importPdfNativePick();
       console.log("[pdf-importer] backend returned:", r);
-      if (r.cancelled) { toast("Annulé", "info"); return; }
-      if (!r.path) { toast("Aucun chemin reçu du sélecteur", "warn"); return; }
+      if (r.cancelled) { toast("Cancelled", "info"); return; }
+      if (!r.path) { toast("No path received from the picker", "warn"); return; }
       handlePdfPath(r.path);
     } catch (e) {
       console.error("[pdf-importer] backend native picker failed:", e);
-      toast("Sélecteur natif non disponible: " + e.message + ". Utilise drag-drop ou colle le chemin.", "error");
+      toast("Native picker unavailable: " + e.message + ". Use drag-and-drop or paste the path.", "error");
     }
   }
 
@@ -8117,9 +8117,9 @@
     }
     // Strip surrounding quotes
     path = path.replace(/^["']|["']$/g, "");
-    if (!path) { toast("Colle un chemin de fichier", "warn"); pdfDbg("  ❌ empty"); return; }
+    if (!path) { toast("Paste a file path", "warn"); pdfDbg("  ❌ empty"); return; }
     if (!path.toLowerCase().endsWith(".pdf")) {
-      toast("Le fichier doit être un .pdf", "error");
+      toast("The file must be a .pdf", "error");
       pdfDbg("  ❌ not .pdf");
       return;
     }
@@ -8127,12 +8127,12 @@
     handlePdfPath(path);
   }
 
-  // STAGE 1b: file picked via NATIVE dialog (path-based) → show "Fichier reçu"
+  // STAGE 1b: file picked via NATIVE dialog (path-based) → show "File received"
   function handlePdfPath(path) {
     pdfDbg(`handlePdfPath("${path}")`);
     const filename = path.split("/").pop() || path;
     if (!filename.toLowerCase().endsWith(".pdf")) {
-      toast(`Fichier non supporté: ${filename}`, "error");
+      toast(`Unsupported file: ${filename}`, "error");
       pdfDbg(`  ❌ rejected — not .pdf`);
       return;
     }
@@ -8147,8 +8147,8 @@
     recv.style.display = "block";
     $("#pdf-received-name").textContent = filename;
     $("#pdf-received-meta").textContent = `📁 ${path}`;
-    toast(`✓ Fichier reçu: ${filename}`, "success");
-    pdfDbg(`  ✓ shown "Fichier reçu" panel — click Analyser to continue`);
+    toast(`✓ File received: ${filename}`, "success");
+    pdfDbg(`  ✓ shown "File received" panel — click Analyze to continue`);
   }
 
   // Wire up the PDF importer once
@@ -8158,7 +8158,7 @@
     const pickBtn = $("#pdf-pick-btn");
     console.log("[pdf-importer] init — drop:", !!drop, "input:", !!input, "pickBtn:", !!pickBtn);
 
-    // Click on the "Sélecteur natif macOS" button
+    // Click on the "Native macOS picker" button
     if (pickBtn) {
       pickBtn.addEventListener("click", e => {
         e.preventDefault(); e.stopPropagation();
@@ -8239,7 +8239,7 @@
         if (ov) ov.style.display = "none";
         const f = e.dataTransfer?.files?.[0];
         if (f) handlePdfFile(f);
-        else toast("Aucun fichier détecté dans le drop", "warn");
+        else toast("No file detected in the drop", "warn");
       });
     }
     const allBtn = $("#pdf-select-all");
@@ -8257,7 +8257,7 @@
     const cancel = $("#pdf-cancel-btn");
     if (cancel) cancel.addEventListener("click", cancelPdfUpload);
 
-    // NEW: "Fichier reçu" stage → [Analyser] + [Annuler]
+    // NEW: "File received" stage → [Analyze] + [Cancel]
     const analyzeBtn = $("#pdf-analyze-btn");
     if (analyzeBtn) analyzeBtn.addEventListener("click", startPdfAnalysis);
     const receivedCancel = $("#pdf-received-cancel");

@@ -3,8 +3,8 @@
 Remote listing photos (photos.zillowstatic.com, lh3.googleusercontent.com…)
 expire after weeks. This module downloads a deal's gallery to the persistent
 data disk and rewrites the deal's image fields to local URLs served by the
-/deal-photos static mount — so photos survive forever (deal PDFs, the
-grand-père presentations, and photo-based AI all keep working).
+/deal-photos static mount — so photos survive forever (deal PDFs,
+presentations, and photo-based AI all keep working).
 """
 from __future__ import annotations
 
