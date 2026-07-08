@@ -1674,6 +1674,54 @@ kbd {
   background: rgba(255,255,255,0.2);
   transform: scale(1.05);
 }
+.lightbox img {
+  cursor: default;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+.lightbox-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px; height: 52px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.1);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.15);
+  color: white;
+  font-size: 34px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all var(--t-fast) var(--ease-snap);
+  z-index: 1;
+}
+.lightbox-nav:hover { background: rgba(255,255,255,0.22); }
+.lightbox-nav:active { transform: translateY(-50%) scale(0.92); }
+.lightbox-prev { left: 20px; padding-right: 4px; }
+.lightbox-next { right: 20px; padding-left: 4px; }
+.lightbox-counter {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: white;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+@media (max-width: 640px) {
+  .lightbox-nav { width: 44px; height: 44px; font-size: 28px; }
+  .lightbox-prev { left: 8px; }
+  .lightbox-next { right: 8px; }
+}
 
 .map-card iframe {
   width: 100%;

@@ -2017,8 +2017,11 @@ https://app.ispeedtolead.com/deal-speed/property/...
   </div>
 
   <div id="lightbox" class="lightbox" style="display:none">
-    <button class="lightbox-close" id="lightbox-close">×</button>
-    <img id="lightbox-img" alt="">
+    <button class="lightbox-close" id="lightbox-close" aria-label="Close">×</button>
+    <button class="lightbox-nav lightbox-prev" id="lightbox-prev" aria-label="Previous photo">‹</button>
+    <img id="lightbox-img" alt="" draggable="false">
+    <button class="lightbox-nav lightbox-next" id="lightbox-next" aria-label="Next photo">›</button>
+    <div class="lightbox-counter" id="lightbox-counter"></div>
   </div>
 
   <script src="/js/api.js"></script>

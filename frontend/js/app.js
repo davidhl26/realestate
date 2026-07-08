@@ -1660,9 +1660,10 @@
         </div>
       </div>
     `;
-    // Hero image click → open lightbox
+    // Hero image click → open lightbox (full gallery, swipeable)
     if (d.image) {
-      $("#hero-img")?.addEventListener("click", () => openLightbox(d.image));
+      const heroImgs = (d.image_gallery && d.image_gallery.length) ? d.image_gallery : [d.image];
+      $("#hero-img")?.addEventListener("click", () => openLightbox(heroImgs, 0));
     }
 
     // Wire inline editables
@@ -1816,7 +1817,7 @@
       d.addEventListener("click", e => { e.stopPropagation(); goCarousel(Number(d.dataset.idx)); });
     });
     $$(".carousel-slide", track).forEach(s => {
-      s.addEventListener("click", () => openLightbox(images[Number(s.dataset.idx)]));
+      s.addEventListener("click", () => openLightbox(images, Number(s.dataset.idx)));
     });
     updateCarousel();
   }
@@ -2240,7 +2241,7 @@
         <div class="gallery-img" data-idx="${i}" style="background-image:url('${escape(url)}')"></div>
       `).join("");
       $$(".gallery-img", $("#gallery")).forEach(el => {
-        el.addEventListener("click", () => openLightbox(gallery[Number(el.dataset.idx)]));
+        el.addEventListener("click", () => openLightbox(gallery, Number(el.dataset.idx)));
       });
     } else $("#gallery-card").style.display = "none";
 
@@ -2803,13 +2804,57 @@
     } catch (e) { toast(e.message, "error"); }
   });
 
-  // ============== LIGHTBOX ==============
-  function openLightbox(url) {
-    $("#lightbox-img").src = url;
+  // ============== LIGHTBOX (swipeable gallery) ==============
+  let lightboxState = { images: [], idx: 0 };
+  // Accepts either a single URL (back-compat) or an array of URLs + a start index.
+  function openLightbox(images, startIdx = 0) {
+    const arr = (Array.isArray(images) ? images : [images]).filter(Boolean);
+    if (!arr.length) return;
+    lightboxState.images = arr;
+    lightboxState.idx = Math.max(0, Math.min(arr.length - 1, startIdx | 0));
+    lightboxShow();
     $("#lightbox").style.display = "flex";
   }
-  $("#lightbox")?.addEventListener("click", () => $("#lightbox").style.display = "none");
-  $("#lightbox-close")?.addEventListener("click", () => $("#lightbox").style.display = "none");
+  function lightboxShow() {
+    const { images, idx } = lightboxState;
+    $("#lightbox-img").src = images[idx] || "";
+    const multi = images.length > 1;
+    const prev = $("#lightbox-prev"), next = $("#lightbox-next"), c = $("#lightbox-counter");
+    if (prev) prev.style.display = multi ? "flex" : "none";
+    if (next) next.style.display = multi ? "flex" : "none";
+    if (c) { c.style.display = multi ? "block" : "none"; c.textContent = `${idx + 1} / ${images.length}`; }
+  }
+  function lightboxGo(delta) {
+    const n = lightboxState.images.length; if (n < 2) return;
+    lightboxState.idx = (lightboxState.idx + delta + n) % n;   // wrap-around
+    lightboxShow();
+  }
+  function closeLightbox() { $("#lightbox").style.display = "none"; }
+
+  $("#lightbox-close")?.addEventListener("click", (e) => { e.stopPropagation(); closeLightbox(); });
+  $("#lightbox-prev")?.addEventListener("click", (e) => { e.stopPropagation(); lightboxGo(-1); });
+  $("#lightbox-next")?.addEventListener("click", (e) => { e.stopPropagation(); lightboxGo(1); });
+  // Backdrop click closes; clicks on the image/arrows do not (unless it was a drag-swipe).
+  (() => {
+    const lb = $("#lightbox"); if (!lb) return;
+    let x0 = null, y0 = null, dragged = false;
+    const down = (x, y) => { x0 = x; y0 = y; dragged = false; };
+    const up = (x, y) => {
+      if (x0 == null) return;
+      const dx = x - x0, dy = y - y0;
+      if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy)) { lightboxGo(dx < 0 ? 1 : -1); dragged = true; }
+      x0 = y0 = null;
+    };
+    lb.addEventListener("touchstart", (e) => { const t = e.changedTouches[0]; down(t.clientX, t.clientY); }, { passive: true });
+    lb.addEventListener("touchend", (e) => { const t = e.changedTouches[0]; up(t.clientX, t.clientY); }, { passive: true });
+    // Desktop mouse drag-to-swipe
+    lb.addEventListener("mousedown", (e) => down(e.clientX, e.clientY));
+    lb.addEventListener("mouseup", (e) => up(e.clientX, e.clientY));
+    lb.addEventListener("click", (e) => {
+      if (dragged) { dragged = false; return; }        // a swipe, not a tap
+      if (e.target === lb) closeLightbox();             // only the backdrop closes
+    });
+  })();
 
   $("#back-btn")?.addEventListener("click", () => showView("deals"));
 
@@ -4626,7 +4671,12 @@
     if (e.key === "Escape") {
       if ($("#pdf-modal").style.display === "flex") closePdfModal();
       else if ($("#cmdk").style.display === "flex") closeCmdk();
-      else if ($("#lightbox").style.display === "flex") $("#lightbox").style.display = "none";
+      else if ($("#lightbox").style.display === "flex") closeLightbox();
+    }
+    // Arrow keys navigate the lightbox gallery
+    if ($("#lightbox")?.style.display === "flex") {
+      if (e.key === "ArrowLeft") { e.preventDefault(); lightboxGo(-1); }
+      else if (e.key === "ArrowRight") { e.preventDefault(); lightboxGo(1); }
     }
     // G then [D|L|A|C|S]
     if (!inField && e.key === "g") {
