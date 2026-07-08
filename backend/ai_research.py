@@ -626,29 +626,32 @@ def find_listings_in_area(params: dict, max_listings: int = 60) -> dict:
     }
 
 
-AREA_SALES_SYSTEM = """You compile RECENT HOME SALES around a specific address for a real-estate investor's neighborhood map (like Zillow's sold layer).
+AREA_SALES_SYSTEM = """You compile RECENT HOME SALES around a specific address for a real-estate investor's neighborhood map (like Zillow's "recently sold" layer).
 
-Use web_search aggressively: Zillow "recently sold" pages for the street/zip, Redfin sold pages, Realtor.com sold, county transfer records, Homes.com. Target sales from the LAST 18 MONTHS within roughly half a mile of the subject (same street and immediate surrounding streets first).
+Use web_search AGGRESSIVELY and run MANY queries: Zillow "recently sold" for the street/zip, Redfin sold pages, Realtor.com sold, Homes.com, county transfer records. Cover the subject's street first, then EVERY surrounding street and the full ZIP code. Target sales from the LAST 24 MONTHS within roughly half a mile of the subject.
 
 RULES:
-- Only report sales that actually appear in your search results — address + sold price. NEVER invent addresses or prices.
-- Prefer many nearby sales over few distant ones. 15-25 sales is the goal; fewer is fine if the area is quiet.
-- Exclude the subject property itself.
+- Find AT LEAST 20 nearby homes (aim for 20-30). Keep searching more streets and the wider ZIP until you have at least 20; only stop below 20 if the area is genuinely rural/quiet and you have truly exhausted the sources.
+- Only report sales that actually appear in your search results — real address + real sold price. NEVER invent addresses, prices, or URLs.
+- Prefer Zillow as the price source. Include each home's Zillow page URL when it appears in results (else the Redfin/Realtor page URL).
+- Exclude the subject property itself. No duplicate addresses.
 
 End with ONE JSON code block and NOTHING after:
 ```json
 {
   "sales": [
-    {"address": "<full street address>", "price": <integer USD sold price>, "date": "<YYYY-MM or YYYY-MM-DD>", "beds": <int|null>, "sqft": <int|null>, "source": "<site>"}
+    {"address": "<full street address>", "price": <integer USD sold price>, "date": "<YYYY-MM or YYYY-MM-DD>", "beds": <int|null>, "sqft": <int|null>, "url": "<Zillow/Redfin/Realtor page URL or null>", "source": "<site, e.g. Zillow>"}
   ],
-  "notes": "<1 sentence: coverage>"
+  "notes": "<1 sentence: coverage + how many found>"
 }
 ```"""
 
 
-def find_area_sales(deal: dict, max_sales: int = 25) -> dict:
+def find_area_sales(deal: dict, max_sales: int = 30, min_sales: int = 20) -> dict:
     """Recent sold properties around the deal's address (for the map's sold
-    layer). Returns {ok, sales:[...], notes} or {ok:False, error}."""
+    layer + price list). Runs top-up web-search passes until it has at least
+    ``min_sales`` nearby homes with Zillow prices. Returns
+    {ok, sales:[...], notes, count} or {ok:False, error}."""
     api_key = get_api_key()
     if not api_key:
         return {"ok": False, "error": "No Anthropic API key configured. Add one in Settings → AI."}
@@ -656,45 +659,71 @@ def find_area_sales(deal: dict, max_sales: int = 25) -> dict:
     client = anthropic.Anthropic(api_key=api_key)
     model = get_model()
     addr = deal.get("address", "")
-    user = (f"Subject property: {addr}\n\n"
-            f"Find up to {max_sales} recent sales (last 18 months) within ~1/2 mile — "
-            "same street and surrounding streets first — and return the JSON.")
-    try:
-        message = client.messages.create(
-            model=model, max_tokens=6000, system=AREA_SALES_SYSTEM,
-            tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 10}],
-            messages=[{"role": "user", "content": user}],
-        )
-    except anthropic.AuthenticationError:
-        return {"ok": False, "error": "Invalid API key — check Settings → AI."}
-    except Exception as e:
-        log.exception("Area sales search failed")
-        return {"ok": False, "error": f"Area sales search failed: {e}"}
-    text = "\n".join(b.text for b in message.content if hasattr(b, "text"))
-    data = _extract_json(text)
-    if not data or not isinstance(data.get("sales"), list):
-        start = text.find("{")
-        data = _repair_json(text[start:]) if start >= 0 else None
-    if not data or not isinstance(data.get("sales"), list):
-        return {"ok": False, "error": "Could not parse area sales.", "raw_text": text[-1200:]}
-    sales, seen = [], set()
-    for s in data["sales"]:
-        if not isinstance(s, dict):
-            continue
-        a = (s.get("address") or "").strip()
-        if not a or a.lower() in seen:
-            continue
-        seen.add(a.lower())
+
+    def _one_pass(exclude):
+        excl = ""
+        if exclude:
+            excl = ("\n\nYou ALREADY have these addresses — find DIFFERENT ones on other "
+                    "nearby streets, do not repeat any of them:\n"
+                    + "\n".join(f"- {a}" for a in list(exclude)[:40]))
+        user = (f"Subject property: {addr}\n\n"
+                f"Find AT LEAST {min_sales} recent home sales (last 24 months) within ~1/2 mile "
+                f"— same street, surrounding streets, and the ZIP — up to {max_sales} total. "
+                f"Include each home's Zillow sold price and its Zillow page URL. "
+                f"Return the JSON." + excl)
         try:
-            price = int(round(float(s.get("price"))))
-        except (TypeError, ValueError):
-            continue
-        sales.append({"address": a, "price": price, "date": s.get("date"),
-                      "beds": s.get("beds"), "sqft": s.get("sqft"),
-                      "source": s.get("source")})
-        if len(sales) >= max_sales:
+            message = client.messages.create(
+                model=model, max_tokens=8000, system=AREA_SALES_SYSTEM,
+                tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 16}],
+                messages=[{"role": "user", "content": user}],
+            )
+        except anthropic.AuthenticationError:
+            return None, "", "Invalid API key — check Settings → AI."
+        except Exception as e:
+            log.exception("Area sales search failed")
+            return None, "", f"Area sales search failed: {e}"
+        text = "\n".join(b.text for b in message.content if hasattr(b, "text"))
+        data = _extract_json(text)
+        if not data or not isinstance(data.get("sales"), list):
+            start = text.find("{")
+            data = _repair_json(text[start:]) if start >= 0 else None
+        return data, text, None
+
+    sales, seen, notes, last_text = [], set(), "", ""
+    for _attempt in range(3):   # initial + up to 2 top-up passes to reach min_sales
+        data, text, err = _one_pass(seen)
+        if err:
+            if not sales:
+                return {"ok": False, "error": err}
             break
-    return {"ok": True, "sales": sales, "notes": data.get("notes", ""), "model": model}
+        last_text = text or last_text
+        if isinstance(data, dict):
+            notes = data.get("notes", "") or notes
+            for s in (data.get("sales") or []):
+                if not isinstance(s, dict):
+                    continue
+                a = (s.get("address") or "").strip()
+                if not a or a.lower() in seen:
+                    continue
+                seen.add(a.lower())
+                try:
+                    price = int(round(float(s.get("price"))))
+                except (TypeError, ValueError):
+                    continue
+                url = s.get("url")
+                if not (isinstance(url, str) and url.startswith("http")):
+                    url = None
+                sales.append({"address": a, "price": price, "date": s.get("date"),
+                              "beds": s.get("beds"), "sqft": s.get("sqft"),
+                              "url": url, "source": s.get("source")})
+                if len(sales) >= max_sales:
+                    break
+        if len(sales) >= min_sales or len(sales) >= max_sales:
+            break
+    if not sales:
+        return {"ok": False, "error": "Could not parse area sales.", "raw_text": last_text[-1200:]}
+    return {"ok": True, "sales": sales[:max_sales], "notes": notes,
+            "model": model, "count": len(sales[:max_sales])}
 
 
 AUCTION_SEARCH_SYSTEM = """You help a fix-and-flip investor DISCOVER residential properties going to AUCTION / foreclosure sale in a given city or state, then triage them.

@@ -608,7 +608,7 @@ def deal_comps_map(deal_id: str):
             raw.append({"address": s.get("address"), "price": s.get("price"),
                         "beds": s.get("beds"), "sqft": s.get("sqft"),
                         "date": s.get("date"), "lat": s.get("lat"),
-                        "lng": s.get("lng"), "source": "sold"})
+                        "lng": s.get("lng"), "url": s.get("url"), "source": "sold"})
 
     # Dedupe by address, geocode missing coords (cached on the deal).
     cache = d.get("comps_geo") or {}
@@ -676,13 +676,14 @@ def deal_area_sales(deal_id: str):
         raise HTTPException(404, "Deal not found")
     if not ai_research.is_configured():
         raise HTTPException(400, "AI not configured. Add an Anthropic API key in Settings → AI.")
-    res = ai_research.find_area_sales(d, max_sales=25)
+    res = ai_research.find_area_sales(d, max_sales=30, min_sales=20)
     if not res.get("ok"):
         return {"ok": False, "error": res.get("error", "search failed")}
     d["area_sales"] = res["sales"]
     d["area_sales_at"] = datetime.utcnow().isoformat() + "Z"
     db.upsert_deal(d)
-    return {"ok": True, "count": len(res["sales"]), "notes": res.get("notes", "")}
+    return {"ok": True, "count": len(res["sales"]), "notes": res.get("notes", ""),
+            "sales": res["sales"]}
 
 
 @app.post("/api/deals/archive-photos")

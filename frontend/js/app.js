@@ -1359,10 +1359,32 @@
 
   // ============== NEIGHBORHOOD MAP (Leaflet: subject + comp price pins) ==============
   let _dealMap = null;
+  // Readable list of the nearby homes with their Zillow prices (below the map).
+  function renderSalesList(sales) {
+    const box = $("#detail-sales-list"); if (!box) return;
+    const arr = (sales || []).filter(s => s && s.price);
+    if (!arr.length) { box.style.display = "none"; box.innerHTML = ""; return; }
+    arr.sort((a, b) => (b.price || 0) - (a.price || 0));
+    const rows = arr.map(s => {
+      const url = (s.url && /^https?:/.test(s.url)) ? s.url
+        : "https://www.zillow.com/homes/" + encodeURIComponent(s.address || "") + "_rb/";
+      const specs = [s.beds ? s.beds + "bd" : "", s.sqft ? Number(s.sqft).toLocaleString("en-US") + " sf" : "", s.date || ""].filter(Boolean).join(" · ");
+      return `<div class="sale-row">
+        <span class="sale-price">$${Number(s.price).toLocaleString("en-US")}</span>
+        <span class="sale-addr">${escape(s.address || "?")}<span class="sale-meta">${escape(specs)}</span></span>
+        <a class="sale-z" href="${url}" target="_blank" rel="noopener">Zillow ↗</a>
+      </div>`;
+    }).join("");
+    box.style.display = "block";
+    box.innerHTML = `<div class="sale-list-head">🏘 ${arr.length} nearby home${arr.length > 1 ? "s" : ""} · Zillow prices</div>
+      <div class="sale-list-scroll">${rows}</div>`;
+  }
+
   async function renderDealMap(data) {
     const card = $("#detail-map-card"); if (!card) return;
     const d = data.deal || {};
     card.style.display = "block";
+    renderSalesList(d.area_sales);
     if (typeof L === "undefined") {
       // Leaflet couldn't load (blocker/offline) — degrade to a plain comps list
       // instead of silently hiding the whole section.
@@ -1467,7 +1489,7 @@
         const geoTxt = r.ungeocoded ? ` · geocoding in progress (${r.ungeocoded} remaining)…` : "";
         if (note) note.textContent = n
           ? `${n} pin(s) — ${nSold} neighborhood sale(s), ${n - nSold} comparable(s)${droppedTxt}${geoTxt} Click a price for details.`
-          : "No pins yet — “📍 Neighborhood sales” fills the map like Zillow (~45 s, ~$0.40); “🤖 Find comparables” targets the best ARV comps.";
+          : "No pins yet — “📍 Neighborhood sales” pulls 20+ nearby homes with their Zillow prices (~60-90 s, ~$0.80); “🤖 Find comparables” targets the best ARV comps.";
         const findBtn = $("#map-find-comps");
         if (findBtn) {
           findBtn.style.display = n ? "none" : "inline-flex";
@@ -1487,7 +1509,7 @@
             }
           };
         }
-        if (r.ungeocoded > 0 && attempt < 6) setTimeout(() => loadPins(attempt + 1), 1500);
+        if (r.ungeocoded > 0 && attempt < 12) setTimeout(() => loadPins(attempt + 1), 1500);
       } catch (e) {
         if (note) note.textContent = "Comparables unavailable: " + e.message;
       }
@@ -1502,12 +1524,16 @@
         ? "📍 Refresh sales" : "📍 Neighborhood sales";
       salesBtn.onclick = async () => {
         salesBtn.disabled = true;
-        salesBtn.innerHTML = '<span class="spinner"></span> Searching for sales… (~45 s)';
-        if (note) note.textContent = "AI is searching for recent sales around the property (Zillow sold, Redfin, records)…";
+        salesBtn.innerHTML = '<span class="spinner"></span> Finding 20+ homes… (~60-90 s)';
+        if (note) note.textContent = "AI is compiling at least 20 nearby homes with their Zillow prices (Zillow sold, Redfin, records)…";
         try {
           const rr = await API.dealAreaSales(d.id);
           if (!rr.ok) { toast(rr.error || "Failed", "error"); }
-          else toast(`✓ ${rr.count} sale(s) found — geocoding in progress…`, "success");
+          else {
+            toast(`✓ ${rr.count} nearby home(s) with Zillow prices — mapping…`, "success");
+            renderSalesList(rr.sales);
+            d.area_sales = rr.sales;   // keep the in-memory deal in sync
+          }
           salesBtn.disabled = false;
           salesBtn.textContent = "📍 Refresh sales";
           loadPins();

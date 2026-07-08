@@ -1723,6 +1723,51 @@ kbd {
   .lightbox-next { right: 8px; }
 }
 
+/* Neighborhood sold-homes price list (below the map) */
+.sale-list-head {
+  font-size: 13px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.sale-list-scroll {
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.sale-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.sale-row:last-child { border-bottom: none; }
+.sale-row:nth-child(even) { background: rgba(127,127,127,0.04); }
+.sale-price {
+  font-weight: 800;
+  color: var(--green, #0fae6f);
+  min-width: 96px;
+  font-variant-numeric: tabular-nums;
+}
+.sale-addr {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+}
+.sale-addr .sale-meta {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.sale-z {
+  font-weight: 700;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 .map-card iframe {
   width: 100%;
   height: 320px;
