@@ -170,10 +170,8 @@
                         auction: "auctions", skiptrace: "auctions" };
   const _GROUP_TABS = {
     sourcing: [
-      { v: "add", label: "➕ Adresse / URL / PDF" },
-      { v: "search", label: "🔎 Recherche par zone" },
-      { v: "watch", label: "🔭 Veille" },
-      { v: "batch", label: "📚 Import en masse" },
+      { v: "add", label: "➕ Ajouter" },
+      { v: "search", label: "🔎 Rechercher & veiller" },
     ],
     auctions: [
       { v: "auction", label: "🏛 Enchères + enchère max" },
@@ -213,6 +211,7 @@
     if (name === "usamap") refreshUsaMapView();
     if (name === "auction" && typeof renderWatchlist === "function") setTimeout(renderWatchlist, 50);
     if (name === "watch" && typeof refreshWatchView === "function") setTimeout(refreshWatchView, 50);
+    if (name === "search" && typeof window._renderSearchWatches === "function") setTimeout(window._renderSearchWatches, 50);
     if (name === "add") {
       // Entering the form defaults to a NEW deal. The edit flow re-binds
       // formDealId to the edited deal AFTER calling showView("add").
@@ -3071,6 +3070,80 @@
   });
   _renderSavedSearches();
 
+  // --- Fusion Recherche → Veille : transforme les critères courants en veille permanente ---
+  $("#search-to-watch")?.addEventListener("click", async () => {
+    const { input, payload } = _gatherSearch();
+    if (!input) { toast("Renseigne d'abord une ville ou une URL de recherche", "warn"); return; }
+    const p = { max_listings: payload.max_listings || 15,
+                interval_min: Number($("#search-watch-interval")?.value ?? 1440) };
+    if (payload.url) p.url = payload.url; else p.location = payload.location;
+    if (payload.price_max) p.price_max = payload.price_max;
+    if (payload.price_min) p.price_min = payload.price_min;
+    if (payload.beds_min) p.beds_min = payload.beds_min;
+    if (payload.property_type) p.property_type = payload.property_type;
+    const btn = $("#search-to-watch"); btn.disabled = true;
+    const st = $("#search-status");
+    if (st) st.innerHTML = '<span class="spinner"></span> Création de la veille…';
+    try {
+      const w = await API.watchCreate(p);
+      if (st) st.textContent = "✓ Veille créée — premier passage en cours…";
+      renderSearchWatches();
+      try { await API.watchRun(w.id); } catch {}
+      if (st) st.textContent = "✓ Veille active. Les nouvelles annonces arriveront analysées dans le flux.";
+      renderSearchWatches();
+      toast("🔭 Veille créée", "success");
+    } catch (e) { toast(e.message, "error"); if (st) st.textContent = ""; }
+    finally { btn.disabled = false; }
+  });
+
+  // Compact active-watches panel shown at the top of the Search view.
+  async function renderSearchWatches() {
+    const box = $("#search-watches"); if (!box) return;
+    let watches = [];
+    try { watches = await API.watchesList(); } catch { box.style.display = "none"; return; }
+    if (!watches.length) { box.style.display = "none"; box.innerHTML = ""; return; }
+    box.style.display = "block";
+    const fmtAgo = ts => {
+      if (!ts) return "jamais lancée";
+      const mins = Math.max(0, Math.round((Date.now() - new Date(ts).getTime()) / 60000));
+      if (mins < 60) return `il y a ${mins} min`;
+      const h = Math.round(mins / 60); return h < 24 ? `il y a ${h} h` : `il y a ${Math.round(h / 24)} j`;
+    };
+    const fmtFreq = m => m >= 1440 ? "1×/j" : (m >= 60 ? "toutes les " + Math.round(m / 60) + " h" : "toutes les " + m + " min");
+    box.innerHTML = `
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px;">
+        <strong style="font-size:14px;">🔭 Veilles actives (${watches.length})</strong>
+        <button class="btn ghost" id="search-manage-watches" style="font-size:12px;">⚙️ Gérer</button>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:6px;">
+        ${watches.map(w => {
+          const crit = w.label || w.location || "Veille";
+          const nb = w.tracked || 0;
+          return `<div style="display:flex; align-items:center; gap:10px; font-size:13px; flex-wrap:wrap;">
+            <span style="font-weight:600;">${escape(crit.length > 40 ? crit.slice(0, 40) + "…" : crit)}</span>
+            <span class="muted" style="font-size:12px;">· ${fmtFreq(w.interval_min || 60)} · ${fmtAgo(w.last_run)}</span>
+            ${nb ? `<span class="pill green" style="font-size:11px;">${nb} suivi${nb > 1 ? "s" : ""}</span>` : ""}
+            <button class="btn ghost sw-run" data-id="${escape(w.id)}" style="font-size:11px; margin-left:auto;">↻ Lancer</button>
+            <button class="btn ghost sw-del" data-id="${escape(w.id)}" style="font-size:11px;">🗑</button>
+          </div>`;
+        }).join("")}
+      </div>`;
+    box.querySelector("#search-manage-watches")?.addEventListener("click", () => showView("watch"));
+    box.querySelectorAll(".sw-run").forEach(b => b.addEventListener("click", async () => {
+      b.disabled = true; b.textContent = "…";
+      try { await API.watchRun(b.dataset.id); toast("Veille relancée", "success"); renderSearchWatches(); }
+      catch (e) { toast(e.message, "error"); b.disabled = false; b.textContent = "↻ Lancer"; }
+    }));
+    box.querySelectorAll(".sw-del").forEach(b => b.addEventListener("click", async () => {
+      if (!confirm("Supprimer cette veille ?")) return;
+      try { await API.watchDelete(b.dataset.id); renderSearchWatches(); } catch (e) { toast(e.message, "error"); }
+    }));
+  }
+  window._renderSearchWatches = renderSearchWatches;
+
+  // Batch importer reachable from the Add view (declutters the sub-tabs).
+  $("#add-open-batch")?.addEventListener("click", (e) => { e.preventDefault(); showView("batch"); });
+
   // ============== ZILLOW WATCH (veille) ==============
   async function refreshWatchView() {
     const box = $("#watch-list"); if (!box) return;
@@ -4389,6 +4462,14 @@
         ar.checked = cfg.auto_research !== false;
         ar.onchange = async () => {
           try { await API.saveAiConfig({ auto_research: ar.checked }); toast(ar.checked ? "Auto-analyse activée" : "Auto-analyse désactivée", "success"); }
+          catch (e) { toast(e.message, "error"); }
+        };
+      }
+      const tm = $("#ai-target-margin");
+      if (tm) {
+        tm.value = String(cfg.target_margin_pct || 15);
+        tm.onchange = async () => {
+          try { await API.saveAiConfig({ target_margin_pct: Number(tm.value) }); toast(`Marge cible → ${tm.value}% (max à offrir recalculé)`, "success"); }
           catch (e) { toast(e.message, "error"); }
         };
       }

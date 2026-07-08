@@ -940,10 +940,17 @@ def run_task(task_name: str, deal: dict) -> dict:
         return {"ok": False, "error": f"{e}"}
 
 
+# Post-close resale content — out of scope for the buy-side flow; kept in TASKS
+# (callable directly) but hidden from the catalog to declutter the deal UI.
+_HIDDEN_TASKS = {"mls_listing", "offer_letter", "marketing", "timing"}
+
+
 def task_registry() -> list:
-    """Public catalog for the frontend."""
+    """Public catalog for the frontend (buy-side tasks only)."""
     out = []
     for name, t in sorted(TASKS.items(), key=lambda kv: kv[1]["priority"]):
+        if name in _HIDDEN_TASKS:
+            continue
         out.append({
             "name": name,
             "label": t["label"],

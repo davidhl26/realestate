@@ -295,6 +295,14 @@ def _maybe_spawn_auto_enrich(deal: dict):
                      daemon=True).start()
 
 
+def _global_margin() -> float:
+    """The owner's target flip margin (Settings) — drives every max-offer."""
+    try:
+        return float(ai_research.read_config().get("target_margin_pct") or 15)
+    except (TypeError, ValueError):
+        return 15.0
+
+
 def _apply_risk(deal: dict, m: dict) -> dict:
     """Run the deterministic safety screen and persist its fields on the deal."""
     risk = analyzer.assess_risk(deal, m)
@@ -311,7 +319,7 @@ def _enrich(deal: dict) -> dict:
     score, grade, signal = analyzer.compute_score(deal, m)
     risk = analyzer.assess_risk(deal, m)
     deal["days_on_market"] = _current_dom(deal)  # live value (daily); None hides garbage
-    offer = analyzer.recommended_max_offer(deal, m)
+    offer = analyzer.recommended_max_offer(deal, m, default_margin=_global_margin())
     offer["blocked"] = bool(risk.get("deal_breakers"))
     return {"deal": deal, "metrics": m, "score": score,
             "grade": grade, "signal": signal, "risk": risk, "max_offer": offer}
@@ -349,13 +357,14 @@ def backups_list():
 @app.get("/api/deals")
 def list_deals():
     deals = db.list_deals()
+    gm = _global_margin()
     out = []
     for d in deals:
         try:
             m = analyzer.compute_metrics(d)
             score, grade, signal = analyzer.compute_score(d, m)
             risk = analyzer.assess_risk(d, m)
-            offer = analyzer.recommended_max_offer(d, m)
+            offer = analyzer.recommended_max_offer(d, m, default_margin=gm)
             out.append({
                 "id": d["id"],
                 "address": d.get("address", ""),
@@ -2409,6 +2418,7 @@ def ai_config_get():
         "key_preview": MASK if key else "",
         "model": cfg.get("model", "claude-opus-4-7"),
         "auto_research": cfg.get("auto_research", True),
+        "target_margin_pct": cfg.get("target_margin_pct", 15),
         "source": source,
         "maps_configured": bool(maps_key),
         "maps_key_preview": MASK if maps_key else "",
@@ -2430,6 +2440,11 @@ def ai_config_set(payload: dict = Body(...)):
         cfg["scraper_api_key"] = (payload["scraper_api_key"] or "").strip()
     if "auto_research" in payload:
         cfg["auto_research"] = bool(payload["auto_research"])
+    if "target_margin_pct" in payload:
+        try:
+            cfg["target_margin_pct"] = max(5, min(40, float(payload["target_margin_pct"])))
+        except (TypeError, ValueError):
+            pass
     ai_research.write_config(cfg)
     return {"ok": True}
 

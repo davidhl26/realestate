@@ -4631,3 +4631,42 @@ body.deals-select-mode .deal-card.selected {
 .dp-close-label { display: block; font-size: 11px; color: var(--muted); margin-top: 7px; }
 .dp-closing { width: 100%; font-size: 12px; padding: 4px 6px; margin-top: 2px; border: 1px solid var(--border); border-radius: 7px; background: var(--card); color: var(--text); }
 .dp-warn { margin-top: 6px; font-size: 11px; font-weight: 700; color: #b91c1c; background: rgba(239,68,68,.1); border-radius: 6px; padding: 4px 6px; }
+
+/* ============== DEAL DETAIL — collapsible sections ============== */
+details.detail-group {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  margin-bottom: 14px;
+  background: var(--card);
+  overflow: hidden;
+}
+details.detail-group > summary {
+  cursor: pointer;
+  list-style: none;
+  padding: 15px 18px;
+  font-weight: 700;
+  font-size: 14.5px;
+  color: var(--text);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+}
+details.detail-group > summary::-webkit-details-marker { display: none; }
+details.detail-group > summary::after {
+  content: "▸"; margin-left: auto; color: var(--muted);
+  transition: transform .15s ease; font-size: 12px;
+}
+details.detail-group[open] > summary::after { transform: rotate(90deg); }
+details.detail-group > summary:hover { background: var(--accent-50, rgba(0,0,0,.03)); }
+/* inner cards lose their own frame — the details wrapper is the frame */
+details.detail-group > .card,
+details.detail-group > .detail-grid,
+details.detail-group > .comps-section,
+details.detail-group > .section-label { margin: 0 14px 14px; }
+details.detail-group > .card { box-shadow: none; }
+
+/* ============== DECLUTTER ============== */
+/* Global "selected deal" top bar removed from the flow — clicking a deal card
+   opens it directly, so the persistent bar was redundant chrome. */
+.global-deal-bar { display: none !important; }

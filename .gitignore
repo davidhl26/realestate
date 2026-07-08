@@ -36,6 +36,9 @@ data/leads.json
 data/auctions.json
 data/crm.json
 data/pdfs/
+data/watches.json
+data/auction-watchlist.json
+data/backups/
 
 # Logs
 *.log

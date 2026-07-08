@@ -276,7 +276,7 @@
         <div class="page-header-text">
           <div class="page-eyebrow">New</div>
           <h2>Add a deal</h2>
-          <p>Paste a Zillow, Redfin, or ispeedtolead URL — or fill in manually.</p>
+          <p>Paste a Zillow, Redfin, or ispeedtolead URL — or fill in manually. <a href="#" id="add-open-batch" style="font-size:13px;">📚 Importer plusieurs URLs →</a></p>
         </div>
       </header>
 
@@ -586,6 +586,7 @@
         <p class="muted" id="detail-map-note" style="font-size:12px; margin:8px 0 0;"></p>
       </div>
 
+      <details class="detail-group"><summary>📄 Documents &amp; pièces</summary>
       <!-- Documents (inspection, appraisal, title…) → AI analysis + verdict -->
       <div class="card" id="detail-documents-card">
         <div style="display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px;">
@@ -610,7 +611,9 @@
         <p class="muted" style="font-size:11.5px; margin:6px 0 0;">Chaque commentaire est horodaté (date + heure) automatiquement. Ctrl/⌘+Entrée pour envoyer.</p>
         <div id="deal-comments-list" style="margin-top:12px;"></div>
       </div>
+      </details>
 
+      <details class="detail-group"><summary>💰 Financement, scénarios &amp; analyses IA</summary>
       <!-- Inline-editable Financing card -->
       <div class="card financing-card" id="financing-card">
         <div class="financing-header">
@@ -716,7 +719,9 @@
         <p class="muted" style="margin-bottom:12px">Comparing ARV estimates across sources. Big spread = verify before committing.</p>
         <div class="arv-anchors" id="arv-anchors-bars"></div>
       </div>
+      </details>
 
+      <details class="detail-group"><summary>🗂 Média, localisation &amp; suivi</summary>
       <!-- Section: media -->
       <div class="comps-section" id="visuals-section" style="display:none">
         <div class="card" id="gallery-card">
@@ -794,6 +799,7 @@
         </h3>
         <div id="description-text" style="white-space:pre-wrap; font-size:13px; line-height:1.7; color:var(--text-2)"></div>
       </div>
+      </details>
 
       <div id="pdf-preview" class="pdf-preview" style="display:none">
         <div class="pdf-actions">
@@ -818,8 +824,8 @@
       <header class="page-header">
         <div class="page-header-text">
           <div class="page-eyebrow">Sourcing</div>
-          <h2>Search</h2>
-          <p>Trouve de nouvelles annonces via l'IA (URL de recherche Zillow ou ville), puis ajoute chaque deal d'un clic.</p>
+          <h2>Rechercher</h2>
+          <p>Une seule surface : lance une recherche ponctuelle, ou <strong>transforme-la en veille</strong> pour recevoir automatiquement les nouvelles annonces analysées.</p>
         </div>
       </header>
 
@@ -848,15 +854,27 @@
               <option value="20">20</option><option value="30">30</option><option value="40">40</option>
             </select>
           </label>
+          <label style="width:150px;">Fréquence veille
+            <select id="search-watch-interval">
+              <option value="60">Toutes les heures</option>
+              <option value="180">Toutes les 3 h</option>
+              <option value="360">Toutes les 6 h</option>
+              <option value="1440" selected>1×/jour</option>
+            </select>
+          </label>
           <button class="btn primary" id="search-run">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" width="14" height="14"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg>
             Rechercher
           </button>
+          <button class="btn" id="search-to-watch" title="Relancer automatiquement cette recherche et recevoir les nouveautés">🔭 Transformer en veille</button>
           <button class="btn" id="search-save" title="Enregistrer cette recherche">★ Enregistrer</button>
         </div>
         <div id="search-saved" style="display:flex; gap:6px; flex-wrap:wrap; margin-top:10px;"></div>
         <div id="search-status" class="status-line" style="margin-top:10px;"></div>
       </div>
+
+      <!-- Active watches (fusion Veille dans Recherche) -->
+      <div id="search-watches" class="card" style="display:none; margin-bottom:12px;"></div>
 
       <!-- Result controls (shown once there are results) -->
       <div id="search-controls" class="card" style="display:none; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:12px;">
@@ -1536,6 +1554,15 @@ https://app.ispeedtolead.com/deal-speed/property/...
         <label style="display:flex; align-items:center; gap:8px; font-size:13px; margin-top:8px;">
           <input type="checkbox" id="ai-auto-research" checked>
           🤖 Auto-analyse à l'ajout — si un deal arrive sans ARV, lancer automatiquement la recherche ARV + rehab en arrière-plan (~$0.30-0.50/deal)
+        </label>
+        <label style="display:flex; align-items:center; gap:10px; font-size:13px; margin-top:12px;">
+          🎯 Marge cible
+          <select id="ai-target-margin" style="font-size:13px; padding:6px 10px;">
+            <option value="15">15 % (standard)</option>
+            <option value="20">20 % (prudent)</option>
+            <option value="25">25 % (conservateur)</option>
+          </select>
+          <span class="muted" style="font-size:12px;">— pilote le « 🎯 Max à offrir » sur tous les deals</span>
         </label>
         <div id="ai-status" class="status-line"></div>
 

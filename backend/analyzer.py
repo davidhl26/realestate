@@ -328,7 +328,7 @@ def compute_score(deal: dict, m: dict) -> tuple:
     return score, grade, signal
 
 
-def recommended_max_offer(deal: dict, m: dict) -> dict:
+def recommended_max_offer(deal: dict, m: dict, default_margin: float = 15.0) -> dict:
     """THE one price not to exceed for this deal — the headline number.
 
     Auction-sourced deals use the auction max-bid math (5% buyer's premium +
@@ -342,9 +342,9 @@ def recommended_max_offer(deal: dict, m: dict) -> dict:
                 "target_margin_pct": None, "gap_vs_price": None}
     rehab = deal.get("rehab_base", 0) or 0
     try:
-        margin = float(deal.get("target_margin_pct") or 15)
+        margin = float(deal.get("target_margin_pct") or default_margin)
     except (TypeError, ValueError):
-        margin = 15.0
+        margin = float(default_margin)
     target_profit = arv * margin / 100.0
     selling = m.get("selling") or round(arv * ((deal.get("selling_cost_pct", 8) or 8) / 100))
     holding = m.get("holding") or 0
