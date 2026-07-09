@@ -1630,35 +1630,43 @@ def _radar_evaluate(listing: dict, cfg: dict):
     return all(checks.values()), info
 
 
-def _radar_process(watch: dict, new_listings: list) -> int:
-    """For each newly-seen listing, keep the interesting ones: auto-add the deal
-    (+ background analysis) and record a Radar find. Returns how many were added."""
+def _radar_process(watch: dict, new_listings: list) -> dict:
+    """For each newly-seen listing, surface the ones listed in the last ~24h as
+    Radar finds (deduped). Ones that pass all criteria are flagged interesting
+    and auto-added to the board; the rest are shown for review. Returns a count
+    breakdown {found, fresh, surfaced, interesting, added, stale}."""
     from urllib.parse import quote
     cfg = _radar_config()
+    c = {"found": len(new_listings or []), "fresh": 0, "surfaced": 0,
+         "interesting": 0, "added": 0, "stale": 0}
     if not cfg.get("enabled"):
-        return 0
-    added, stale = 0, 0
+        return c
     label = watch.get("label") or watch.get("location") or "Watch"
+
+    def _num(v):
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return None
+
     for l in new_listings or []:
         try:
-            # Freshness gate: only keep homes listed in the last ~24h. Zillow
-            # days_on_market 0/1 = just listed today/yesterday. A null DOM is
-            # kept (unknown — the search prompt already asks for last-24h only).
+            # Freshness gate: only keep homes listed in the last ~24h (Zillow
+            # days_on_market 0/1). Null DOM is kept (the search prompt already
+            # scopes to the last 24h).
             dom = l.get("days_on_market")
             try:
                 dom_val = int(dom) if dom is not None else None
             except (TypeError, ValueError):
                 dom_val = None
             if dom_val is not None and dom_val > _RADAR_FRESH_MAX_DOM:
-                stale += 1
+                c["stale"] += 1
                 continue
-            interesting, info = _radar_evaluate(l, cfg)
-            if not interesting or not info:
-                continue
+            c["fresh"] += 1
             addr = (l.get("address") or "").strip()
             if not addr or radar_db.has_address(addr):
-                continue
-            # Build the full address without repeating parts already in `addr`.
+                continue   # duplicate — already on the radar
+            # Full address (no repeated parts) + a Zillow URL.
             parts = [addr]
             city = (l.get("city") or "").strip()
             tail = f"{l.get('state', '')} {l.get('zip', '')}".strip()
@@ -1668,11 +1676,15 @@ def _radar_process(watch: dict, new_listings: list) -> int:
                 parts.append(tail)
             full = ", ".join(p for p in parts if p)
             url = l.get("url") or ("https://www.zillow.com/homes/" + quote(full or addr) + "_rb/")
+
+            # Score it if we have enough data (ARV present); otherwise still
+            # surface it as a fresh listing to review.
+            interesting, info = _radar_evaluate(l, cfg)
             deal_id = None
             dup = db.find_duplicate(addr)
             if dup:
                 deal_id = dup["id"]
-            elif cfg.get("auto_add"):
+            elif interesting and info and cfg.get("auto_add"):
                 deal = {
                     "address": full or addr, "city": l.get("city", ""),
                     "state": l.get("state", ""), "zip": str(l.get("zip") or ""),
@@ -1687,22 +1699,33 @@ def _radar_process(watch: dict, new_listings: list) -> int:
                 saved = db.upsert_deal(deal)
                 deal_id = saved["id"]
                 _maybe_spawn_auto_enrich(saved)
-                added += 1
-            radar_db.add_find({
-                "address": full or addr, "city": l.get("city", ""),
-                "state": l.get("state", ""), "url": url,
-                "price": info["price"], "arv": info["arv"], "rehab": info["rehab"],
-                "profit": info["profit"], "margin_pct": info["margin_pct"],
-                "roi": info["roi"], "risk_grade": info["risk_grade"],
-                "reasons": info["reasons"], "watch_id": watch.get("id"),
-                "watch_label": label, "deal_id": deal_id,
-            })
+                c["added"] += 1
+
+            price = _num(l.get("price"))
+            find = {"address": full or addr, "city": l.get("city", ""),
+                    "state": l.get("state", ""), "url": url,
+                    "beds": l.get("beds"), "sqft": l.get("sqft"),
+                    "days_on_market": dom_val, "watch_id": watch.get("id"),
+                    "watch_label": label, "deal_id": deal_id,
+                    "interesting": bool(interesting and info)}
+            if info:
+                find.update(price=info["price"], arv=info["arv"], rehab=info["rehab"],
+                            profit=info["profit"], margin_pct=info["margin_pct"],
+                            roi=info["roi"], risk_grade=info["risk_grade"],
+                            reasons=info["reasons"])
+            else:
+                find.update(price=int(price) if price else None, arv=None, rehab=None,
+                            profit=None, margin_pct=None, roi=None, risk_grade=None,
+                            reasons=["New listing — open it to analyze ARV & profit"])
+            if radar_db.add_find(find):
+                c["surfaced"] += 1
+                if find["interesting"]:
+                    c["interesting"] += 1
         except Exception:
             log.exception("radar: failed to process a listing")
-    if stale:
-        log.info("radar: skipped %d listing(s) older than %dd (freshness gate)",
-                 stale, _RADAR_FRESH_MAX_DOM)
-    return added
+    log.info("radar %s: found=%d fresh=%d surfaced=%d interesting=%d added=%d stale=%d",
+             label, c["found"], c["fresh"], c["surfaced"], c["interesting"], c["added"], c["stale"])
+    return c
 
 
 def _run_watch(watch_id: str) -> dict:
@@ -1721,10 +1744,14 @@ def _run_watch(watch_id: str) -> dict:
         return {"ok": False, "error": res.get("error", "search failed")}
     out = watches_db.apply_run(watch_id, res.get("listings") or [])
     out["area_label"] = res.get("area_label", "")
+    out["listings_found"] = len(res.get("listings") or [])
     try:
-        out["radar_added"] = _radar_process(w, out.get("new_listings") or [])
+        rc = _radar_process(w, out.get("new_listings") or [])
+        out["radar"] = rc
+        out["radar_added"] = rc.get("added", 0)
     except Exception:
         log.exception("radar processing failed for watch %s", watch_id)
+        out["radar"] = {}
         out["radar_added"] = 0
     out.pop("new_listings", None)
     return out
@@ -1790,7 +1817,8 @@ def radar_delete(find_id: str):
 
 # Real-time import: run every watch right now (instead of waiting for the hourly
 # scheduler). Runs in the background; the UI polls scan-status + refreshes.
-_radar_scan = {"running": False, "added": 0, "done": 0, "total": 0}
+_radar_scan = {"running": False, "added": 0, "done": 0, "total": 0,
+               "found": 0, "fresh": 0, "surfaced": 0, "error": ""}
 
 
 @app.post("/api/radar/scan")
@@ -1805,14 +1833,22 @@ def radar_scan():
     import threading
 
     def _job():
-        _radar_scan.update(running=True, added=0, done=0, total=len(watches))
+        _radar_scan.update(running=True, added=0, done=0, total=len(watches),
+                           found=0, fresh=0, surfaced=0, error="")
         try:
             for w in watches:
                 try:
                     res = _run_watch(w["id"])
+                    if not res.get("ok"):
+                        _radar_scan["error"] = res.get("error", "") or _radar_scan["error"]
+                    rc = res.get("radar") or {}
                     _radar_scan["added"] += int(res.get("radar_added") or 0)
-                except Exception:
+                    _radar_scan["found"] += int(res.get("listings_found") or 0)
+                    _radar_scan["fresh"] += int(rc.get("fresh") or 0)
+                    _radar_scan["surfaced"] += int(rc.get("surfaced") or 0)
+                except Exception as e:
                     log.exception("radar scan: watch %s failed", w.get("id"))
+                    _radar_scan["error"] = str(e)
                 _radar_scan["done"] += 1
         finally:
             _radar_scan["running"] = False

@@ -3416,43 +3416,76 @@
     let data;
     try { data = await API.radarList(); }
     catch (e) { if (st) st.innerHTML = `<span style="color:var(--red)">${escape(e.message)}</span>`; return; }
-    const finds = data.finds || [];
+    let finds = data.finds || [];
+    // Interesting (passed all criteria) first, then the rest.
+    finds = finds.slice().sort((a, b) => (b.interesting ? 1 : 0) - (a.interesting ? 1 : 0));
+    const nInt = finds.filter(f => f.interesting).length;
     if (st) st.textContent = finds.length
-      ? `${finds.length} find(s) — auto-surfaced by your watches.`
+      ? `${finds.length} listing(s) from the last 24h — ${nInt} pass all your criteria.`
       : "";
     if (!finds.length) {
-      feed.innerHTML = `<div class="card"><p class="muted" style="margin:0;">No finds yet. <strong>Add a zone above</strong> (e.g. “Cleveland, OH”), then hit <strong>⚡ Scan now</strong> — the Radar searches Zillow and drops the interesting deals here (auto-added to your board).</p></div>`;
+      feed.innerHTML = `<div class="card"><p class="muted" style="margin:0;">No finds yet. <strong>Add a zone above</strong> (e.g. “Cleveland, OH”), then hit <strong>⚡ Scan now</strong> — it lists the homes posted in the last 24 hours and flags the ones that pass your criteria.</p></div>`;
     } else {
-      const K = v => "$" + Math.round(Number(v) / 1000) + "K";
+      const K = v => (v == null ? "—" : "$" + Math.round(Number(v) / 1000) + "K");
       feed.innerHTML = `<div class="deals-grid">${finds.map(f => {
-        const marginCol = f.margin_pct >= 20 ? "var(--green)" : f.margin_pct >= 12 ? "#e8a93b" : "var(--red)";
-        const reasons = (f.reasons || []).map(r => `<span class="radar-reason">${escape(r)}</span>`).join("");
-        const dealBtn = f.deal_id
-          ? `<button class="btn primary radar-open" data-deal="${escape(f.deal_id)}" style="font-size:12px;">Open deal →</button>`
-          : "";
+        const via = escape([f.city, f.state].filter(Boolean).join(", ")) + " · via " + escape(f.watch_label || "watch");
         const zBtn = f.url ? `<a class="btn ghost" href="${escape(f.url)}" target="_blank" rel="noopener" style="font-size:12px;">Zillow ↗</a>` : "";
-        return `<div class="card radar-card${f.seen ? "" : " radar-new"}">
+        const delBtn = `<button class="btn ghost radar-del" data-id="${escape(f.id)}" title="Dismiss" style="margin-left:auto; font-size:12px;">🗑</button>`;
+        if (f.interesting) {
+          const marginCol = f.margin_pct >= 20 ? "var(--green)" : f.margin_pct >= 12 ? "#e8a93b" : "var(--red)";
+          const reasons = (f.reasons || []).map(r => `<span class="radar-reason">${escape(r)}</span>`).join("");
+          const dealBtn = f.deal_id ? `<button class="btn primary radar-open" data-deal="${escape(f.deal_id)}" style="font-size:12px;">Open deal →</button>` : "";
+          return `<div class="card radar-card${f.seen ? "" : " radar-new"}">
+            <div style="display:flex; justify-content:space-between; gap:8px; align-items:flex-start;">
+              <div style="font-weight:700;">${escape(f.address || "?")}</div>
+              <span class="pill green" style="height:fit-content;">✓ INTERESTING</span>
+            </div>
+            <div class="muted" style="font-size:12px;">${via}</div>
+            <div style="display:flex; gap:14px; margin:9px 0 2px; font-size:13px; flex-wrap:wrap;">
+              <span><span class="muted">Price</span> <strong>${K(f.price)}</strong></span>
+              <span><span class="muted">ARV</span> <strong>${K(f.arv)}</strong></span>
+              <span><span class="muted">Rehab</span> ${K(f.rehab)}</span>
+            </div>
+            <div style="font-weight:800; color:${marginCol}; margin-top:2px;">▲ ${K(f.profit)} profit · ${Math.round(f.margin_pct)}% margin${f.roi ? ` · ${Math.round(f.roi)}% ROI` : ""} · Risk ${escape(f.risk_grade || "?")}</div>
+            <div class="radar-reasons">${reasons}</div>
+            <div style="display:flex; gap:8px; margin-top:10px;">${dealBtn}${zBtn}${delBtn}</div>
+          </div>`;
+        }
+        // Non-scored fresh listing — surfaced for review
+        const specs = [f.beds ? f.beds + "bd" : "", f.sqft ? Number(f.sqft).toLocaleString("en-US") + " sf" : ""].filter(Boolean).join(" · ");
+        const addBtn = f.deal_id
+          ? `<button class="btn radar-open" data-deal="${escape(f.deal_id)}" style="font-size:12px;">Open deal →</button>`
+          : `<button class="btn primary radar-add" data-id="${escape(f.id)}" style="font-size:12px;">➕ Add to board</button>`;
+        return `<div class="card radar-card${f.seen ? "" : " radar-new"}" style="opacity:.94;">
           <div style="display:flex; justify-content:space-between; gap:8px; align-items:flex-start;">
             <div style="font-weight:700;">${escape(f.address || "?")}</div>
-            ${!f.seen ? '<span class="pill green" style="height:fit-content;">NEW</span>' : ""}
+            <span class="pill" style="height:fit-content; background:rgba(127,127,127,0.14);">🆕 last 24h</span>
           </div>
-          <div class="muted" style="font-size:12px;">${escape([f.city, f.state].filter(Boolean).join(", "))} · via ${escape(f.watch_label || "watch")}</div>
-          <div style="display:flex; gap:14px; margin:9px 0 2px; font-size:13px; flex-wrap:wrap;">
-            <span><span class="muted">Price</span> <strong>${K(f.price)}</strong></span>
-            <span><span class="muted">ARV</span> <strong>${K(f.arv)}</strong></span>
-            <span><span class="muted">Rehab</span> ${K(f.rehab)}</span>
-          </div>
-          <div style="font-weight:800; color:${marginCol}; margin-top:2px;">▲ ${K(f.profit)} profit · ${Math.round(f.margin_pct)}% margin${f.roi ? ` · ${Math.round(f.roi)}% ROI` : ""} · Risk ${escape(f.risk_grade || "?")}</div>
-          <div class="radar-reasons">${reasons}</div>
-          <div style="display:flex; gap:8px; margin-top:10px;">${dealBtn}${zBtn}
-            <button class="btn ghost radar-del" data-id="${escape(f.id)}" title="Dismiss" style="margin-left:auto; font-size:12px;">🗑</button>
-          </div>
+          <div class="muted" style="font-size:12px;">${via}</div>
+          <div style="margin:8px 0 2px; font-size:13px;"><span class="muted">Price</span> <strong>${K(f.price)}</strong>${specs ? ` · ${escape(specs)}` : ""}</div>
+          <div class="muted" style="font-size:12px;">New listing — add it to analyze ARV, profit & risk.</div>
+          <div style="display:flex; gap:8px; margin-top:10px;">${addBtn}${zBtn}${delBtn}</div>
         </div>`;
       }).join("")}</div>`;
       feed.querySelectorAll(".radar-open").forEach(b => b.addEventListener("click", () => openDeal(b.dataset.deal)));
       feed.querySelectorAll(".radar-del").forEach(b => b.addEventListener("click", async () => {
         try { await API.radarDelete(b.dataset.id); refreshRadarView(); refreshRadarBadge(); }
         catch (e) { toast(e.message, "error"); }
+      }));
+      feed.querySelectorAll(".radar-add").forEach(b => b.addEventListener("click", async () => {
+        const f = finds.find(x => x.id === b.dataset.id); if (!f) return;
+        b.disabled = true; b.textContent = "…";
+        try {
+          const r = await API.createDeal({
+            address: f.address, city: f.city || "", state: f.state || "",
+            purchase_price: f.price || 0, source: "radar", source_url: f.url || "",
+            status: "evaluating", force_duplicate: true,
+            notes: `[Radar — ${f.watch_label || "watch"}]\n${f.url || ""}`,
+          });
+          const deal = r.deal || r;
+          toast("Added to board — analyzing…", "success");
+          openDeal(deal.id);
+        } catch (e) { toast(e.message, "error"); b.disabled = false; b.textContent = "➕ Add to board"; }
       }));
     }
     // Mark all seen (clears the badge) once viewed.
@@ -3486,15 +3519,25 @@
       const running = s && s.running;
       const timedOut = Date.now() - t0 > 8 * 60 * 1000;   // safety cap 8 min
       if (running && !timedOut) {
-        if (st && s) st.innerHTML = `<span class="spinner"></span> Scanning… ${s.done}/${s.total} zone(s) done · ${s.added} new find(s) so far`;
+        if (st && s) st.innerHTML = `<span class="spinner"></span> Scanning… ${s.done}/${s.total} zone(s) · ${s.found || 0} listings found · ${s.fresh || 0} in last 24h · ${s.surfaced || 0} shown`;
         setTimeout(poll, 5000);
       } else {
         _radarScanning = false;
         if (btn) { btn.disabled = false; btn.innerHTML = "⚡ Scan now"; }
-        const added = s ? s.added : 0;
-        if (st) st.textContent = added ? `✓ Scan done — ${added} new interesting deal(s) added.` : "✓ Scan done — no new interesting deals this time.";
+        const surfaced = s ? (s.surfaced || 0) : 0, added = s ? (s.added || 0) : 0, found = s ? (s.found || 0) : 0;
+        if (st) {
+          if (s && s.error && !surfaced) {
+            st.innerHTML = `<span style="color:var(--red)">Scan issue: ${escape(s.error)}</span>`;
+          } else if (surfaced) {
+            st.textContent = `✓ Scan done — ${surfaced} listing(s) from the last 24h${added ? `, ${added} auto-added (passed all criteria)` : ""}.`;
+          } else if (found) {
+            st.textContent = `✓ Scan done — ${found} listing(s) found but none posted in the last 24h. Try again later or widen the zone.`;
+          } else {
+            st.textContent = "✓ Scan done — no new listings found in your zone(s) right now.";
+          }
+        }
         await refreshRadarView();
-        if (added) toast(`🎯 ${added} new deal(s) on the radar`, "success");
+        if (surfaced) toast(`🎯 ${surfaced} new listing(s) on the radar`, "success");
       }
     };
     setTimeout(poll, 4000);
