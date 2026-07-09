@@ -1899,11 +1899,14 @@
     { id: "heloc",        label: "HELOC" },
   ];
   const METHOD_DEFAULTS = {
-    cash:         { ltv_pct: 0,  interest_rate_pct: 0,    origination_pct: 0,   term_months: 0,  rehab_financed: false },
-    hard_money:   { ltv_pct: 75, interest_rate_pct: 9.0,  origination_pct: 1.0, term_months: 6,  rehab_financed: true  },
-    private:      { ltv_pct: 80, interest_rate_pct: 9.0,  origination_pct: 1.0, term_months: 12, rehab_financed: true  },
-    conventional: { ltv_pct: 80, interest_rate_pct: 7.5,  origination_pct: 1.0, term_months: 360, rehab_financed: false },
-    heloc:        { ltv_pct: 100, interest_rate_pct: 9.5, origination_pct: 0.0, term_months: 12, rehab_financed: true  },
+    cash:         { ltv_pct: 0,  interest_rate_pct: 0,    origination_pct: 0,   lender_fees_pct: 0,    term_months: 0,  rehab_financed: false },
+    // Hard money misc lender fees default to 4.97% of the loan (origination +
+    // processing + admin, per a typical fix-and-flip quote). Origination points
+    // default to 0 here so the 4.97% isn't double-counted.
+    hard_money:   { ltv_pct: 75, interest_rate_pct: 9.0,  origination_pct: 0.0, lender_fees_pct: 4.97, term_months: 6,  rehab_financed: true  },
+    private:      { ltv_pct: 80, interest_rate_pct: 9.0,  origination_pct: 1.0, lender_fees_pct: 0,    term_months: 12, rehab_financed: true  },
+    conventional: { ltv_pct: 80, interest_rate_pct: 7.5,  origination_pct: 1.0, lender_fees_pct: 0,    term_months: 360, rehab_financed: false },
+    heloc:        { ltv_pct: 100, interest_rate_pct: 9.5, origination_pct: 0.0, lender_fees_pct: 0,    term_months: 12, rehab_financed: true  },
   };
 
   function renderFinancingCard(d, m) {
@@ -1950,6 +1953,13 @@
         <span class="val ${dim}">
           <span class="editable" data-fin-field="origination_pct" data-value="${fin.origination_pct || 0}"
                 ${isCash ? 'style="pointer-events:none;"' : ''}>${(fin.origination_pct || 0).toFixed(2)}%</span>
+        </span>
+      </div>
+      <div class="fin-input">
+        <span class="lbl" title="Miscellaneous lender fees — processing, admin & junk fees — as % of the loan amount">Other lender fees</span>
+        <span class="val ${dim}">
+          <span class="editable" data-fin-field="lender_fees_pct" data-value="${fin.lender_fees_pct || 0}"
+                ${isCash ? 'style="pointer-events:none;"' : ''}>${(fin.lender_fees_pct || 0).toFixed(2)}%</span>
         </span>
       </div>
       <div class="fin-input">
@@ -2018,6 +2028,10 @@
         <div class="fin-out">
           <div class="lbl">Points paid</div>
           <div class="val">${fmtMoney(sel.points_paid)}</div>
+        </div>
+        <div class="fin-out">
+          <div class="lbl">Other lender fees (${(sel.lender_fees_pct || 0).toFixed(2)}%)</div>
+          <div class="val">${fmtMoney(sel.lender_fees_paid)}</div>
         </div>
         <div class="fin-out">
           <div class="lbl">Total financing cost</div>
@@ -2197,6 +2211,7 @@
       ltv_pct: "Loan-to-value",
       interest_rate_pct: "Interest rate",
       origination_pct: "Origination",
+      lender_fees_pct: "Other lender fees",
       term_months: "Loan term",
     })[f] || f;
   }

@@ -134,6 +134,9 @@ def compute_metrics(deal: dict) -> dict:
     ltv_pct = float(fin.get("ltv_pct") or 0)
     rate_pct = float(fin.get("interest_rate_pct") or 0)
     orig_pct = float(fin.get("origination_pct") or 0)
+    # Misc. lender fees (processing, admin, junk fees) as a % of the loan —
+    # separate from the origination points above.
+    lender_fees_pct = float(fin.get("lender_fees_pct") or 0)
     term_mo = int(fin.get("term_months") or hold_mo or 6)
     rehab_fin = bool(fin.get("rehab_financed", True))
 
@@ -141,6 +144,7 @@ def compute_metrics(deal: dict) -> dict:
         loan_amount = 0
         interest_cost = 0
         points_paid = 0
+        lender_fees_paid = 0
         cash_for_purchase = pp
         cash_for_rehab = rehab
     else:
@@ -149,11 +153,13 @@ def compute_metrics(deal: dict) -> dict:
         loan_amount = loan_principal_pp + loan_principal_rehab
         interest_cost = loan_amount * (rate_pct / 100) * (term_mo / 12)
         points_paid = loan_amount * (orig_pct / 100)
+        lender_fees_paid = loan_amount * (lender_fees_pct / 100)
         cash_for_purchase = pp - loan_principal_pp
         cash_for_rehab = rehab - loan_principal_rehab
 
-    fin_total_cost = interest_cost + points_paid
-    cash_needed_up_front = max(0, cash_for_purchase) + max(0, cash_for_rehab) + closing + points_paid
+    fin_total_cost = interest_cost + points_paid + lender_fees_paid
+    cash_needed_up_front = (max(0, cash_for_purchase) + max(0, cash_for_rehab)
+                            + closing + points_paid + lender_fees_paid)
     # All-in WITH financing cost (already in holding via separate; but here keep separate)
     all_in_with_financing = all_in + fin_total_cost
     net_with_financing = arv - all_in_with_financing
@@ -165,11 +171,13 @@ def compute_metrics(deal: dict) -> dict:
         "ltv_pct": ltv_pct,
         "interest_rate_pct": rate_pct,
         "origination_pct": orig_pct,
+        "lender_fees_pct": lender_fees_pct,
         "term_months": term_mo,
         "rehab_financed": rehab_fin,
         "loan_amount": round(loan_amount),
         "interest_cost": round(interest_cost),
         "points_paid": round(points_paid),
+        "lender_fees_paid": round(lender_fees_paid),
         "total_financing_cost": round(fin_total_cost),
         "cash_needed_up_front": round(cash_needed_up_front),
         "net_profit_after_financing": round(net_with_financing),
