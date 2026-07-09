@@ -1900,10 +1900,9 @@
   ];
   const METHOD_DEFAULTS = {
     cash:         { ltv_pct: 0,  interest_rate_pct: 0,    origination_pct: 0,   lender_fees_pct: 0,    term_months: 0,  rehab_financed: false },
-    // Hard money misc lender fees default to 4.97% of the loan (origination +
-    // processing + admin, per a typical fix-and-flip quote). Origination points
-    // default to 0 here so the 4.97% isn't double-counted.
-    hard_money:   { ltv_pct: 75, interest_rate_pct: 9.0,  origination_pct: 0.0, lender_fees_pct: 4.97, term_months: 6,  rehab_financed: true  },
+    // Hard money defaults from a typical fix-and-flip quote: 90% LTV, 11% rate,
+    // 2% origination (points) + 3% other lender fees (processing/admin/junk).
+    hard_money:   { ltv_pct: 90, interest_rate_pct: 11.0, origination_pct: 2.0, lender_fees_pct: 3.0,  term_months: 6,  rehab_financed: true  },
     private:      { ltv_pct: 80, interest_rate_pct: 9.0,  origination_pct: 1.0, lender_fees_pct: 0,    term_months: 12, rehab_financed: true  },
     conventional: { ltv_pct: 80, interest_rate_pct: 7.5,  origination_pct: 1.0, lender_fees_pct: 0,    term_months: 360, rehab_financed: false },
     heloc:        { ltv_pct: 100, interest_rate_pct: 9.5, origination_pct: 0.0, lender_fees_pct: 0,    term_months: 12, rehab_financed: true  },
