@@ -48,6 +48,9 @@ const API = (() => {
     watchPatch: (id, u) => req("/api/watches/" + encodeURIComponent(id), { method: "PATCH", body: JSON.stringify(u) }),
     watchRun: (id) => req("/api/watches/" + encodeURIComponent(id) + "/run", { method: "POST", body: "{}" }),
     watchesRunStale: () => req("/api/watches/run-stale", { method: "POST", body: "{}" }),
+    radarList: () => req("/api/radar"),
+    radarSeen: () => req("/api/radar/seen", { method: "POST", body: "{}" }),
+    radarDelete: (id) => req("/api/radar/" + encodeURIComponent(id), { method: "DELETE" }),
     compareDeals: (dealIds, includeVerdict, focus) => req("/api/board/compare",
       { method: "POST", body: JSON.stringify({
         deal_ids: dealIds || [],

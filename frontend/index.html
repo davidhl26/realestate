@@ -63,6 +63,11 @@
         <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg></span>
         Sourcing
       </a>
+      <a data-view="radar" class="nav-link">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg></span>
+        Radar
+        <span class="nav-badge" id="nav-radar-count"></span>
+      </a>
       <a data-view="auction" data-group="auctions" class="nav-link">
         <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M3 21h18 M6 13l5-5 M9 16l5-5 M13 4l7 7-3 3-7-7z" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
         Auctions
@@ -139,6 +144,23 @@
 
     <!-- Sub-tabs for grouped nav (Sourcing / Auctions) -->
     <div class="group-tabs" id="group-tabs" style="display:none;"></div>
+
+    <!-- ============ DEAL RADAR ============ -->
+    <section id="view-radar" class="view">
+      <header class="page-header">
+        <div class="page-header-text">
+          <div class="page-eyebrow">Sourcing</div>
+          <h2>🎯 Radar</h2>
+          <p>New Zillow listings your watches surfaced that pass all your criteria — <strong>target margin, min profit, the 70% rule, and low risk</strong>. Interesting ones are auto-added to your board and analyzed.</p>
+        </div>
+        <div class="toolbar">
+          <button class="btn" id="radar-settings-btn" title="Radar settings">⚙️ Settings</button>
+          <button class="btn" id="radar-refresh-btn">🔄 Refresh</button>
+        </div>
+      </header>
+      <div id="radar-status" class="status-line" style="margin:0 0 12px;"></div>
+      <div id="radar-feed"></div>
+    </section>
 
     <!-- ============ DASHBOARD ============ -->
     <section id="view-dashboard" class="view active">
@@ -1551,6 +1573,22 @@ https://app.ispeedtolead.com/deal-speed/property/...
           </select>
           <span class="muted" style="font-size:12px;">— drives the "🎯 Max offer" on all deals</span>
         </label>
+        <div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--divider);">
+          <div style="font-weight:600; margin-bottom:6px;">🎯 Deal Radar</div>
+          <label style="display:flex; align-items:center; gap:8px; font-size:13px;">
+            <input type="checkbox" id="radar-enabled" checked>
+            Enable Radar — watches auto-surface interesting new listings here
+          </label>
+          <label style="display:flex; align-items:center; gap:8px; font-size:13px; margin-top:8px;">
+            <input type="checkbox" id="radar-auto-add" checked>
+            Auto-add interesting finds to the board (with background analysis)
+          </label>
+          <label style="display:flex; align-items:center; gap:10px; font-size:13px; margin-top:8px;">
+            Minimum profit to flag as interesting $
+            <input type="number" id="radar-min-profit" step="1000" min="0" style="width:120px;">
+          </label>
+          <p class="muted" style="font-size:12px; margin:6px 0 0;">A find must pass <strong>all</strong> criteria: margin ≥ your target, profit ≥ this amount, the 70% rule, and low risk (grade A/B).</p>
+        </div>
         <div id="ai-status" class="status-line"></div>
 
         <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--divider);">

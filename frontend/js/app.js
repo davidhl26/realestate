@@ -212,6 +212,7 @@
     if (name === "auction" && typeof renderWatchlist === "function") setTimeout(renderWatchlist, 50);
     if (name === "watch" && typeof refreshWatchView === "function") setTimeout(refreshWatchView, 50);
     if (name === "search" && typeof window._renderSearchWatches === "function") setTimeout(window._renderSearchWatches, 50);
+    if (name === "radar" && typeof refreshRadarView === "function") refreshRadarView();
     if (name === "add") {
       // Entering the form defaults to a NEW deal. The edit flow re-binds
       // formDealId to the edited deal AFTER calling showView("add").
@@ -3393,6 +3394,79 @@
   // Kick stale watches (>20 h) in the background at app open — the watch feature.
   setTimeout(() => { API.watchesRunStale?.().catch(() => {}); }, 4000);
 
+  // ============== DEAL RADAR (interesting finds feed) ==============
+  async function refreshRadarBadge() {
+    try {
+      const r = await API.radarList();
+      const badge = $("#nav-radar-count");
+      if (badge) {
+        const n = r.unseen || 0;
+        badge.textContent = n ? String(n) : "";
+        badge.style.display = n ? "" : "none";
+      }
+      return r;
+    } catch { return null; }
+  }
+
+  async function refreshRadarView() {
+    const feed = $("#radar-feed"), st = $("#radar-status");
+    if (!feed) return;
+    if (st) st.innerHTML = '<span class="spinner"></span> Loading finds…';
+    let data;
+    try { data = await API.radarList(); }
+    catch (e) { if (st) st.innerHTML = `<span style="color:var(--red)">${escape(e.message)}</span>`; return; }
+    const finds = data.finds || [];
+    if (st) st.textContent = finds.length
+      ? `${finds.length} find(s) — auto-surfaced by your watches.`
+      : "";
+    if (!finds.length) {
+      feed.innerHTML = `<div class="card"><p class="muted" style="margin:0;">No finds yet. Create a <a href="#" id="radar-goto-watch">🔭 watch</a> on a zone — every hour it scans Zillow and drops the interesting deals here (auto-added to your board).</p></div>`;
+      feed.querySelector("#radar-goto-watch")?.addEventListener("click", e => { e.preventDefault(); showView("search"); });
+    } else {
+      const K = v => "$" + Math.round(Number(v) / 1000) + "K";
+      feed.innerHTML = `<div class="deals-grid">${finds.map(f => {
+        const marginCol = f.margin_pct >= 20 ? "var(--green)" : f.margin_pct >= 12 ? "#e8a93b" : "var(--red)";
+        const reasons = (f.reasons || []).map(r => `<span class="radar-reason">${escape(r)}</span>`).join("");
+        const dealBtn = f.deal_id
+          ? `<button class="btn primary radar-open" data-deal="${escape(f.deal_id)}" style="font-size:12px;">Open deal →</button>`
+          : "";
+        const zBtn = f.url ? `<a class="btn ghost" href="${escape(f.url)}" target="_blank" rel="noopener" style="font-size:12px;">Zillow ↗</a>` : "";
+        return `<div class="card radar-card${f.seen ? "" : " radar-new"}">
+          <div style="display:flex; justify-content:space-between; gap:8px; align-items:flex-start;">
+            <div style="font-weight:700;">${escape(f.address || "?")}</div>
+            ${!f.seen ? '<span class="pill green" style="height:fit-content;">NEW</span>' : ""}
+          </div>
+          <div class="muted" style="font-size:12px;">${escape([f.city, f.state].filter(Boolean).join(", "))} · via ${escape(f.watch_label || "watch")}</div>
+          <div style="display:flex; gap:14px; margin:9px 0 2px; font-size:13px; flex-wrap:wrap;">
+            <span><span class="muted">Price</span> <strong>${K(f.price)}</strong></span>
+            <span><span class="muted">ARV</span> <strong>${K(f.arv)}</strong></span>
+            <span><span class="muted">Rehab</span> ${K(f.rehab)}</span>
+          </div>
+          <div style="font-weight:800; color:${marginCol}; margin-top:2px;">▲ ${K(f.profit)} profit · ${Math.round(f.margin_pct)}% margin${f.roi ? ` · ${Math.round(f.roi)}% ROI` : ""} · Risk ${escape(f.risk_grade || "?")}</div>
+          <div class="radar-reasons">${reasons}</div>
+          <div style="display:flex; gap:8px; margin-top:10px;">${dealBtn}${zBtn}
+            <button class="btn ghost radar-del" data-id="${escape(f.id)}" title="Dismiss" style="margin-left:auto; font-size:12px;">🗑</button>
+          </div>
+        </div>`;
+      }).join("")}</div>`;
+      feed.querySelectorAll(".radar-open").forEach(b => b.addEventListener("click", () => openDeal(b.dataset.deal)));
+      feed.querySelectorAll(".radar-del").forEach(b => b.addEventListener("click", async () => {
+        try { await API.radarDelete(b.dataset.id); refreshRadarView(); refreshRadarBadge(); }
+        catch (e) { toast(e.message, "error"); }
+      }));
+    }
+    // Mark all seen (clears the badge) once viewed.
+    try { await API.radarSeen(); } catch {}
+    const badge = $("#nav-radar-count");
+    if (badge) { badge.textContent = ""; badge.style.display = "none"; }
+  }
+  $("#radar-refresh-btn")?.addEventListener("click", () => refreshRadarView());
+  $("#radar-settings-btn")?.addEventListener("click", () => showView("settings"));
+
+  // Badge: check on open, then every 5 min.
+  setTimeout(refreshRadarBadge, 2500);
+  setInterval(refreshRadarBadge, 300000);
+
   // ===== Auto-update: reload when a new version is deployed (stale-SPA killer) =====
   (() => {
     let bootVersion = null;
@@ -4610,6 +4684,31 @@
         tm.value = String(cfg.target_margin_pct || 15);
         tm.onchange = async () => {
           try { await API.saveAiConfig({ target_margin_pct: Number(tm.value) }); toast(`Target margin → ${tm.value}% (max offer recomputed)`, "success"); }
+          catch (e) { toast(e.message, "error"); }
+        };
+      }
+      // Deal Radar settings
+      const re = $("#radar-enabled");
+      if (re) {
+        re.checked = cfg.radar_enabled !== false;
+        re.onchange = async () => {
+          try { await API.saveAiConfig({ radar_enabled: re.checked }); toast(re.checked ? "Radar enabled" : "Radar disabled", "success"); }
+          catch (e) { toast(e.message, "error"); }
+        };
+      }
+      const ra = $("#radar-auto-add");
+      if (ra) {
+        ra.checked = cfg.radar_auto_add !== false;
+        ra.onchange = async () => {
+          try { await API.saveAiConfig({ radar_auto_add: ra.checked }); toast(ra.checked ? "Radar auto-add on" : "Radar auto-add off", "success"); }
+          catch (e) { toast(e.message, "error"); }
+        };
+      }
+      const rp = $("#radar-min-profit");
+      if (rp) {
+        rp.value = cfg.radar_min_profit != null ? cfg.radar_min_profit : 25000;
+        rp.onchange = async () => {
+          try { await API.saveAiConfig({ radar_min_profit: Number(rp.value) }); toast(`Radar min profit → $${Number(rp.value).toLocaleString("en-US")}`, "success"); }
           catch (e) { toast(e.message, "error"); }
         };
       }

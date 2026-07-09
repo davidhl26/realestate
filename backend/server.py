@@ -83,6 +83,10 @@ watchlist_db = WatchlistDB(DATA_DIR / "auction-watchlist.json")
 from .watches import WatchesDB
 watches_db = WatchesDB(DATA_DIR / "zillow-watches.json")
 
+# Deal Radar — "interesting" finds auto-surfaced by the watches
+from .radar import RadarDB
+radar_db = RadarDB(DATA_DIR / "radar.json")
+
 # Initialize browser scraper profile dir
 try:
     from . import scraper_browser
@@ -1565,8 +1569,126 @@ def auction_recheck_all(payload: dict = Body(default={})):
 
 
 # ---- Zillow watches ----
+def _radar_config() -> dict:
+    """Deal Radar settings (with sensible defaults)."""
+    cfg = ai_research.read_config()
+    return {
+        "enabled": cfg.get("radar_enabled", True),
+        "auto_add": cfg.get("radar_auto_add", True),
+        "min_profit": float(cfg.get("radar_min_profit") or 25000),
+        "margin": _global_margin(),
+    }
+
+
+def _radar_evaluate(listing: dict, cfg: dict):
+    """Judge a fresh listing against the 4 interest criteria (target margin,
+    min profit, 70% rule, low risk). Returns (interesting: bool, info: dict|None).
+    info is None when the listing lacks the data needed to judge it."""
+    def num(v):
+        try:
+            return float(v)
+        except (TypeError, ValueError):
+            return None
+    price = num(listing.get("price"))
+    arv = num(listing.get("arv_estimate"))
+    if not price or not arv or arv <= 0:
+        return False, None
+    rehab = num(listing.get("rehab_estimate"))
+    if rehab is None:
+        rehab = round(arv * 0.15)   # conservative default when the AI didn't estimate
+    deal = {
+        "address": listing.get("address", ""),
+        "purchase_price": price, "arv_base": arv, "rehab_base": rehab,
+        "year_built": listing.get("year_built"), "source": "radar",
+        "notes": listing.get("notes") or "",
+    }
+    m = analyzer.compute_metrics(deal)
+    risk = analyzer.assess_risk(deal, m)
+    profit = m["net_profit"]
+    margin_pct = (profit / arv * 100) if arv else 0
+    checks = {
+        "margin": margin_pct >= cfg["margin"],
+        "profit": profit >= cfg["min_profit"],
+        "rule70": bool(m.get("rule_70_pass")),
+        "low_risk": risk.get("risk_grade") in ("A", "B") and not risk.get("deal_breakers"),
+    }
+    reasons = [
+        f"Margin {margin_pct:.0f}% (target {cfg['margin']:.0f}%)",
+        f"Profit ${int(profit):,}",
+        "Passes 70% rule" if checks["rule70"] else "Fails 70% rule",
+        f"Risk {risk.get('risk_grade', '?')}",
+    ]
+    info = {"price": int(price), "arv": int(arv), "rehab": int(rehab),
+            "profit": int(profit), "margin_pct": round(margin_pct, 1),
+            "roi": round(m.get("roi", 0), 1), "risk_grade": risk.get("risk_grade"),
+            "checks": checks, "reasons": reasons}
+    return all(checks.values()), info
+
+
+def _radar_process(watch: dict, new_listings: list) -> int:
+    """For each newly-seen listing, keep the interesting ones: auto-add the deal
+    (+ background analysis) and record a Radar find. Returns how many were added."""
+    from urllib.parse import quote
+    cfg = _radar_config()
+    if not cfg.get("enabled"):
+        return 0
+    added = 0
+    label = watch.get("label") or watch.get("location") or "Watch"
+    for l in new_listings or []:
+        try:
+            interesting, info = _radar_evaluate(l, cfg)
+            if not interesting or not info:
+                continue
+            addr = (l.get("address") or "").strip()
+            if not addr or radar_db.has_address(addr):
+                continue
+            # Build the full address without repeating parts already in `addr`.
+            parts = [addr]
+            city = (l.get("city") or "").strip()
+            tail = f"{l.get('state', '')} {l.get('zip', '')}".strip()
+            if city and city.lower() not in addr.lower():
+                parts.append(city)
+            if tail and tail.lower() not in addr.lower():
+                parts.append(tail)
+            full = ", ".join(p for p in parts if p)
+            url = l.get("url") or ("https://www.zillow.com/homes/" + quote(full or addr) + "_rb/")
+            deal_id = None
+            dup = db.find_duplicate(addr)
+            if dup:
+                deal_id = dup["id"]
+            elif cfg.get("auto_add"):
+                deal = {
+                    "address": full or addr, "city": l.get("city", ""),
+                    "state": l.get("state", ""), "zip": str(l.get("zip") or ""),
+                    "beds": l.get("beds"), "baths": l.get("baths"), "sqft": l.get("sqft"),
+                    "year_built": l.get("year_built"),
+                    "purchase_price": info["price"], "arv_base": info["arv"],
+                    "rehab_base": info["rehab"], "arv_confidence": "Low",
+                    "source": "radar", "source_url": url, "status": "evaluating",
+                    "financing": dict(_HM_DEFAULTS, term_months=6, rehab_financed=True),
+                    "notes": f"[Radar auto-add — {label}]\n" + " · ".join(info["reasons"]) + f"\n{url}",
+                }
+                saved = db.upsert_deal(deal)
+                deal_id = saved["id"]
+                _maybe_spawn_auto_enrich(saved)
+                added += 1
+            radar_db.add_find({
+                "address": full or addr, "city": l.get("city", ""),
+                "state": l.get("state", ""), "url": url,
+                "price": info["price"], "arv": info["arv"], "rehab": info["rehab"],
+                "profit": info["profit"], "margin_pct": info["margin_pct"],
+                "roi": info["roi"], "risk_grade": info["risk_grade"],
+                "reasons": info["reasons"], "watch_id": watch.get("id"),
+                "watch_label": label, "deal_id": deal_id,
+            })
+        except Exception:
+            log.exception("radar: failed to process a listing")
+    return added
+
+
 def _run_watch(watch_id: str) -> dict:
-    """Run one watch: AI area search with the watch's criteria, then diff."""
+    """Run one watch: AI area search with the watch's criteria, then diff, then
+    let the Radar auto-add the interesting new listings."""
     from . import ai_research
     w = watches_db.get(watch_id)
     if not w:
@@ -1580,6 +1702,12 @@ def _run_watch(watch_id: str) -> dict:
         return {"ok": False, "error": res.get("error", "search failed")}
     out = watches_db.apply_run(watch_id, res.get("listings") or [])
     out["area_label"] = res.get("area_label", "")
+    try:
+        out["radar_added"] = _radar_process(w, out.get("new_listings") or [])
+    except Exception:
+        log.exception("radar processing failed for watch %s", watch_id)
+        out["radar_added"] = 0
+    out.pop("new_listings", None)
     return out
 
 
@@ -1622,6 +1750,23 @@ def watches_patch(watch_id: str, payload: dict = Body(...)):
             w[k] = payload[k]
     watches_db.save(w)
     return watches_db.summary(w)
+
+
+# ---- Deal Radar (interesting finds auto-surfaced by the watches) ----
+@app.get("/api/radar")
+def radar_list():
+    return {"finds": radar_db.list_finds(200), "unseen": radar_db.unseen_count()}
+
+
+@app.post("/api/radar/seen")
+def radar_seen():
+    radar_db.mark_all_seen()
+    return {"ok": True, "unseen": 0}
+
+
+@app.delete("/api/radar/{find_id}")
+def radar_delete(find_id: str):
+    return {"ok": radar_db.delete(find_id)}
 
 
 # ---- Hourly watch scheduler (server-side, plan standard = always on) ----
@@ -2482,6 +2627,9 @@ def ai_config_get():
         "model": cfg.get("model", "claude-opus-4-7"),
         "auto_research": cfg.get("auto_research", True),
         "target_margin_pct": cfg.get("target_margin_pct", 15),
+        "radar_enabled": cfg.get("radar_enabled", True),
+        "radar_auto_add": cfg.get("radar_auto_add", True),
+        "radar_min_profit": cfg.get("radar_min_profit", 25000),
         "source": source,
         "maps_configured": bool(maps_key),
         "maps_key_preview": MASK if maps_key else "",
@@ -2506,6 +2654,15 @@ def ai_config_set(payload: dict = Body(...)):
     if "target_margin_pct" in payload:
         try:
             cfg["target_margin_pct"] = max(5, min(40, float(payload["target_margin_pct"])))
+        except (TypeError, ValueError):
+            pass
+    if "radar_enabled" in payload:
+        cfg["radar_enabled"] = bool(payload["radar_enabled"])
+    if "radar_auto_add" in payload:
+        cfg["radar_auto_add"] = bool(payload["radar_auto_add"])
+    if "radar_min_profit" in payload:
+        try:
+            cfg["radar_min_profit"] = max(0, float(payload["radar_min_profit"]))
         except (TypeError, ValueError):
             pass
     ai_research.write_config(cfg)

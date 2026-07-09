@@ -125,6 +125,7 @@ class WatchesDB:
         events = w.get("events") or []
         seen_now = set()
         n_new, n_drops = 0, 0
+        new_snaps = []   # full snapshots of the newly-seen listings (for the radar)
 
         def _num(v):
             try:
@@ -148,6 +149,7 @@ class WatchesDB:
                                 "price_history": ([{"ts": now, "price": price}]
                                                    if price is not None else [])}
                 events.insert(0, {"ts": now, "type": "new", "key": key, **snap})
+                new_snaps.append(snap)
                 n_new += 1
             else:
                 t = tracked[key]
@@ -186,7 +188,8 @@ class WatchesDB:
         w["run_count"] = int(w.get("run_count") or 0) + 1
         self.save(w)
         return {"ok": True, "new": n_new, "price_drops": n_drops, "gone": n_gone,
-                "tracked": len(tracked), "found": len(seen_now)}
+                "tracked": len(tracked), "found": len(seen_now),
+                "new_listings": new_snaps}
 
     def summary(self, w: dict) -> dict:
         """Lightweight view for the list UI (no full listings payload)."""

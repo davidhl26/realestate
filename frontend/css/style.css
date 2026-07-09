@@ -1768,6 +1768,18 @@ kbd {
   white-space: nowrap;
 }
 
+/* Deal Radar finds */
+.radar-card.radar-new { border-left: 3px solid var(--green, #0fae6f); }
+.radar-reasons { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+.radar-reason {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(127,127,127,0.12);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
 /* Click-to-collapse cards in the deal detail */
 .card-collapsible > .card-collapse-header { cursor: pointer; }
 .card-collapse-title::after {

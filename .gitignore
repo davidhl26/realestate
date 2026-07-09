@@ -37,6 +37,8 @@ data/auctions.json
 data/crm.json
 data/pdfs/
 data/watches.json
+data/zillow-watches.json
+data/radar.json
 data/auction-watchlist.json
 data/backups/
 
