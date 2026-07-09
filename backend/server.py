@@ -1677,31 +1677,37 @@ def _radar_process(watch: dict, new_listings: list) -> dict:
             full = ", ".join(p for p in parts if p)
             url = l.get("url") or ("https://www.zillow.com/homes/" + quote(full or addr) + "_rb/")
 
-            # Score it if we have enough data (ARV present); otherwise still
-            # surface it as a fresh listing to review.
+            # Score it if we have enough data (ARV present). Interesting ones are
+            # highlighted; but with auto_add on, EVERY fresh 24h listing is added
+            # to the board (status evaluating) and analyzed in the background.
             interesting, info = _radar_evaluate(l, cfg)
+            price = _num(l.get("price"))
             deal_id = None
             dup = db.find_duplicate(addr)
             if dup:
                 deal_id = dup["id"]
-            elif interesting and info and cfg.get("auto_add"):
+            elif cfg.get("auto_add"):
+                note = (" · ".join(info["reasons"]) if info
+                        else "New listing (last 24h) — analyzing…")
+                tag = "✓ interesting" if (interesting and info) else "fresh"
                 deal = {
                     "address": full or addr, "city": l.get("city", ""),
                     "state": l.get("state", ""), "zip": str(l.get("zip") or ""),
                     "beds": l.get("beds"), "baths": l.get("baths"), "sqft": l.get("sqft"),
                     "year_built": l.get("year_built"),
-                    "purchase_price": info["price"], "arv_base": info["arv"],
-                    "rehab_base": info["rehab"], "arv_confidence": "Low",
-                    "source": "radar", "source_url": url, "status": "evaluating",
+                    "purchase_price": (info["price"] if info else (int(price) if price else 0)),
+                    "arv_base": (info["arv"] if info else 0),
+                    "rehab_base": (info["rehab"] if info else 0),
+                    "arv_confidence": "Low", "source": "radar", "source_url": url,
+                    "status": "evaluating",
                     "financing": dict(_HM_DEFAULTS, term_months=6, rehab_financed=True),
-                    "notes": f"[Radar auto-add — {label}]\n" + " · ".join(info["reasons"]) + f"\n{url}",
+                    "notes": f"[Radar — {label} · {tag}]\n{note}\n{url}",
                 }
                 saved = db.upsert_deal(deal)
                 deal_id = saved["id"]
                 _maybe_spawn_auto_enrich(saved)
                 c["added"] += 1
 
-            price = _num(l.get("price"))
             find = {"address": full or addr, "city": l.get("city", ""),
                     "state": l.get("state", ""), "url": url,
                     "beds": l.get("beds"), "sqft": l.get("sqft"),
