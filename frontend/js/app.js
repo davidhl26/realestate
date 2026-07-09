@@ -6292,7 +6292,7 @@
             ${riskBadge(d)}
           </div>
           <div class="dp-meta">
-            🎯 ${D(d.max_offer)}${d.max_offer_blocked ? " ⛔" : ""} · profit ${D(d.net_profit)}
+            🎯 ${D(d.max_offer)}${d.max_offer_blocked ? " ⛔" : ""} · profit ${D(d.net_profit_financed ?? d.net_profit)}
           </div>
           <select class="dp-status" data-id="${escape(d.id)}" title="Change status">
             ${_DP_COLS.map(([k, l]) => `<option value="${k}" ${k === key ? "selected" : ""}>${l}</option>`).join("")}
@@ -6355,8 +6355,10 @@
   const _COLOR_PALETTE = ["#6b7280", "#3b82f6", "#f59e0b", "#8b5cf6", "#22c55e",
                           "#ef4444", "#ec4899", "#14b8a6", "#eab308", "#0ea5e9"];
 
-  // Financials for a lead (uses the linked deal as fallback). Profit potential
-  // = ARV − price − rehab − selling costs (~8% of ARV); ROI on cash invested.
+  // Financials for a lead (uses the linked deal as fallback). When a deal is
+  // linked, the gain reflects its selected financing (cash → net profit;
+  // hard money / other → net profit after financing). Otherwise falls back to
+  // the simple estimate: ARV − price − rehab − ~8% selling costs.
   function _leadFin(lead) {
     const deal = lead.external_id ? (state.deals || []).find(d => d.id === lead.external_id) : null;
     const num = v => (v === 0 || v) ? Number(v) : null;
@@ -6364,13 +6366,19 @@
     const arv = num(lead.estimated_arv) ?? num(deal?.arv_base);
     const rehab = num(lead.estimated_rehab) ?? num(deal?.rehab_base) ?? 0;
     const score = num(lead.score) ?? num(deal?.score);
-    let profit = null, roi = null;
-    if (arv != null && price != null) {
+    let profit = null, roi = null, financed = false;
+    const method = deal?.financing_method || "cash";
+    if (deal && num(deal.net_profit_financed) != null) {
+      // Server-computed gain that already accounts for the chosen financing.
+      profit = num(deal.net_profit_financed);
+      roi = num(deal.roi_financed);
+      financed = method !== "cash";
+    } else if (arv != null && price != null) {
       profit = arv - price - (rehab || 0) - arv * 0.08;
       const cashIn = price + (rehab || 0);
       roi = cashIn > 0 ? (profit / cashIn) * 100 : null;
     }
-    return { deal, price, arv, rehab, score, profit, roi };
+    return { deal, price, arv, rehab, score, profit, roi, method, financed };
   }
   function _daysSince(iso) {
     if (!iso) return null;
@@ -6528,7 +6536,13 @@
     if (fin.profit != null) {
       const k = Math.round(fin.profit / 1000);
       const roi = fin.roi != null ? ` · ${Math.round(fin.roi)}%` : "";
-      profitTag = `<span class="kanban-card-profit ${fin.profit >= 0 ? 'money' : 'risk'}" title="Profit potential (ARV − price − rehab − 8% selling costs)">▲ ${k >= 0 ? '$' + k : '-$' + Math.abs(k)}K${roi}</span>`;
+      const methodLabel = { cash: "cash", hard_money: "hard money", private: "private lender",
+                            conventional: "conventional", heloc: "HELOC" }[fin.method] || fin.method;
+      const tip = fin.financed
+        ? `Net profit after financing (${methodLabel})`
+        : (fin.deal ? `Net profit — cash (ARV − price − rehab − 8% selling)`
+                    : `Profit potential (ARV − price − rehab − 8% selling costs)`);
+      profitTag = `<span class="kanban-card-profit ${fin.profit >= 0 ? 'money' : 'risk'}" title="${tip}">▲ ${k >= 0 ? '$' + k : '-$' + Math.abs(k)}K${roi}</span>`;
     }
 
     // B — days in stage + follow-up

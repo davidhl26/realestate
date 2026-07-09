@@ -1390,11 +1390,13 @@ https://app.ispeedtolead.com/deal-speed/property/...
       </header>
 
       <!-- ============ DEALS PIPELINE (tracked through closing) ============ -->
-      <div class="card" id="deals-pipeline-card">
-        <h3 style="margin:0 0 4px;">🏠 Deals — tracked through closing</h3>
-        <p class="muted" style="font-size:12px; margin:0 0 12px;">Change the status directly. Moving to "under contract" with an unresolved ⛔ deal-breaker requires confirmation. The closing date appears on deals under contract.</p>
-        <div id="deals-pipeline"></div>
-      </div>
+      <details class="detail-group" id="deals-pipeline-group" open>
+        <summary>🏠 Deals — tracked through closing</summary>
+        <div class="card" id="deals-pipeline-card">
+          <p class="muted" style="font-size:12px; margin:0 0 12px;">Change the status directly. Moving to "under contract" with an unresolved ⛔ deal-breaker requires confirmation. The closing date appears on deals under contract.</p>
+          <div id="deals-pipeline"></div>
+        </div>
+      </details>
 
       <!-- ============ LEADS KANBAN ============ -->
       <div class="card crm-kanban-card">

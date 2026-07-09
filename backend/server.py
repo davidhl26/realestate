@@ -354,6 +354,28 @@ def backups_list():
     return backup.list_snapshots(DATA_DIR)
 
 
+def _fin_method(m):
+    """Selected financing method for a computed-metrics dict ('cash' default)."""
+    return ((m.get("selected_financing") or {}).get("method")) or "cash"
+
+
+def _fin_net_profit(m):
+    """Gain that matches the deal's chosen financing: cash → plain net profit;
+    financed (hard money / private / etc.) → net profit after financing cost."""
+    sel = m.get("selected_financing") or {}
+    if _fin_method(m) != "cash" and sel.get("net_profit_after_financing") is not None:
+        return sel["net_profit_after_financing"]
+    return m["net_profit"]
+
+
+def _fin_roi(m):
+    """ROI matching the chosen financing (on cash actually invested)."""
+    sel = m.get("selected_financing") or {}
+    if _fin_method(m) != "cash" and sel.get("roi_on_cash") is not None:
+        return sel["roi_on_cash"]
+    return m["roi"]
+
+
 @app.get("/api/deals")
 def list_deals():
     deals = db.list_deals()
@@ -398,6 +420,11 @@ def list_deals():
                 "status": d.get("status", "evaluating"),
                 "net_profit": m["net_profit"],
                 "roi": m["roi"],
+                # Financing-aware gain: cash → net_profit; hard money/other →
+                # net profit after financing (interest + points + lender fees).
+                "financing_method": _fin_method(m),
+                "net_profit_financed": _fin_net_profit(m),
+                "roi_financed": _fin_roi(m),
                 "cap_rate": m["rent"]["cap_rate"],
                 "brrrr_cf": m["brrrr"]["monthly_cash_flow"],
                 "rule_70_pass": m["rule_70_pass"],
