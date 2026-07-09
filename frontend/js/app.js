@@ -4028,16 +4028,30 @@
     } catch {}
     researchArvForForm();
   });
-  $("#scrape-btn")?.addEventListener("click", () => tryScrape($("#scrape-url").value.trim()));
+  // One bar for both: detect whether the input is a URL/link or an address,
+  // then route to the scraper or the address search accordingly.
+  function _looksLikeUrl(v) {
+    return /^https?:\/\//i.test(v)
+        || /^www\./i.test(v)
+        || /\b(zillow|redfin|realtor|trulia|homes|ispeedtolead|auction|movoto|har|compass|xome|hubzu)\.[a-z]{2,}/i.test(v)  // portal.tld
+        || /^[\w-]+(\.[\w-]+)+\/\S/.test(v);   // bare domain.tld/path
+  }
+  function handleUnifiedSearch(value) {
+    const v = (value || "").trim();
+    if (!v) return;
+    if (_looksLikeUrl(v)) tryScrape(v);
+    else tryFindByAddress(v);
+  }
+  $("#scrape-btn")?.addEventListener("click", () => handleUnifiedSearch($("#scrape-url").value.trim()));
   $("#scrape-url")?.addEventListener("keydown", e => {
-    if (e.key === "Enter") { e.preventDefault(); tryScrape(e.target.value.trim()); }
+    if (e.key === "Enter") { e.preventDefault(); handleUnifiedSearch(e.target.value.trim()); }
   });
 
   // ============== ADDRESS SEARCH ==============
   async function tryFindByAddress(address) {
     if (!address || address.length < 5) return;
-    const status = $("#address-search-status");
-    const btn = $("#address-search-btn");
+    const status = $("#scrape-status");
+    const btn = $("#scrape-btn");
     btn.disabled = true;
     status.innerHTML = '<span class="spinner"></span> Searching Zillow…';
     status.className = "status-line";
@@ -4077,10 +4091,7 @@
       btn.disabled = false;
     }
   }
-  $("#address-search-btn")?.addEventListener("click", () => tryFindByAddress($("#address-search").value.trim()));
-  $("#address-search")?.addEventListener("keydown", e => {
-    if (e.key === "Enter") { e.preventDefault(); tryFindByAddress(e.target.value.trim()); }
-  });
+  // (address search is now reached through the unified #scrape-url bar above)
 
   // Translate Zillow / Redfin enum property types → form select options
   const _PROPERTY_TYPE_MAP = {

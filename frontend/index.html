@@ -276,40 +276,24 @@
         <div class="page-header-text">
           <div class="page-eyebrow">New</div>
           <h2>Add a deal</h2>
-          <p>Paste a Zillow, Redfin, or ispeedtolead URL — or fill in manually. <a href="#" id="add-open-batch" style="font-size:13px;">📚 Import multiple URLs →</a></p>
+          <p>Type an address or paste a Zillow / Redfin / ispeedtolead link — or fill in manually. <a href="#" id="add-open-batch" style="font-size:13px;">📚 Import multiple URLs →</a></p>
         </div>
       </header>
 
       <div class="card hero-card">
         <h3>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg>
-          Find by address
+          Find by address or link
           <span style="font-weight:500; text-transform:none; letter-spacing:0; font-size:11.5px; margin-left:8px; color:var(--muted);">
-            Searches Zillow, Redfin, then AI fallback
+            Auto-detects an address or a Zillow / Redfin / ispeedtolead link
           </span>
         </h3>
         <div class="url-fetch">
-          <input type="text" id="address-search"
-            placeholder="e.g. 623 E 117th St, Cleveland OH 44108">
-          <button id="address-search-btn" class="btn primary">
+          <input type="text" id="scrape-url"
+            placeholder="623 E 117th St, Cleveland OH 44108   —or—   a Zillow / Redfin / ispeedtolead link  •  drag &amp; drop anywhere">
+          <button id="scrape-btn" class="btn primary">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3" stroke-linecap="round"/></svg>
             Search
-          </button>
-        </div>
-        <div id="address-search-status" class="status-line"></div>
-      </div>
-
-      <div class="card hero-card">
-        <h3>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          Or paste a URL
-        </h3>
-        <div class="url-fetch">
-          <input type="url" id="scrape-url"
-            placeholder="Zillow / Redfin / ispeedtolead URL  •  drag &amp; drop anywhere">
-          <button id="scrape-btn" class="btn primary">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M9 5l7 7-7 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            Fetch
           </button>
         </div>
         <div id="scrape-status" class="status-line"></div>
