@@ -3411,6 +3411,7 @@
   async function refreshRadarView() {
     const feed = $("#radar-feed"), st = $("#radar-status");
     if (!feed) return;
+    renderRadarZones();
     if (st) st.innerHTML = '<span class="spinner"></span> Loading finds…';
     let data;
     try { data = await API.radarList(); }
@@ -3420,8 +3421,7 @@
       ? `${finds.length} find(s) — auto-surfaced by your watches.`
       : "";
     if (!finds.length) {
-      feed.innerHTML = `<div class="card"><p class="muted" style="margin:0;">No finds yet. Create a <a href="#" id="radar-goto-watch">🔭 watch</a> on a zone — every hour it scans Zillow and drops the interesting deals here (auto-added to your board).</p></div>`;
-      feed.querySelector("#radar-goto-watch")?.addEventListener("click", e => { e.preventDefault(); showView("search"); });
+      feed.innerHTML = `<div class="card"><p class="muted" style="margin:0;">No finds yet. <strong>Add a zone above</strong> (e.g. “Cleveland, OH”), then hit <strong>⚡ Scan now</strong> — the Radar searches Zillow and drops the interesting deals here (auto-added to your board).</p></div>`;
     } else {
       const K = v => "$" + Math.round(Number(v) / 1000) + "K";
       feed.innerHTML = `<div class="deals-grid">${finds.map(f => {
@@ -3500,6 +3500,59 @@
     setTimeout(poll, 4000);
   }
   $("#radar-scan-btn")?.addEventListener("click", startRadarScan);
+
+  // ----- Watched zones (each zone = a Zillow watch the Radar scans) -----
+  async function renderRadarZones() {
+    const box = $("#radar-zones"); if (!box) return;
+    let zones = [];
+    try { zones = await API.watchesList(); } catch { box.innerHTML = ""; return; }
+    if (!zones.length) {
+      box.innerHTML = `<p class="muted" style="font-size:12px; margin:6px 0 0;">No zones yet — add a city or ZIP above to start.</p>`;
+      return;
+    }
+    const fmtAgo = ts => {
+      if (!ts) return "never scanned";
+      const mins = Math.max(0, Math.round((Date.now() - new Date(ts).getTime()) / 60000));
+      if (mins < 60) return `scanned ${mins} min ago`;
+      const h = Math.round(mins / 60); return h < 24 ? `scanned ${h} h ago` : `scanned ${Math.round(h / 24)} d ago`;
+    };
+    box.innerHTML = zones.map(z => {
+      const filters = [z.price_max ? "≤ $" + Number(z.price_max).toLocaleString("en-US") : "",
+                       z.beds_min ? z.beds_min + "+ bd" : "",
+                       z.property_type || ""].filter(Boolean).join(" · ");
+      return `<div style="display:flex; align-items:center; gap:10px; font-size:13px; flex-wrap:wrap; padding:6px 0; border-top:1px solid var(--border);">
+        <span style="font-weight:600;">📍 ${escape(z.label || z.location || "?")}</span>
+        ${filters ? `<span class="muted" style="font-size:12px;">${escape(filters)}</span>` : ""}
+        <span class="muted" style="font-size:12px;">· ${fmtAgo(z.last_run)}${z.tracked ? " · " + z.tracked + " tracked" : ""}</span>
+        <button class="btn ghost rz-del" data-id="${escape(z.id)}" title="Remove zone" style="margin-left:auto; font-size:11px;">🗑</button>
+      </div>`;
+    }).join("");
+    box.querySelectorAll(".rz-del").forEach(b => b.addEventListener("click", async () => {
+      if (!confirm("Remove this zone from the Radar?")) return;
+      try { await API.watchDelete(b.dataset.id); renderRadarZones(); } catch (e) { toast(e.message, "error"); }
+    }));
+  }
+  window._renderRadarZones = renderRadarZones;
+
+  $("#radar-zone-add")?.addEventListener("click", async () => {
+    const loc = ($("#radar-zone-location")?.value || "").trim();
+    if (!loc) { toast("Enter a city, ZIP or state", "warn"); return; }
+    const num = id => { const v = Number($(id)?.value); return v > 0 ? v : null; };
+    const p = { location: loc, interval_min: 60, max_listings: 15 };
+    if (num("#radar-zone-pricemax")) p.price_max = num("#radar-zone-pricemax");
+    if (num("#radar-zone-bedsmin")) p.beds_min = num("#radar-zone-bedsmin");
+    if ($("#radar-zone-type")?.value) p.property_type = $("#radar-zone-type").value;
+    const btn = $("#radar-zone-add"); btn.disabled = true;
+    try {
+      await API.watchCreate(p);
+      $("#radar-zone-location").value = "";
+      $("#radar-zone-pricemax").value = ""; $("#radar-zone-bedsmin").value = "";
+      toast(`📍 Zone added — scanning ${escape(loc)}…`, "success");
+      await renderRadarZones();
+      startRadarScan();   // kick a real-time scan right away so finds appear
+    } catch (e) { toast(e.message, "error"); }
+    finally { btn.disabled = false; }
+  });
 
   // Badge: check on open, then every 5 min.
   setTimeout(refreshRadarBadge, 2500);

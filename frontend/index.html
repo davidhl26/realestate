@@ -159,6 +159,31 @@
           <button class="btn" id="radar-refresh-btn">🔄 Refresh</button>
         </div>
       </header>
+      <!-- Watched zones — the Radar scans these zones every hour -->
+      <div class="card" id="radar-zones-card" style="margin-bottom:14px;">
+        <div style="display:flex; align-items:center; justify-content:space-between; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
+          <strong style="font-size:14px;">📍 Watched zones</strong>
+          <span class="muted" style="font-size:12px;">The Radar scans these zones every hour — add at least one to get finds.</span>
+        </div>
+        <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
+          <label style="flex:1; min-width:200px;">City / ZIP / State
+            <input id="radar-zone-location" type="text" placeholder="e.g. Cleveland, OH  ·  44105  ·  Ohio" style="width:100%;">
+          </label>
+          <label style="width:120px;">Price max ($) <input id="radar-zone-pricemax" type="number" placeholder="—"></label>
+          <label style="width:90px;">Beds min <input id="radar-zone-bedsmin" type="number" placeholder="—"></label>
+          <label style="width:150px;">Type
+            <select id="radar-zone-type">
+              <option value="">Any</option>
+              <option value="Single Family Residence">House</option>
+              <option value="Multi-family / Duplex">Multi / Duplex</option>
+              <option value="Townhouse">Townhouse</option>
+              <option value="Condo">Condo</option>
+            </select>
+          </label>
+          <button class="btn primary" id="radar-zone-add">➕ Add zone</button>
+        </div>
+        <div id="radar-zones" style="margin-top:10px;"></div>
+      </div>
       <div id="radar-status" class="status-line" style="margin:0 0 12px;"></div>
       <div id="radar-feed"></div>
     </section>
