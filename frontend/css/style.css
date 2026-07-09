@@ -1768,6 +1768,21 @@ kbd {
   white-space: nowrap;
 }
 
+/* Click-to-collapse cards in the deal detail */
+.card-collapsible > .card-collapse-header { cursor: pointer; }
+.card-collapse-title::after {
+  content: "▾";
+  margin-left: 8px;
+  font-size: 0.7em;
+  opacity: 0.5;
+  transition: transform 0.15s ease;
+  display: inline-block;
+  vertical-align: middle;
+}
+.card-collapsed .card-collapse-title::after { transform: rotate(-90deg); }
+.card-collapsed > *:not(.card-collapse-header) { display: none !important; }
+.card-collapsed { padding-bottom: 14px; }
+
 .map-card iframe {
   width: 100%;
   height: 320px;

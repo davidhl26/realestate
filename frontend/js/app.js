@@ -1819,6 +1819,33 @@
     $("#chat-fab").style.display = "flex";
 
     $("#pdf-preview").style.display = "none";
+
+    // === Make every block collapsible (click its header to shrink) ===
+    initDetailCardCollapse();
+  }
+
+  // Click any card's header to collapse/expand it in the deal detail. Uses the
+  // card's first child as the clickable header; ignores clicks on controls.
+  function initDetailCardCollapse() {
+    const root = $("#view-detail"); if (!root) return;
+    root.querySelectorAll(".card").forEach(card => {
+      if (card.dataset.collapsibleInit) return;
+      const header = card.firstElementChild;
+      if (!header) return;
+      const title = header.matches("h3") ? header : (header.querySelector("h3") || header);
+      card.dataset.collapsibleInit = "1";
+      card.classList.add("card-collapsible");
+      header.classList.add("card-collapse-header");
+      title.classList.add("card-collapse-title");
+      header.addEventListener("click", (e) => {
+        if (e.target.closest("button, a, input, select, textarea, label, .method-chip, .editable")) return;
+        const collapsed = card.classList.toggle("card-collapsed");
+        // Leaflet needs a resize nudge when its card is re-opened.
+        if (!collapsed && card.querySelector("#detail-map") && _dealMap) {
+          setTimeout(() => { try { _dealMap.invalidateSize(); } catch {} }, 60);
+        }
+      });
+    });
   }
 
   // ============== PHOTO CAROUSEL ==============
