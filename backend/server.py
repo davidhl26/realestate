@@ -1569,6 +1569,11 @@ def auction_recheck_all(payload: dict = Body(default={})):
 
 
 # ---- Zillow watches ----
+# Radar freshness: only surface homes listed in the last ~24h (Zillow
+# days_on_market 0 or 1 = just listed today/yesterday).
+_RADAR_FRESH_MAX_DOM = 1
+
+
 def _radar_config() -> dict:
     """Deal Radar settings (with sensible defaults)."""
     cfg = ai_research.read_config()
@@ -1632,10 +1637,21 @@ def _radar_process(watch: dict, new_listings: list) -> int:
     cfg = _radar_config()
     if not cfg.get("enabled"):
         return 0
-    added = 0
+    added, stale = 0, 0
     label = watch.get("label") or watch.get("location") or "Watch"
     for l in new_listings or []:
         try:
+            # Freshness gate: only keep homes listed in the last ~24h. Zillow
+            # days_on_market 0/1 = just listed today/yesterday. A null DOM is
+            # kept (unknown — the search prompt already asks for last-24h only).
+            dom = l.get("days_on_market")
+            try:
+                dom_val = int(dom) if dom is not None else None
+            except (TypeError, ValueError):
+                dom_val = None
+            if dom_val is not None and dom_val > _RADAR_FRESH_MAX_DOM:
+                stale += 1
+                continue
             interesting, info = _radar_evaluate(l, cfg)
             if not interesting or not info:
                 continue
@@ -1683,6 +1699,9 @@ def _radar_process(watch: dict, new_listings: list) -> int:
             })
         except Exception:
             log.exception("radar: failed to process a listing")
+    if stale:
+        log.info("radar: skipped %d listing(s) older than %dd (freshness gate)",
+                 stale, _RADAR_FRESH_MAX_DOM)
     return added
 
 

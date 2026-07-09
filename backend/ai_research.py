@@ -411,6 +411,7 @@ Method:
 3. Capture whatever price / beds / baths / sqft / days-on-market the result shows.
 
 RULES:
+- FRESHNESS (critical): Only include homes listed in the LAST 24 HOURS — "just listed today or yesterday" on Zillow, i.e. days_on_market of 0 or 1. Use Zillow's "just listed" / newest sort (days on Zillow = 1 day). EXCLUDE anything on the market longer, and ALWAYS fill days_on_market with the real integer so the caller can verify.
 - Return the MOST RECENTLY LISTED properties first (newest on market). The caller wants the freshest listings, then scrapes each individual listing page (for photos and full data).
 - Strongly prefer providing a real listing URL for every property — that is what lets the system open and scrape the listing. Only set "url": null when you genuinely could not find the URL after searching for that address.
 - Do NOT fabricate. Only return addresses and URLs that actually appeared in your search results. Never invent a zpid or guess a URL.
@@ -519,9 +520,10 @@ def _build_listing_search_prompt(params: dict, max_listings: int = 60) -> str:
         lines.append(f"- EXCLUDE these property types: {', '.join(p['excluded_type_labels'])} "
                      "(i.e. single-family houses only).")
     lines.append("")
-    lines.append(f"Return the {max_listings} most recently listed matching properties, newest first, "
-                 "EACH with its exact Zillow listing URL (search '<address> zillow' to get the URL "
-                 "when a result only shows the address), in the JSON schema specified.")
+    lines.append(f"Return ONLY homes listed in the LAST 24 HOURS (days_on_market 0 or 1 — just "
+                 f"listed today or yesterday), up to {max_listings}, newest first, EACH with its "
+                 "exact Zillow listing URL (search '<address> zillow' to get the URL when a result "
+                 "only shows the address) and its real days_on_market, in the JSON schema specified.")
     return "\n".join(lines)
 
 
