@@ -1615,6 +1615,35 @@ def _watch_scheduler():
         _t.sleep(_WATCH_TICK_SEC)
 
 
+# One-time backfill: apply the current Hard Money defaults (90% LTV, 11% rate,
+# 2% origination, 3% other lender fees) to every existing deal. Requested
+# 2026-07-09 ("applique les à tous"). Guarded by a marker so it runs once.
+_HM_DEFAULTS = {"method": "hard_money", "ltv_pct": 90, "interest_rate_pct": 11.0,
+                "origination_pct": 2.0, "lender_fees_pct": 3.0}
+
+
+@app.on_event("startup")
+def _apply_hard_money_defaults():
+    marker = DATA_DIR / ".hm-defaults-applied"
+    if marker.exists():
+        return
+    updated = 0
+    try:
+        for d in db.list_deals():
+            fin = d.get("financing") or {}
+            new_fin = {**_HM_DEFAULTS,
+                       "term_months": int(fin.get("term_months") or 6),
+                       "rehab_financed": bool(fin.get("rehab_financed", True))}
+            if fin != new_fin:
+                d["financing"] = new_fin
+                db.upsert_deal(d)
+                updated += 1
+        marker.write_text(f"applied to {updated} deal(s)\n")
+        log.info("Hard-money defaults applied to %d deal(s)", updated)
+    except Exception:
+        log.exception("Hard-money default backfill failed")
+
+
 @app.on_event("startup")
 def _start_watch_scheduler():
     import threading
