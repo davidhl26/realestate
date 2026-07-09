@@ -992,6 +992,9 @@ def build_deal_pdf(deal, m, output_path):
                 ["Origination Fee",
                  f"{scenario.get('origination_pct', 0)}% "
                  f"({fmt_money(scenario.get('points_paid', 0))})"],
+                ["Other Lender Fees",
+                 f"{scenario.get('lender_fees_pct', 0)}% "
+                 f"({fmt_money(scenario.get('lender_fees_paid', 0))})"],
                 ["Loan Term",
                  f"{scenario.get('loan_term_months', 0)} months"],
                 ["Rehab Financed?",

@@ -4300,11 +4300,27 @@
     try { currentDealCache = await API.getDeal(state.currentDealId); }
     catch (e) { toast(e.message, "error"); return; }
     const d = currentDealCache.deal;
-    $("[name=holding_months]", $("#pdf-modal")).value = d.holding_months || 5;
-    $("[name=holding_cost_monthly]", $("#pdf-modal")).value = d.holding_cost_monthly || 500;
-    $("[name=selling_cost_pct]", $("#pdf-modal")).value = d.selling_cost_pct || 8;
-    $("[name=strategy][value=flip]", $("#pdf-modal")).checked = true;
-    $("#pdf-modal").style.display = "flex";
+    const M = $("#pdf-modal");
+    $("[name=holding_months]", M).value = d.holding_months || 5;
+    $("[name=holding_cost_monthly]", M).value = d.holding_cost_monthly || 500;
+    $("[name=selling_cost_pct]", M).value = d.selling_cost_pct || 8;
+    $("[name=strategy][value=flip]", M).checked = true;
+    // Pre-fill the financing block from the deal's saved scenario (hard money,
+    // etc.) so the report reflects exactly what was entered on the deal.
+    const fin = d.financing || {};
+    const setV = (name, val) => {
+      const el = $(`[name=${name}]`, M);
+      if (el && val != null && val !== "") el.value = val;
+    };
+    if (fin.method) { const sel = $("[name=financing_method]", M); if (sel) sel.value = fin.method; }
+    setV("loan_ltv_pct", fin.ltv_pct);
+    setV("interest_rate_pct", fin.interest_rate_pct);
+    setV("origination_pct", fin.origination_pct);
+    setV("lender_fees_pct", fin.lender_fees_pct);
+    setV("loan_term_months", fin.term_months);
+    const rf = $("[name=rehab_financed]", M);
+    if (rf && fin.rehab_financed != null) rf.value = fin.rehab_financed ? "yes" : "no";
+    M.style.display = "flex";
     updateLivePreview();
   }
   function closePdfModal() { $("#pdf-modal").style.display = "none"; }
@@ -4347,8 +4363,9 @@
       const months = opts.loan_term_months || (opts.holding_months || 5);
       const interest = loan * ((opts.interest_rate_pct || 0) / 100) * (months / 12);
       const points = loan * ((opts.origination_pct || 0) / 100);
-      financing_cost = interest + points;
-      cash_needed = (purchase - loanBase) + (rehab - rehabFinanced) + closing + holding_total + points;
+      const lenderFees = loan * ((opts.lender_fees_pct || 0) / 100);
+      financing_cost = interest + points + lenderFees;
+      cash_needed = (purchase - loanBase) + (rehab - rehabFinanced) + closing + holding_total + points + lenderFees;
     }
     const all_in = purchase + closing + rehab + holding_total + selling + dd + other + financing_cost;
     const net_profit = arv - all_in;

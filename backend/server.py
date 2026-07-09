@@ -1003,20 +1003,24 @@ def deal_pdf_with_options(deal_id: str, options: dict = Body(...)):
 
     financing_cost = 0
     points_paid = 0
+    lender_fees_paid = 0
     cash_needed = purchase + rehab
     loan_amount = 0
     if fin_method and fin_method != "cash":
         ltv_pct = float(options.get("loan_ltv_pct") or 0)
         rate_pct = float(options.get("interest_rate_pct") or 0)
         orig_pct = float(options.get("origination_pct") or 0)
+        lender_fees_pct = float(options.get("lender_fees_pct") or 0)
         term_months = int(options.get("loan_term_months") or holding_months)
         rehab_financed = options.get("rehab_financed", "yes") == "yes"
         loan_base = purchase * ltv_pct / 100
         loan_amount = loan_base + (rehab if rehab_financed else 0)
         interest = loan_amount * (rate_pct / 100) * (term_months / 12)
         points_paid = loan_amount * (orig_pct / 100)
-        financing_cost = interest + points_paid
-        cash_needed = (purchase - loan_base) + (0 if rehab_financed else rehab) + points_paid
+        lender_fees_paid = loan_amount * (lender_fees_pct / 100)
+        financing_cost = interest + points_paid + lender_fees_paid
+        cash_needed = ((purchase - loan_base) + (0 if rehab_financed else rehab)
+                       + points_paid + lender_fees_paid)
 
     # Attach a "scenario" block to the deal for the PDF generator to use
     deal_copy["scenario"] = {
@@ -1026,6 +1030,7 @@ def deal_pdf_with_options(deal_id: str, options: dict = Body(...)):
         "loan_ltv_pct": options.get("loan_ltv_pct"),
         "interest_rate_pct": options.get("interest_rate_pct"),
         "origination_pct": options.get("origination_pct"),
+        "lender_fees_pct": options.get("lender_fees_pct"),
         "loan_term_months": options.get("loan_term_months"),
         "rehab_financed": options.get("rehab_financed"),
         "purchase_closing_pct": options.get("purchase_closing_pct", 2),
@@ -1033,6 +1038,7 @@ def deal_pdf_with_options(deal_id: str, options: dict = Body(...)):
         "other_fees": options.get("other_fees", 0),
         "financing_cost": financing_cost,
         "points_paid": points_paid,
+        "lender_fees_paid": lender_fees_paid,
         "cash_needed": cash_needed,
     }
 
