@@ -54,7 +54,7 @@ def get_api_key() -> Optional[str]:
 
 
 def get_model() -> str:
-    return read_config().get("model") or "claude-opus-4-7"
+    return read_config().get("model") or "claude-opus-4-8"
 
 
 def get_maps_key() -> Optional[str]:
@@ -139,7 +139,7 @@ def _build_user_prompt(deal: dict) -> str:
 def _repair_json(snippet: str) -> Optional[dict]:
     """Repair Claude's malformed JSON using the json-repair library.
 
-    Common failure modes from Opus 4.7:
+    Common failure modes from Opus 4.8:
       - Strings split across lines
       - Unescaped newlines / stray prose between fields
       - Trailing commas

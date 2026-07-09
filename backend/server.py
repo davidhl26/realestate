@@ -1769,6 +1769,44 @@ def radar_delete(find_id: str):
     return {"ok": radar_db.delete(find_id)}
 
 
+# Real-time import: run every watch right now (instead of waiting for the hourly
+# scheduler). Runs in the background; the UI polls scan-status + refreshes.
+_radar_scan = {"running": False, "added": 0, "done": 0, "total": 0}
+
+
+@app.post("/api/radar/scan")
+def radar_scan():
+    if not ai_research.is_configured():
+        raise HTTPException(400, "AI not configured. Add an Anthropic API key in Settings → AI.")
+    watches = watches_db.list_watches()
+    if not watches:
+        return {"ok": False, "error": "No watches yet — create one first (Sourcing → Search & watch)."}
+    if _radar_scan["running"]:
+        return {"ok": True, "started": False, "already_running": True, "total": _radar_scan["total"]}
+    import threading
+
+    def _job():
+        _radar_scan.update(running=True, added=0, done=0, total=len(watches))
+        try:
+            for w in watches:
+                try:
+                    res = _run_watch(w["id"])
+                    _radar_scan["added"] += int(res.get("radar_added") or 0)
+                except Exception:
+                    log.exception("radar scan: watch %s failed", w.get("id"))
+                _radar_scan["done"] += 1
+        finally:
+            _radar_scan["running"] = False
+
+    threading.Thread(target=_job, daemon=True, name="radar-scan").start()
+    return {"ok": True, "started": True, "total": len(watches)}
+
+
+@app.get("/api/radar/scan-status")
+def radar_scan_status():
+    return dict(_radar_scan)
+
+
 # ---- Hourly watch scheduler (server-side, plan standard = always on) ----
 _WATCH_TICK_SEC = int(os.environ.get("FLIPBOARD_WATCH_TICK", "300"))  # 5 min
 
@@ -1820,6 +1858,24 @@ def _apply_hard_money_defaults():
         log.info("Hard-money defaults applied to %d deal(s)", updated)
     except Exception:
         log.exception("Hard-money default backfill failed")
+
+
+@app.on_event("startup")
+def _upgrade_ai_model():
+    """One-time: activate Opus 4.8 by bumping a saved legacy/default model.
+    Guarded by a marker so a later deliberate choice in Settings is respected."""
+    marker = DATA_DIR / ".model-4-8-applied"
+    if marker.exists():
+        return
+    try:
+        cfg = ai_research.read_config()
+        if cfg.get("model") in (None, "", "claude-opus-4-7"):
+            cfg["model"] = "claude-opus-4-8"
+            ai_research.write_config(cfg)
+        marker.write_text("done\n")
+        log.info("AI model activated: claude-opus-4-8")
+    except Exception:
+        log.exception("AI model upgrade failed")
 
 
 @app.on_event("startup")
@@ -2624,7 +2680,7 @@ def ai_config_get():
     return {
         "configured": bool(key),
         "key_preview": MASK if key else "",
-        "model": cfg.get("model", "claude-opus-4-7"),
+        "model": cfg.get("model", "claude-opus-4-8"),
         "auto_research": cfg.get("auto_research", True),
         "target_margin_pct": cfg.get("target_margin_pct", 15),
         "radar_enabled": cfg.get("radar_enabled", True),
@@ -2644,7 +2700,7 @@ def ai_config_set(payload: dict = Body(...)):
     if "anthropic_api_key" in payload:
         cfg["anthropic_api_key"] = (payload["anthropic_api_key"] or "").strip()
     if "model" in payload:
-        cfg["model"] = (payload["model"] or "claude-opus-4-7").strip()
+        cfg["model"] = (payload["model"] or "claude-opus-4-8").strip()
     if "google_maps_key" in payload:
         cfg["google_maps_key"] = (payload["google_maps_key"] or "").strip()
     if "scraper_api_key" in payload:

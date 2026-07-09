@@ -2419,7 +2419,7 @@
     // Model pill
     try {
       const cfg = await API.aiConfig();
-      $("#ai-model-pill").textContent = (cfg.model || "claude-opus-4-7").replace("claude-", "");
+      $("#ai-model-pill").textContent = (cfg.model || "claude-opus-4-8").replace("claude-", "");
     } catch {}
   }
 
@@ -3462,6 +3462,44 @@
   }
   $("#radar-refresh-btn")?.addEventListener("click", () => refreshRadarView());
   $("#radar-settings-btn")?.addEventListener("click", () => showView("settings"));
+
+  // ⚡ Scan now — run every watch immediately (real-time import) and stream
+  // new finds into the feed as they land.
+  let _radarScanning = false;
+  async function startRadarScan() {
+    if (_radarScanning) return;
+    const btn = $("#radar-scan-btn"), st = $("#radar-status");
+    let res;
+    try { res = await API.radarScan(); }
+    catch (e) { toast(e.message, "error"); return; }
+    if (!res.ok) { toast(res.error || "Scan failed", "warn"); return; }
+    _radarScanning = true;
+    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Scanning…'; }
+    const total = res.total || 1;
+    if (st) st.innerHTML = `<span class="spinner"></span> Scanning ${total} zone(s) in real time — new deals will appear as they're found…`;
+    const t0 = Date.now();
+    const poll = async () => {
+      let s;
+      try { s = await API.radarScanStatus(); } catch { s = null; }
+      await refreshRadarView();   // show finds arriving live
+      refreshRadarBadge();
+      const running = s && s.running;
+      const timedOut = Date.now() - t0 > 8 * 60 * 1000;   // safety cap 8 min
+      if (running && !timedOut) {
+        if (st && s) st.innerHTML = `<span class="spinner"></span> Scanning… ${s.done}/${s.total} zone(s) done · ${s.added} new find(s) so far`;
+        setTimeout(poll, 5000);
+      } else {
+        _radarScanning = false;
+        if (btn) { btn.disabled = false; btn.innerHTML = "⚡ Scan now"; }
+        const added = s ? s.added : 0;
+        if (st) st.textContent = added ? `✓ Scan done — ${added} new interesting deal(s) added.` : "✓ Scan done — no new interesting deals this time.";
+        await refreshRadarView();
+        if (added) toast(`🎯 ${added} new deal(s) on the radar`, "success");
+      }
+    };
+    setTimeout(poll, 4000);
+  }
+  $("#radar-scan-btn")?.addEventListener("click", startRadarScan);
 
   // Badge: check on open, then every 5 min.
   setTimeout(refreshRadarBadge, 2500);
@@ -4670,7 +4708,7 @@
       $("#ai-key-input").placeholder = cfg.configured
         ? `Configured (${cfg.key_preview}) — re-enter to update`
         : "sk-ant-...";
-      $("#ai-model-input").value = cfg.model || "claude-opus-4-7";
+      $("#ai-model-input").value = cfg.model || "claude-opus-4-8";
       const ar = $("#ai-auto-research");
       if (ar) {
         ar.checked = cfg.auto_research !== false;
@@ -4713,7 +4751,7 @@
         };
       }
       $("#ai-status").textContent = cfg.configured
-        ? `✓ Configured with ${cfg.model || 'claude-opus-4-7'}`
+        ? `✓ Configured with ${cfg.model || 'claude-opus-4-8'}`
         : "Not configured — AI ARV research is disabled.";
       $("#ai-status").className = cfg.configured ? "status-line success" : "status-line";
       // ScraperAPI proxy status (Zillow photos)
@@ -4766,7 +4804,7 @@
     e.preventDefault();
     const fd = new FormData(e.target);
     const key = (fd.get("anthropic_api_key") || "").trim();
-    const model = fd.get("model") || "claude-opus-4-7";
+    const model = fd.get("model") || "claude-opus-4-8";
     try {
       const body = { model };
       if (key) body.anthropic_api_key = key;
@@ -7808,7 +7846,7 @@
       // Tiny delay so user sees the stage change
       await new Promise(r => setTimeout(r, 200));
 
-      updatePdfNotification("🧠 Claude Opus 4.7 is analyzing the document (20-60s)…");
+      updatePdfNotification("🧠 Claude Opus 4.8 is analyzing the document (20-60s)…");
       const r = await API.importPdfAnalyzeFromPath(path);
 
       if (!r.ok) {
@@ -7998,7 +8036,7 @@
       setTimeout(() => {
         setPdfStep("extract", "done");
         setPdfStep("claude", "active");
-        setPdfProgress(55, "Claude Opus 4.7 is analyzing the PDF…",
+        setPdfProgress(55, "Claude Opus 4.8 is analyzing the PDF…",
           "Claude reads each page. 20-60 seconds.");
       }, 2000);
 
@@ -8081,7 +8119,7 @@
         if (_pdfXhr !== xhr) return;  // cancelled
         setPdfStep("extract", "done");
         setPdfStep("claude", "active");
-        setPdfProgress(55, "Claude Opus 4.7 is analyzing the PDF…",
+        setPdfProgress(55, "Claude Opus 4.8 is analyzing the PDF…",
           "Claude reads each page and identifies every property. This step takes 20 to 60 seconds depending on the PDF size.");
       }, 2500);
     });
