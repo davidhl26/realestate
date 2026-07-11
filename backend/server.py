@@ -1638,7 +1638,7 @@ def _radar_process(watch: dict, new_listings: list) -> dict:
     from urllib.parse import quote
     cfg = _radar_config()
     c = {"found": len(new_listings or []), "fresh": 0, "surfaced": 0,
-         "interesting": 0, "added": 0, "stale": 0}
+         "interesting": 0, "added": 0, "stale": 0, "sold": 0, "unknown_age": 0}
     if not cfg.get("enabled"):
         return c
     label = watch.get("label") or watch.get("location") or "Watch"
@@ -1651,15 +1651,25 @@ def _radar_process(watch: dict, new_listings: list) -> dict:
 
     for l in new_listings or []:
         try:
-            # Freshness gate: only keep homes listed in the last ~24h (Zillow
-            # days_on_market 0/1). Null DOM is kept (the search prompt already
-            # scopes to the last 24h).
+            # Active-only gate: drop anything not currently for sale (sold,
+            # pending, contingent, under contract, coming soon, off-market,
+            # foreclosure/auction).
+            status = (l.get("listing_status") or "").strip().lower()
+            if status and not any(k in status for k in ("for_sale", "for sale", "active", "new")):
+                c["sold"] += 1
+                continue
+            # Freshness gate: only keep homes listed in the last ~24h — the real
+            # Zillow days_on_market must be present and 0 or 1. Unknown age is
+            # dropped (we can't confirm it's fresh, so it may be days old).
             dom = l.get("days_on_market")
             try:
                 dom_val = int(dom) if dom is not None else None
             except (TypeError, ValueError):
                 dom_val = None
-            if dom_val is not None and dom_val > _RADAR_FRESH_MAX_DOM:
+            if dom_val is None:
+                c["unknown_age"] += 1
+                continue
+            if dom_val > _RADAR_FRESH_MAX_DOM:
                 c["stale"] += 1
                 continue
             c["fresh"] += 1
@@ -1729,8 +1739,10 @@ def _radar_process(watch: dict, new_listings: list) -> dict:
                     c["interesting"] += 1
         except Exception:
             log.exception("radar: failed to process a listing")
-    log.info("radar %s: found=%d fresh=%d surfaced=%d interesting=%d added=%d stale=%d",
-             label, c["found"], c["fresh"], c["surfaced"], c["interesting"], c["added"], c["stale"])
+    log.info("radar %s: found=%d fresh=%d surfaced=%d interesting=%d added=%d "
+             "stale=%d sold=%d unknown_age=%d",
+             label, c["found"], c["fresh"], c["surfaced"], c["interesting"],
+             c["added"], c["stale"], c["sold"], c["unknown_age"])
     return c
 
 
@@ -1824,7 +1836,7 @@ def radar_delete(find_id: str):
 # Real-time import: run every watch right now (instead of waiting for the hourly
 # scheduler). Runs in the background; the UI polls scan-status + refreshes.
 _radar_scan = {"running": False, "added": 0, "done": 0, "total": 0,
-               "found": 0, "fresh": 0, "surfaced": 0, "error": ""}
+               "found": 0, "fresh": 0, "surfaced": 0, "sold": 0, "old": 0, "error": ""}
 
 
 @app.post("/api/radar/scan")
@@ -1842,7 +1854,7 @@ def radar_scan():
 
     def _job():
         _radar_scan.update(running=True, added=0, done=0, total=len(watches),
-                           found=0, fresh=0, surfaced=0, error="")
+                           found=0, fresh=0, surfaced=0, sold=0, old=0, error="")
         try:
             for w in watches:
                 try:
@@ -1854,6 +1866,8 @@ def radar_scan():
                     _radar_scan["found"] += int(res.get("listings_found") or 0)
                     _radar_scan["fresh"] += int(rc.get("fresh") or 0)
                     _radar_scan["surfaced"] += int(rc.get("surfaced") or 0)
+                    _radar_scan["sold"] += int(rc.get("sold") or 0)
+                    _radar_scan["old"] += int(rc.get("stale") or 0) + int(rc.get("unknown_age") or 0)
                 except Exception as e:
                     log.exception("radar scan: watch %s failed", w.get("id"))
                     _radar_scan["error"] = str(e)

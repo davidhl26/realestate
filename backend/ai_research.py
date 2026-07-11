@@ -411,8 +411,9 @@ Method:
 3. Capture whatever price / beds / baths / sqft / days-on-market the result shows.
 
 RULES:
-- FRESHNESS (critical): Only include homes listed in the LAST 24 HOURS — "just listed today or yesterday" on Zillow, i.e. days_on_market of 0 or 1. Use Zillow's "just listed" / newest sort (days on Zillow = 1 day). EXCLUDE anything on the market longer, and ALWAYS fill days_on_market with the real integer so the caller can verify.
-- Return the MOST RECENTLY LISTED properties first (newest on market). The caller wants the freshest listings, then scrapes each individual listing page (for photos and full data).
+- FRESHNESS (critical): Only include homes listed in the LAST 24 HOURS — "just listed today or yesterday" on Zillow, i.e. days_on_market of 0 or 1. Use Zillow's "just listed" / newest sort (days on Zillow = 1 day). EXCLUDE anything on the market longer. ALWAYS fill days_on_market with the REAL integer (0 or 1). If you cannot confirm the home was listed within the last 24 hours, DO NOT include it.
+- ACTIVE ONLY (critical): Only include homes that are CURRENTLY FOR SALE and active. EXCLUDE anything sold, pending, contingent, under contract, coming-soon, off-market, foreclosure-auction, or delisted. Zillow "recently sold" / Redfin sold pages are FORBIDDEN sources — never return a sold home. Set "listing_status" to the home's current market status ("for_sale" only for active listings).
+- Return the MOST RECENTLY LISTED properties first (newest on market). The caller wants the freshest ACTIVE listings, then scrapes each individual listing page (for photos and full data).
 - Strongly prefer providing a real listing URL for every property — that is what lets the system open and scrape the listing. Only set "url": null when you genuinely could not find the URL after searching for that address.
 - Do NOT fabricate. Only return addresses and URLs that actually appeared in your search results. Never invent a zpid or guess a URL.
 - Include candidates even if you cannot confirm they are still active — the system fetches each live page afterward and discards any that have already sold. Breadth + freshness matter more than certainty.
@@ -429,7 +430,7 @@ CRITICAL: End your response with a SINGLE JSON code block in exactly this schema
 {
   "area_label": "<human name of the area, e.g. 'Cleveland, OH — East Side & inner-ring suburbs'>",
   "listings": [
-    {"url": "<full zillow/redfin listing url, or null>", "address": "<full street address>", "city": "<city>", "state": "<2-letter>", "zip": "<zip>", "price": <integer or null>, "beds": <integer or null>, "baths": <number or null>, "sqft": <integer or null>, "year_built": <integer or null>, "last_renovated": <integer year or null>, "arv_estimate": <integer or null>, "rehab_estimate": <integer or null>, "days_on_market": <integer or null>}
+    {"url": "<full zillow/redfin listing url, or null>", "address": "<full street address>", "city": "<city>", "state": "<2-letter>", "zip": "<zip>", "price": <integer or null>, "beds": <integer or null>, "baths": <number or null>, "sqft": <integer or null>, "year_built": <integer or null>, "last_renovated": <integer year or null>, "arv_estimate": <integer or null>, "rehab_estimate": <integer or null>, "days_on_market": <integer 0 or 1>, "listing_status": "for_sale"}
   ],
   "notes": "<1-2 sentences: how many found, coverage caveats>"
 }
@@ -610,6 +611,7 @@ def find_listings_in_area(params: dict, max_listings: int = 60) -> dict:
             "arv_estimate": it.get("arv_estimate"),
             "rehab_estimate": it.get("rehab_estimate"),
             "days_on_market": it.get("days_on_market"),
+            "listing_status": (it.get("listing_status") or "").strip().lower(),
         })
         if len(listings) >= max_listings:
             break

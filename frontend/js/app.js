@@ -3538,13 +3538,15 @@
         _radarScanning = false;
         if (btn) { btn.disabled = false; btn.innerHTML = "⚡ Scan now"; }
         const surfaced = s ? (s.surfaced || 0) : 0, added = s ? (s.added || 0) : 0, found = s ? (s.found || 0) : 0;
+        const excl = s ? ((s.sold || 0) + (s.old || 0)) : 0;
+        const exclTxt = excl ? ` (${s.sold || 0} sold/off-market + ${s.old || 0} older than 24h excluded)` : "";
         if (st) {
           if (s && s.error && !surfaced) {
             st.innerHTML = `<span style="color:var(--red)">Scan issue: ${escape(s.error)}</span>`;
           } else if (surfaced) {
-            st.textContent = `✓ Scan done — ${surfaced} listing(s) from the last 24h${added ? `, ${added} auto-added (passed all criteria)` : ""}.`;
+            st.textContent = `✓ Scan done — ${surfaced} active listing(s) from the last 24h${added ? `, ${added} added to your board` : ""}${exclTxt}.`;
           } else if (found) {
-            st.textContent = `✓ Scan done — ${found} listing(s) found but none posted in the last 24h. Try again later or widen the zone.`;
+            st.textContent = `✓ Scan done — ${found} found, but none were both active and posted in the last 24h${exclTxt}. Try again later or widen the zone.`;
           } else {
             st.textContent = "✓ Scan done — no new listings found in your zone(s) right now.";
           }
