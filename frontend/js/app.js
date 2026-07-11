@@ -3412,15 +3412,28 @@
     const feed = $("#radar-feed"), st = $("#radar-status");
     if (!feed) return;
     renderRadarZones();
-    if (st) st.innerHTML = '<span class="spinner"></span> Loading finds…';
+    // Paused state — Radar is off in Settings.
+    let paused = false;
+    try {
+      const cfg = await API.aiConfig();
+      paused = !!(cfg && cfg.radar_enabled === false);
+    } catch {}
+    const scanBtn = $("#radar-scan-btn");
+    if (scanBtn) scanBtn.disabled = paused;
+    if (paused && st) {
+      st.innerHTML = '⏸ <strong>Radar is paused.</strong> It won\'t add deals or scan. Turn it back on in <a href="#" id="radar-goto-settings">Settings → Deal Radar</a>.';
+      st.querySelector("#radar-goto-settings")?.addEventListener("click", e => { e.preventDefault(); showView("settings"); });
+    } else if (st) {
+      st.innerHTML = '<span class="spinner"></span> Loading finds…';
+    }
     let data;
     try { data = await API.radarList(); }
-    catch (e) { if (st) st.innerHTML = `<span style="color:var(--red)">${escape(e.message)}</span>`; return; }
+    catch (e) { if (st && !paused) st.innerHTML = `<span style="color:var(--red)">${escape(e.message)}</span>`; return; }
     let finds = data.finds || [];
     // Interesting (passed all criteria) first, then the rest.
     finds = finds.slice().sort((a, b) => (b.interesting ? 1 : 0) - (a.interesting ? 1 : 0));
     const nInt = finds.filter(f => f.interesting).length;
-    if (st) st.textContent = finds.length
+    if (st && !paused) st.textContent = finds.length
       ? `${finds.length} listing(s) from the last 24h — ${nInt} pass all your criteria.`
       : "";
     if (!finds.length) {

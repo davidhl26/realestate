@@ -1829,6 +1829,8 @@ _radar_scan = {"running": False, "added": 0, "done": 0, "total": 0,
 
 @app.post("/api/radar/scan")
 def radar_scan():
+    if not _radar_config().get("enabled"):
+        return {"ok": False, "error": "Radar is off. Turn it on in Settings → Deal Radar to scan."}
     if not ai_research.is_configured():
         raise HTTPException(400, "AI not configured. Add an Anthropic API key in Settings → AI.")
     watches = watches_db.list_watches()
@@ -1937,6 +1939,31 @@ def _upgrade_ai_model():
         log.info("AI model activated: claude-opus-4-8")
     except Exception:
         log.exception("AI model upgrade failed")
+
+
+@app.on_event("startup")
+def _pause_radar():
+    """One-time kill switch (owner request 2026-07-10): turn the Radar OFF and
+    pause every watch so it stops auto-adding deals and running hourly AI scans.
+    Guarded by a marker so the owner can re-enable it in Settings afterward."""
+    marker = DATA_DIR / ".radar-paused"
+    if marker.exists():
+        return
+    try:
+        cfg = ai_research.read_config()
+        cfg["radar_enabled"] = False
+        cfg["radar_auto_add"] = False
+        ai_research.write_config(cfg)
+        paused = 0
+        for w in watches_db.list_watches():
+            if int(w.get("interval_min") or 0) != 0:
+                w["interval_min"] = 0   # manual-only → the scheduler skips it
+                watches_db.save(w)
+                paused += 1
+        marker.write_text("done\n")
+        log.info("Radar paused (disabled + %d watch(es) set to manual-only)", paused)
+    except Exception:
+        log.exception("Radar pause failed")
 
 
 @app.on_event("startup")
