@@ -3547,6 +3547,7 @@
         if (s && s.old) exclParts.push(`${s.old} older than 24h`);
         if (s && s.unverified) exclParts.push(`${s.unverified} unverifiable on Zillow`);
         const exclTxt = exclParts.length ? ` (excluded: ${exclParts.join(" + ")})` : "";
+        await refreshRadarView();   // refresh FIRST — it overwrites #radar-status
         if (st) {
           if (s && s.error && !surfaced) {
             st.innerHTML = `<span style="color:var(--red)">Scan issue: ${escape(s.error)}</span>`;
@@ -3558,7 +3559,6 @@
             st.textContent = "✓ Scan done — no new listings found in your zone(s) right now.";
           }
         }
-        await refreshRadarView();
         if (surfaced) toast(`🎯 ${surfaced} new listing(s) on the radar`, "success");
       }
     };
