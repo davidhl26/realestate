@@ -85,6 +85,19 @@ class RadarDB:
             self._write(data)
             return find
 
+    def purge_unverified(self) -> int:
+        """One-time cleanup: drop finds recorded before live Zillow
+        verification existed (they lack verified=True) — mostly sold/stale
+        junk the old pipeline let through. Returns how many were removed."""
+        with self._lock:
+            data = self._read()
+            before = len(data["finds"])
+            data["finds"] = [f for f in data["finds"] if f.get("verified")]
+            removed = before - len(data["finds"])
+            if removed:
+                self._write(data)
+            return removed
+
     def mark_all_seen(self):
         with self._lock:
             data = self._read()

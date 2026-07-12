@@ -2103,6 +2103,22 @@ def _resume_radar():
 
 
 @app.on_event("startup")
+def _purge_prefix_finds():
+    """One-time (owner request 2026-07-12): clear the Radar feed of finds
+    recorded BEFORE live Zillow verification existed — mostly sold/stale junk
+    the old pipeline let through. Deals already on the board are untouched."""
+    marker = DATA_DIR / ".radar-finds-purged"
+    if marker.exists():
+        return
+    try:
+        removed = radar_db.purge_unverified()
+        marker.write_text(f"removed {removed} find(s)\n")
+        log.info("Radar feed purged: %d pre-verification find(s) removed", removed)
+    except Exception:
+        log.exception("Radar finds purge failed")
+
+
+@app.on_event("startup")
 def _start_watch_scheduler():
     import threading
     if os.environ.get("FLIPBOARD_NO_SCHEDULER") == "1":
