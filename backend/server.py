@@ -1572,6 +1572,45 @@ def auction_recheck_all(payload: dict = Body(default={})):
 # Radar freshness: only surface homes listed in the last ~24h (Zillow
 # days_on_market 0 or 1 = just listed today/yesterday).
 _RADAR_FRESH_MAX_DOM = 1
+_RADAR_VERIFY_MAX = 12    # live-verify at most N candidates per watch run
+
+
+def _radar_verify(url: str):
+    """Live-check a Radar candidate on Zillow before it reaches the user.
+
+    The AI search is good at DISCOVERING listings but unreliable on status and
+    age — so Zillow's own homedetails page is the source of truth. Returns
+    (verdict, data):
+      "ok"         — confirmed FOR_SALE, and daysOnZillow within the window
+      "sold"       — page says it's pending/sold/off-market (not buyable)
+      "stale"      — active but older than the freshness window
+      "unverified" — no homedetails URL, blocked page, or scrape error (the AI
+                     may have hallucinated the listing) → caller drops it
+    On "ok", data carries Zillow's real price/beds/baths/sqft/photos so the
+    find shows exact numbers instead of AI estimates.
+    """
+    if "/homedetails/" not in (url or ""):
+        return "unverified", None
+    try:
+        data = scraper.scrape(url)
+    except Exception:
+        log.exception("radar verify: scrape failed for %s", url)
+        return "unverified", None
+    if not isinstance(data, dict) or data.get("error") or data.get("captcha_detected"):
+        return "unverified", None
+    status = (data.get("home_status") or "").strip().upper()
+    if not status:
+        return "unverified", None
+    if status != "FOR_SALE":
+        return "sold", data
+    dom = data.get("days_on_market")
+    try:
+        dom_val = int(dom) if dom is not None else None
+    except (TypeError, ValueError):
+        dom_val = None
+    if dom_val is not None and dom_val > _RADAR_FRESH_MAX_DOM:
+        return "stale", data
+    return "ok", data
 
 
 def _radar_config() -> dict:
@@ -1632,13 +1671,16 @@ def _radar_evaluate(listing: dict, cfg: dict):
 
 def _radar_process(watch: dict, new_listings: list) -> dict:
     """For each newly-seen listing, surface the ones listed in the last ~24h as
-    Radar finds (deduped). Ones that pass all criteria are flagged interesting
-    and auto-added to the board; the rest are shown for review. Returns a count
-    breakdown {found, fresh, surfaced, interesting, added, stale}."""
+    Radar finds (deduped by zpid/address). Each candidate is LIVE-VERIFIED on
+    its Zillow page (status FOR_SALE + daysOnZillow ≤ 1) before it reaches the
+    user — the AI only discovers; Zillow is the source of truth. Ones that pass
+    all criteria are flagged interesting; with auto_add on, every verified find
+    is added to the board. Returns a count breakdown."""
     from urllib.parse import quote
     cfg = _radar_config()
     c = {"found": len(new_listings or []), "fresh": 0, "surfaced": 0,
-         "interesting": 0, "added": 0, "stale": 0, "sold": 0, "unknown_age": 0}
+         "interesting": 0, "added": 0, "stale": 0, "sold": 0, "unknown_age": 0,
+         "verified": 0, "unverified": 0}
     if not cfg.get("enabled"):
         return c
     label = watch.get("label") or watch.get("location") or "Watch"
@@ -1649,6 +1691,7 @@ def _radar_process(watch: dict, new_listings: list) -> dict:
         except (TypeError, ValueError):
             return None
 
+    verify_budget = _RADAR_VERIFY_MAX
     for l in new_listings or []:
         try:
             # Active-only gate: drop anything not currently for sale (sold,
@@ -1674,8 +1717,53 @@ def _radar_process(watch: dict, new_listings: list) -> dict:
                 continue
             c["fresh"] += 1
             addr = (l.get("address") or "").strip()
-            if not addr or radar_db.has_address(addr):
+            if not addr:
+                continue
+            url = (l.get("url") or "").strip()
+            # zpid from the homedetails URL → exact dedup (immune to address
+            # formatting differences between scans).
+            m = re.search(r"/(\d+)_zpid", url)
+            zpid = m.group(1) if m else None
+            if radar_db.has_zpid(zpid) or radar_db.has_address(addr):
                 continue   # duplicate — already on the radar
+
+            # Live verification on Zillow — the page itself must say FOR_SALE
+            # and daysOnZillow ≤ 1. Kills sold/pending leftovers, stale
+            # listings and AI-hallucinated URLs before they reach the user.
+            if verify_budget <= 0:
+                c["unverified"] += 1
+                continue
+            verify_budget -= 1
+            verdict, zdata = _radar_verify(url)
+            if verdict == "sold":
+                c["sold"] += 1
+                continue
+            if verdict == "stale":
+                c["stale"] += 1
+                continue
+            if verdict == "unverified":
+                c["unverified"] += 1
+                log.info("radar %s: dropped unverifiable listing %s (%s)",
+                         label, addr, url or "no url")
+                continue
+            c["verified"] += 1
+            # Zillow's live data is the source of truth — overwrite AI guesses.
+            if zdata:
+                for src, dst in (("price", "price"), ("bedrooms", "beds"),
+                                 ("bathrooms", "baths"), ("sqft", "sqft"),
+                                 ("year_built", "year_built"),
+                                 ("city", "city"), ("state", "state"),
+                                 ("zip", "zip")):
+                    v = zdata.get(src)
+                    if v is not None and v != "":
+                        l[dst] = v
+                zdom = zdata.get("days_on_market")
+                try:
+                    if zdom is not None:
+                        dom_val = int(zdom)
+                except (TypeError, ValueError):
+                    pass
+
             # Full address (no repeated parts) + a Zillow URL.
             parts = [addr]
             city = (l.get("city") or "").strip()
@@ -1685,11 +1773,11 @@ def _radar_process(watch: dict, new_listings: list) -> dict:
             if tail and tail.lower() not in addr.lower():
                 parts.append(tail)
             full = ", ".join(p for p in parts if p)
-            url = l.get("url") or ("https://www.zillow.com/homes/" + quote(full or addr) + "_rb/")
+            url = url or ("https://www.zillow.com/homes/" + quote(full or addr) + "_rb/")
 
             # Score it if we have enough data (ARV present). Interesting ones are
-            # highlighted; but with auto_add on, EVERY fresh 24h listing is added
-            # to the board (status evaluating) and analyzed in the background.
+            # highlighted; but with auto_add on, EVERY verified 24h listing is
+            # added to the board (status evaluating) and analyzed in the background.
             interesting, info = _radar_evaluate(l, cfg)
             price = _num(l.get("price"))
             deal_id = None
@@ -1723,6 +1811,8 @@ def _radar_process(watch: dict, new_listings: list) -> dict:
                     "beds": l.get("beds"), "sqft": l.get("sqft"),
                     "days_on_market": dom_val, "watch_id": watch.get("id"),
                     "watch_label": label, "deal_id": deal_id,
+                    "zpid": zpid, "image": (zdata or {}).get("image"),
+                    "verified": True,
                     "interesting": bool(interesting and info)}
             if info:
                 find.update(price=info["price"], arv=info["arv"], rehab=info["rehab"],
@@ -1739,10 +1829,11 @@ def _radar_process(watch: dict, new_listings: list) -> dict:
                     c["interesting"] += 1
         except Exception:
             log.exception("radar: failed to process a listing")
-    log.info("radar %s: found=%d fresh=%d surfaced=%d interesting=%d added=%d "
-             "stale=%d sold=%d unknown_age=%d",
-             label, c["found"], c["fresh"], c["surfaced"], c["interesting"],
-             c["added"], c["stale"], c["sold"], c["unknown_age"])
+    log.info("radar %s: found=%d fresh=%d verified=%d surfaced=%d interesting=%d "
+             "added=%d stale=%d sold=%d unknown_age=%d unverified=%d",
+             label, c["found"], c["fresh"], c["verified"], c["surfaced"],
+             c["interesting"], c["added"], c["stale"], c["sold"],
+             c["unknown_age"], c["unverified"])
     return c
 
 
@@ -1836,7 +1927,8 @@ def radar_delete(find_id: str):
 # Real-time import: run every watch right now (instead of waiting for the hourly
 # scheduler). Runs in the background; the UI polls scan-status + refreshes.
 _radar_scan = {"running": False, "added": 0, "done": 0, "total": 0,
-               "found": 0, "fresh": 0, "surfaced": 0, "sold": 0, "old": 0, "error": ""}
+               "found": 0, "fresh": 0, "surfaced": 0, "sold": 0, "old": 0,
+               "unverified": 0, "error": ""}
 
 
 @app.post("/api/radar/scan")
@@ -1854,7 +1946,8 @@ def radar_scan():
 
     def _job():
         _radar_scan.update(running=True, added=0, done=0, total=len(watches),
-                           found=0, fresh=0, surfaced=0, sold=0, old=0, error="")
+                           found=0, fresh=0, surfaced=0, sold=0, old=0,
+                           unverified=0, error="")
         try:
             for w in watches:
                 try:
@@ -1868,6 +1961,7 @@ def radar_scan():
                     _radar_scan["surfaced"] += int(rc.get("surfaced") or 0)
                     _radar_scan["sold"] += int(rc.get("sold") or 0)
                     _radar_scan["old"] += int(rc.get("stale") or 0) + int(rc.get("unknown_age") or 0)
+                    _radar_scan["unverified"] += int(rc.get("unverified") or 0)
                 except Exception as e:
                     log.exception("radar scan: watch %s failed", w.get("id"))
                     _radar_scan["error"] = str(e)

@@ -52,14 +52,29 @@ class RadarDB:
         with self._lock:
             return any(_key(f.get("address")) == k for f in self._read().get("finds", []))
 
+    def has_zpid(self, zpid) -> bool:
+        """True if a find with this Zillow property id is already on the radar.
+        zpid dedup is exact — immune to address-format drift ("123 Main St" vs
+        "123 Main Street, Cleveland, OH")."""
+        z = str(zpid or "").strip()
+        if not z:
+            return False
+        with self._lock:
+            return any(str(f.get("zpid") or "").strip() == z
+                       for f in self._read().get("finds", []))
+
     def add_find(self, find: dict):
-        """Insert a find (deduped by address). Returns the stored find, or None
-        if that address is already on the radar."""
+        """Insert a find (deduped by zpid when present, else address). Returns
+        the stored find, or None if that home is already on the radar."""
         with self._lock:
             data = self._read()
+            z = str(find.get("zpid") or "").strip()
             k = _key(find.get("address"))
-            if k and any(_key(f.get("address")) == k for f in data["finds"]):
-                return None
+            for f in data["finds"]:
+                if z and str(f.get("zpid") or "").strip() == z:
+                    return None
+                if k and _key(f.get("address")) == k:
+                    return None
             find = dict(find)
             find.setdefault("id", "r" + _now().replace(":", "").replace("-", "").replace(".", "")[:20]
                              + "-" + str(len(data["finds"])))

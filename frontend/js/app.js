@@ -3434,14 +3434,16 @@
     finds = finds.slice().sort((a, b) => (b.interesting ? 1 : 0) - (a.interesting ? 1 : 0));
     const nInt = finds.filter(f => f.interesting).length;
     if (st && !paused) st.textContent = finds.length
-      ? `${finds.length} listing(s) from the last 24h — ${nInt} pass all your criteria.`
+      ? `${finds.length} listing(s) from the last 24h, live-verified on Zillow — ${nInt} pass all your criteria.`
       : "";
     if (!finds.length) {
       feed.innerHTML = `<div class="card"><p class="muted" style="margin:0;">No finds yet. <strong>Add a zone above</strong> (e.g. “Cleveland, OH”), then hit <strong>⚡ Scan now</strong> — it lists the homes posted in the last 24 hours and flags the ones that pass your criteria.</p></div>`;
     } else {
       const K = v => (v == null ? "—" : "$" + Math.round(Number(v) / 1000) + "K");
       feed.innerHTML = `<div class="deals-grid">${finds.map(f => {
-        const via = escape([f.city, f.state].filter(Boolean).join(", ")) + " · via " + escape(f.watch_label || "watch");
+        const via = escape([f.city, f.state].filter(Boolean).join(", ")) + " · via " + escape(f.watch_label || "watch")
+          + (f.verified ? ' · <span style="color:var(--green)">Zillow ✓</span>' : "");
+        const thumb = f.image ? `<img src="${escape(f.image)}" alt="" style="width:100%; height:130px; object-fit:cover; border-radius:8px; margin-bottom:8px;">` : "";
         const zBtn = f.url ? `<a class="btn ghost" href="${escape(f.url)}" target="_blank" rel="noopener" style="font-size:12px;">Zillow ↗</a>` : "";
         const delBtn = `<button class="btn ghost radar-del" data-id="${escape(f.id)}" title="Dismiss" style="margin-left:auto; font-size:12px;">🗑</button>`;
         if (f.interesting) {
@@ -3449,6 +3451,7 @@
           const reasons = (f.reasons || []).map(r => `<span class="radar-reason">${escape(r)}</span>`).join("");
           const dealBtn = f.deal_id ? `<button class="btn primary radar-open" data-deal="${escape(f.deal_id)}" style="font-size:12px;">Open deal →</button>` : "";
           return `<div class="card radar-card${f.seen ? "" : " radar-new"}">
+            ${thumb}
             <div style="display:flex; justify-content:space-between; gap:8px; align-items:flex-start;">
               <div style="font-weight:700;">${escape(f.address || "?")}</div>
               <span class="pill green" style="height:fit-content;">✓ INTERESTING</span>
@@ -3470,6 +3473,7 @@
           ? `<button class="btn radar-open" data-deal="${escape(f.deal_id)}" style="font-size:12px;">Open deal →</button>`
           : `<button class="btn primary radar-add" data-id="${escape(f.id)}" style="font-size:12px;">➕ Add to board</button>`;
         return `<div class="card radar-card${f.seen ? "" : " radar-new"}" style="opacity:.94;">
+          ${thumb}
           <div style="display:flex; justify-content:space-between; gap:8px; align-items:flex-start;">
             <div style="font-weight:700;">${escape(f.address || "?")}</div>
             <span class="pill" style="height:fit-content; background:rgba(127,127,127,0.14);">🆕 last 24h</span>
@@ -3538,15 +3542,18 @@
         _radarScanning = false;
         if (btn) { btn.disabled = false; btn.innerHTML = "⚡ Scan now"; }
         const surfaced = s ? (s.surfaced || 0) : 0, added = s ? (s.added || 0) : 0, found = s ? (s.found || 0) : 0;
-        const excl = s ? ((s.sold || 0) + (s.old || 0)) : 0;
-        const exclTxt = excl ? ` (${s.sold || 0} sold/off-market + ${s.old || 0} older than 24h excluded)` : "";
+        const exclParts = [];
+        if (s && s.sold) exclParts.push(`${s.sold} sold/off-market`);
+        if (s && s.old) exclParts.push(`${s.old} older than 24h`);
+        if (s && s.unverified) exclParts.push(`${s.unverified} unverifiable on Zillow`);
+        const exclTxt = exclParts.length ? ` (excluded: ${exclParts.join(" + ")})` : "";
         if (st) {
           if (s && s.error && !surfaced) {
             st.innerHTML = `<span style="color:var(--red)">Scan issue: ${escape(s.error)}</span>`;
           } else if (surfaced) {
-            st.textContent = `✓ Scan done — ${surfaced} active listing(s) from the last 24h${added ? `, ${added} added to your board` : ""}${exclTxt}.`;
+            st.textContent = `✓ Scan done — ${surfaced} Zillow-verified listing(s) from the last 24h${added ? `, ${added} added to your board` : ""}${exclTxt}.`;
           } else if (found) {
-            st.textContent = `✓ Scan done — ${found} found, but none were both active and posted in the last 24h${exclTxt}. Try again later or widen the zone.`;
+            st.textContent = `✓ Scan done — ${found} found, but none could be verified as active and posted in the last 24h${exclTxt}. Try again later or widen the zone.`;
           } else {
             st.textContent = "✓ Scan done — no new listings found in your zone(s) right now.";
           }
