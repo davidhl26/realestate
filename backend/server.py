@@ -2119,6 +2119,28 @@ def _purge_prefix_finds():
 
 
 @app.on_event("startup")
+def _watches_manual_only():
+    """One-time (owner request 2026-07-12): stop AUTO scans — every watch goes
+    manual-only (interval 0). The Radar itself stays ON so ⚡ Scan now works
+    and manual-scan finds keep being verified + auto-added. Marker-guarded so
+    a frequency deliberately picked later in Sourcing is respected."""
+    marker = DATA_DIR / ".watches-manual-only"
+    if marker.exists():
+        return
+    try:
+        changed = 0
+        for w in watches_db.list_watches():
+            if int(w.get("interval_min") or 0) != 0:
+                w["interval_min"] = 0
+                watches_db.save(w)
+                changed += 1
+        marker.write_text("done\n")
+        log.info("Watches set to manual-only (%d changed) — Radar scans only via Scan now", changed)
+    except Exception:
+        log.exception("Manual-only migration failed")
+
+
+@app.on_event("startup")
 def _start_watch_scheduler():
     import threading
     if os.environ.get("FLIPBOARD_NO_SCHEDULER") == "1":
@@ -2144,6 +2166,11 @@ def watches_run_stale(payload: dict = Body(default={})):
     cutoff = dt.now(tz.utc) - timedelta(hours=max_age_h)
     stale = []
     for w in watches_db.list_watches():
+        try:
+            if int(w.get("interval_min") or 0) <= 0:
+                continue   # manual-only — never auto-run on app open
+        except (TypeError, ValueError):
+            pass
         lr = w.get("last_run")
         try:
             fresh = lr and dt.fromisoformat(lr) > cutoff

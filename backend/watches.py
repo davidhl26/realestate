@@ -80,8 +80,10 @@ class WatchesDB:
             "beds_min": criteria.get("beds_min"),
             "property_type": criteria.get("property_type"),
             "max_listings": min(int(criteria.get("max_listings") or 15), 30),
-            # Auto-run cadence in minutes (60 = hourly). 0 = manual only.
-            "interval_min": int(criteria.get("interval_min") if criteria.get("interval_min") is not None else 60),
+            # Auto-run cadence in minutes (60 = hourly). 0 = manual only —
+            # the DEFAULT: scans cost AI + proxy credits, so they only run
+            # when explicitly requested (owner request 2026-07-12).
+            "interval_min": int(criteria.get("interval_min") if criteria.get("interval_min") is not None else 0),
             "created_at": _now(),
             "last_run": None,
             "run_count": 0,
