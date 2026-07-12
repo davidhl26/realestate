@@ -2075,6 +2075,34 @@ def _pause_radar():
 
 
 @app.on_event("startup")
+def _resume_radar():
+    """One-time (owner request 2026-07-12): turn the Radar back ON now that
+    every find is live-verified on its Zillow page (FOR_SALE + ≤ 1 day on
+    market) before reaching the user. Restores hourly scans on paused watches.
+    Guarded by a marker so a later manual pause in Settings is respected.
+    Registered after _pause_radar on purpose — on a fresh data dir the pause
+    runs first and this immediately re-enables."""
+    marker = DATA_DIR / ".radar-resumed"
+    if marker.exists():
+        return
+    try:
+        cfg = ai_research.read_config()
+        cfg["radar_enabled"] = True
+        cfg["radar_auto_add"] = True
+        ai_research.write_config(cfg)
+        resumed = 0
+        for w in watches_db.list_watches():
+            if int(w.get("interval_min") or 0) == 0:
+                w["interval_min"] = 60   # back to hourly scans
+                watches_db.save(w)
+                resumed += 1
+        marker.write_text("done\n")
+        log.info("Radar resumed (enabled + %d watch(es) back to hourly)", resumed)
+    except Exception:
+        log.exception("Radar resume failed")
+
+
+@app.on_event("startup")
 def _start_watch_scheduler():
     import threading
     if os.environ.get("FLIPBOARD_NO_SCHEDULER") == "1":
