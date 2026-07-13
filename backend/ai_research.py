@@ -658,6 +658,54 @@ End with ONE JSON code block and NOTHING after:
 ```"""
 
 
+URL_RESOLVE_SYSTEM = """You are a real-estate URL resolver. For EACH address given, find its exact Zillow listing URL (https://www.zillow.com/homedetails/<street-city-state-zip-slug>/<zpid>_zpid/) by running a web search like "<address> zillow".
+
+RULES:
+- Only return URLs that actually appeared in your search results. NEVER invent or guess a zpid or slug.
+- Use each address EXACTLY as given as the JSON key (character for character).
+- If you cannot find the Zillow page for an address, use null for that key.
+
+CRITICAL: End your response with a SINGLE JSON code block and NO text after it:
+```json
+{"urls": {"<address exactly as given>": "<zillow homedetails url or null>"}}
+```"""
+
+
+def resolve_listing_urls(addresses: list, area_hint: str = "") -> dict:
+    """ONE batched Claude call: address → exact Zillow homedetails URL.
+
+    Recovers listings the area search returned without their link — they
+    would otherwise be dropped as unverifiable. Returns {address: url} for
+    hits only."""
+    api_key = get_api_key()
+    if not api_key or not addresses:
+        return {}
+    import anthropic
+    client = anthropic.Anthropic(api_key=api_key)
+    lines = [f"Find the exact Zillow listing URL for these {len(addresses)} properties"
+             + (f" (area: {area_hint})" if area_hint else "") + ":"]
+    lines += [f"{i + 1}. {a}" for i, a in enumerate(addresses)]
+    try:
+        message = client.messages.create(
+            model=get_model(),
+            max_tokens=4000,
+            system=URL_RESOLVE_SYSTEM,
+            tools=[{"type": "web_search_20250305", "name": "web_search",
+                    "max_uses": min(2 * len(addresses), 20)}],
+            messages=[{"role": "user", "content": "\n".join(lines)}],
+        )
+    except Exception:
+        log.exception("URL resolve call failed")
+        return {}
+    text = "\n".join(b.text for b in message.content if hasattr(b, "text"))
+    data = _extract_json(text) or {}
+    out = {}
+    for addr, url in (data.get("urls") or {}).items():
+        if isinstance(url, str) and "/homedetails/" in url:
+            out[addr] = url.strip()
+    return out
+
+
 def find_area_sales(deal: dict, max_sales: int = 30, min_sales: int = 20) -> dict:
     """Recent sold properties around the deal's address (for the map's sold
     layer + price list). Runs top-up web-search passes until it has at least

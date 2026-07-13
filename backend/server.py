@@ -1306,6 +1306,8 @@ def search_listings(payload: dict = Body(...)):
             params[k] = payload[k]
     res = ai_research.find_listings_in_area(params, max_listings=max_listings)
     if res.get("ok"):
+        _recover_missing_urls(res.get("listings") or [],
+                              hint=params.get("search_term", ""))
         res = _verify_search_listings(res)
     return res
 
@@ -1647,6 +1649,33 @@ def _find_deal_by_zpid(zpid):
     return None
 
 
+def _recover_missing_urls(listings, hint: str = "", cap: int = 15) -> int:
+    """The AI search often returns fresh addresses WITHOUT their Zillow link —
+    those get dropped as unverifiable. Resolve the missing links in ONE
+    batched web-search call so they can be verified instead. Returns how many
+    links were recovered (listings are patched in place)."""
+    missing = [l for l in (listings or [])
+               if l.get("address") and "/homedetails/" not in (l.get("url") or "")][:cap]
+    if not missing:
+        return 0
+    try:
+        resolved = ai_research.resolve_listing_urls(
+            [l["address"] for l in missing], area_hint=hint)
+    except Exception:
+        log.exception("URL recovery failed")
+        return 0
+    norm = lambda s: re.sub(r"[^a-z0-9]+", " ", (s or "").lower()).strip()
+    by_key = {norm(a): u for a, u in resolved.items()}
+    hits = 0
+    for l in missing:
+        u = by_key.get(norm(l["address"]))
+        if u:
+            l["url"] = u
+            hits += 1
+    log.info("URL recovery: %d/%d missing Zillow links resolved", hits, len(missing))
+    return hits
+
+
 def _radar_verify(url: str, max_dom: int = None):
     """Live-check a Radar candidate on Zillow before it reaches the user.
 
@@ -1763,6 +1792,19 @@ def _radar_process(watch: dict, new_listings: list) -> dict:
         fresh_max = max(1, min(int(watch.get("max_dom") or _RADAR_FRESH_MAX_DOM), 30))
     except (TypeError, ValueError):
         fresh_max = _RADAR_FRESH_MAX_DOM
+
+    # URL recovery — only for candidates that would reach verification (the
+    # AI says active + inside the freshness window) but came without a link.
+    def _ai_fresh(l):
+        status = (l.get("listing_status") or "").strip().lower()
+        if status and not any(k in status for k in ("for_sale", "for sale", "active", "new")):
+            return False
+        try:
+            return int(l.get("days_on_market")) <= fresh_max
+        except (TypeError, ValueError):
+            return False
+    _recover_missing_urls([l for l in (new_listings or []) if _ai_fresh(l)],
+                          hint=watch.get("location", ""))
 
     def _num(v):
         try:
