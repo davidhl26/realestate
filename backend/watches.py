@@ -179,7 +179,9 @@ class WatchesDB:
             snap = {k: l.get(k) for k in
                     ("url", "address", "city", "state", "zip", "price", "beds",
                      "baths", "sqft", "year_built", "last_renovated",
-                     "arv_estimate", "rehab_estimate", "days_on_market")}
+                     "arv_estimate", "rehab_estimate", "days_on_market",
+                     "listing_status", "zpid", "image", "home_type",
+                     "zestimate", "_preverified")}
             if key not in tracked:
                 tracked[key] = {**snap, "first_seen": now, "last_seen": now,
                                 "misses": 0, "status": "active",

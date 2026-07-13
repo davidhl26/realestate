@@ -1304,6 +1304,28 @@ def search_listings(payload: dict = Body(...)):
     for k in ("price_max", "price_min", "beds_min", "baths_min", "sqft_min", "property_type"):
         if payload.get(k):
             params[k] = payload[k]
+
+    # DISCOVERY — Zillow's own search API first for location searches
+    # (real-time newest listings, already verified data, 1 request);
+    # AI web search as fallback and for search-URL/bounds inputs.
+    loc_term = (params.get("search_term") or "").strip()
+    if loc_term and zillow_api.is_configured():
+        api_listings = zillow_api.search_newest(
+            location=loc_term,
+            max_dom=payload.get("max_dom") or 7,   # browse default: last 7 days
+            price_min=params.get("price_min"), price_max=params.get("price_max"),
+            beds_min=params.get("beds_min"), baths_min=params.get("baths_min"),
+            sqft_min=params.get("sqft_min"),
+            property_type=params.get("property_type"),
+            limit=max_listings)
+        if api_listings is not None:
+            for l in api_listings:
+                l.pop("_preverified", None)
+                l["verified"] = True
+            return {"ok": True, "area_label": loc_term, "listings": api_listings,
+                    "removed_sold": 0, "unverified": 0, "discovery": "zillow-api",
+                    "notes": f"{len(api_listings)} newest listings straight from Zillow"}
+
     res = ai_research.find_listings_in_area(params, max_listings=max_listings)
     if res.get("ok"):
         _recover_missing_urls(res.get("listings") or [],
@@ -1872,18 +1894,23 @@ def _radar_process(watch: dict, new_listings: list, should_stop=None) -> dict:
             # zpid from the homedetails URL → exact dedup (immune to address
             # formatting differences between scans).
             m = re.search(r"/(\d+)_zpid", url)
-            zpid = m.group(1) if m else None
+            zpid = (m.group(1) if m else None) or (str(l["zpid"]) if l.get("zpid") else None)
             if radar_db.has_zpid(zpid) or radar_db.has_address(addr):
                 continue   # duplicate — already on the radar
 
             # Live verification on Zillow — the page itself must say FOR_SALE
-            # and daysOnZillow ≤ 1. Kills sold/pending leftovers, stale
-            # listings and AI-hallucinated URLs before they reach the user.
-            if verify_budget <= 0:
-                c["unverified"] += 1
-                continue
-            verify_budget -= 1
-            verdict, zdata = _radar_verify(url, fresh_max)
+            # and daysOnZillow ≤ the window. Kills sold/pending leftovers,
+            # stale listings and AI-hallucinated URLs before they reach the
+            # user. Candidates from Zillow's own search API are already
+            # authoritative (_preverified) — no extra call needed.
+            if l.get("_preverified"):
+                verdict, zdata = "ok", None
+            else:
+                if verify_budget <= 0:
+                    c["unverified"] += 1
+                    continue
+                verify_budget -= 1
+                verdict, zdata = _radar_verify(url, fresh_max)
             if verdict == "sold":
                 c["sold"] += 1
                 continue
@@ -1985,7 +2012,8 @@ def _radar_process(watch: dict, new_listings: list, should_stop=None) -> dict:
                     "beds": l.get("beds"), "sqft": l.get("sqft"),
                     "days_on_market": dom_val, "watch_id": watch.get("id"),
                     "watch_label": label, "deal_id": deal_id,
-                    "zpid": zpid, "image": (zdata or {}).get("image"),
+                    "zpid": zpid,
+                    "image": (zdata or {}).get("image") or l.get("image"),
                     "verified": True,
                     "interesting": bool(interesting and info)}
             if info:
@@ -2020,21 +2048,41 @@ def _run_watch(watch_id: str, should_stop=None) -> dict:
     w = watches_db.get(watch_id)
     if not w:
         return {"ok": False, "error": "watch not found"}
-    params = {"search_term": w.get("location", "")}
-    for k in ("price_max", "price_min", "beds_min", "baths_min", "sqft_min",
-              "property_type", "max_dom"):
-        if w.get(k):
-            params[k] = w[k]
-    res = ai_research.find_listings_in_area(params, max_listings=w.get("max_listings") or 15)
-    if not res.get("ok"):
-        return {"ok": False, "error": res.get("error", "search failed")}
+
+    # DISCOVERY — Zillow's own search API first (deterministic newest-first,
+    # real-time, 1 request); the AI web search only as fallback (search
+    # engines index Zillow pages days late, so it rarely sees fresh listings).
+    listings, area_label, discovery = None, w.get("location", ""), "zillow-api"
+    if zillow_api.is_configured():
+        listings = zillow_api.search_newest(
+            location=w.get("location", ""),
+            max_dom=w.get("max_dom") or 1,
+            price_min=w.get("price_min"), price_max=w.get("price_max"),
+            beds_min=w.get("beds_min"), baths_min=w.get("baths_min"),
+            sqft_min=w.get("sqft_min"), property_type=w.get("property_type"),
+            limit=int(w.get("max_listings") or 15))
+    if listings is None:
+        discovery = "ai"
+        params = {"search_term": w.get("location", "")}
+        for k in ("price_max", "price_min", "beds_min", "baths_min", "sqft_min",
+                  "property_type", "max_dom"):
+            if w.get(k):
+                params[k] = w[k]
+        res = ai_research.find_listings_in_area(params, max_listings=w.get("max_listings") or 15)
+        if not res.get("ok"):
+            return {"ok": False, "error": res.get("error", "search failed")}
+        listings = res.get("listings") or []
+        area_label = res.get("area_label", "")
+    log.info("watch %s: discovery via %s — %d listing(s)", watch_id, discovery, len(listings))
+
     if should_stop and should_stop():
-        return {"ok": True, "cancelled": True, "area_label": res.get("area_label", ""),
-                "listings_found": len(res.get("listings") or []),
+        return {"ok": True, "cancelled": True, "area_label": area_label,
+                "listings_found": len(listings),
                 "radar": {}, "radar_added": 0}
-    out = watches_db.apply_run(watch_id, res.get("listings") or [])
-    out["area_label"] = res.get("area_label", "")
-    out["listings_found"] = len(res.get("listings") or [])
+    out = watches_db.apply_run(watch_id, listings)
+    out["area_label"] = area_label
+    out["listings_found"] = len(listings)
+    out["discovery"] = discovery
     try:
         rc = _radar_process(w, out.get("new_listings") or [], should_stop=should_stop)
         out["radar"] = rc
