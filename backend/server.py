@@ -1860,6 +1860,7 @@ def _radar_process(watch: dict, new_listings: list, should_stop=None) -> dict:
             return None
 
     verify_budget = _RADAR_VERIFY_MAX
+    comps_budget = 15   # comps-ARV lookups per run (1 API request each)
     for l in new_listings or []:
         if should_stop and should_stop():
             log.info("radar %s: scan cancelled — remaining listings skipped", label)
@@ -1976,6 +1977,15 @@ def _radar_process(watch: dict, new_listings: list, should_stop=None) -> dict:
             full = ", ".join(p for p in parts if p)
             url = url or ("https://www.zillow.com/homes/" + quote(full or addr) + "_rb/")
 
+            # ARV from REAL comparable sales (1 API request) so every card can
+            # show profitability — 75th pct of sold-comp $/sqft × subject sqft.
+            if (l.get("arv_estimate") in (None, 0, "") and zpid
+                    and zillow_api.is_configured() and comps_budget > 0):
+                comps_budget -= 1
+                ca = zillow_api.comparable_arv(zpid, subject_sqft=l.get("sqft"))
+                if ca:
+                    l["arv_estimate"], l["comps_count"] = ca
+
             # Score it if we have enough data (ARV present). Interesting ones are
             # highlighted; but with auto_add on, EVERY verified 24h listing is
             # added to the board (status evaluating) and analyzed in the background.
@@ -2014,7 +2024,8 @@ def _radar_process(watch: dict, new_listings: list, should_stop=None) -> dict:
                     "watch_label": label, "deal_id": deal_id,
                     "zpid": zpid,
                     "image": (zdata or {}).get("image") or l.get("image"),
-                    "verified": True,
+                    "verified": True, "comps_count": l.get("comps_count"),
+                    "baths": l.get("baths"),
                     "interesting": bool(interesting and info)}
             if info:
                 find.update(price=info["price"], arv=info["arv"], rehab=info["rehab"],

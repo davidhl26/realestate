@@ -88,6 +88,54 @@ def first_image(zpid) -> Optional[str]:
     return None
 
 
+def comparable_arv(zpid, subject_sqft=None):
+    """ARV proxy from Zillow's own comparable homes (ONE request).
+
+    Uses the 75th percentile of SOLD comps' $/sqft × the subject's sqft —
+    the top of the sold range approximates post-rehab condition (falls back
+    to the 75th percentile of raw sold prices when sqft is missing).
+    Returns (arv, n_sold_comps) or None when fewer than 2 sold comps."""
+    d = _get("/property/comps", {"zpid": str(zpid)})
+    if not d:
+        return None
+    sold = []
+    for c in (d.get("comparables") or []):
+        p = (c or {}).get("property") or {}
+        if (p.get("homeStatus") or "").upper() != "RECENTLY_SOLD":
+            continue
+        try:
+            price = float(p.get("price") or 0)
+        except (TypeError, ValueError):
+            continue
+        if price < 10000:   # junk/rent rows
+            continue
+        sold.append({"price": price, "sqft": p.get("livingAreaValue")})
+    if len(sold) < 2:
+        return None
+
+    def _pct75(vals):
+        vals = sorted(vals)
+        return vals[max(0, int(round(0.75 * (len(vals) - 1))))]
+
+    ppsf = []
+    for s in sold:
+        try:
+            sq = float(s["sqft"] or 0)
+            if sq > 200:
+                ppsf.append(s["price"] / sq)
+        except (TypeError, ValueError):
+            pass
+    try:
+        subject_sqft = float(subject_sqft or 0)
+    except (TypeError, ValueError):
+        subject_sqft = 0
+    if subject_sqft > 200 and len(ppsf) >= 2:
+        arv = _pct75(ppsf) * subject_sqft
+    else:
+        arv = _pct75([s["price"] for s in sold])
+    return int(round(arv / 500.0) * 500), len(sold)
+
+
 # ---- Discovery: newest listings straight from Zillow's search --------------
 # Zillow's own days-on-Zillow buckets (the API rejects anything else).
 _DOZ_BUCKETS = (1, 7, 14, 30, 90)

@@ -3466,7 +3466,7 @@
             <div class="muted" style="font-size:12px;">${via}</div>
             <div style="display:flex; gap:14px; margin:9px 0 2px; font-size:13px; flex-wrap:wrap;">
               <span><span class="muted">Price</span> <strong>${K(f.price)}</strong></span>
-              <span><span class="muted">ARV</span> <strong>${K(f.arv)}</strong></span>
+              <span><span class="muted">ARV${f.comps_count ? ` (×${f.comps_count} comps)` : ""}</span> <strong>${K(f.arv)}</strong></span>
               <span><span class="muted">Rehab</span> ${K(f.rehab)}</span>
             </div>
             <div style="font-weight:800; color:${marginCol}; margin-top:2px;">▲ ${K(f.profit)} profit · ${Math.round(f.margin_pct)}% margin${f.roi ? ` · ${Math.round(f.roi)}% ROI` : ""} · Risk ${escape(f.risk_grade || "?")}</div>
@@ -3474,8 +3474,18 @@
             <div style="display:flex; gap:8px; margin-top:10px;">${dealBtn}${zBtn}${delBtn}</div>
           </div>`;
         }
-        // Non-scored fresh listing — surfaced for review
-        const specs = [f.beds ? f.beds + "bd" : "", f.sqft ? Number(f.sqft).toLocaleString("en-US") + " sf" : ""].filter(Boolean).join(" · ");
+        // Non-flagged fresh listing — surfaced for review, with the quick
+        // flip math when comps gave us an ARV: Price → Rehab → ARV → profit.
+        const specs = [f.beds ? f.beds + "bd" : "", f.baths ? f.baths + "ba" : "",
+                       f.sqft ? Number(f.sqft).toLocaleString("en-US") + " sf" : ""].filter(Boolean).join(" · ");
+        let flipMath = `<div class="muted" style="font-size:12px;">New listing — add it to analyze ARV, profit & risk.</div>`;
+        if (f.arv != null) {
+          const col = f.margin_pct >= 20 ? "var(--green)" : f.margin_pct >= 12 ? "#e8a93b" : "var(--red)";
+          flipMath = `<div style="font-size:12.5px; margin-top:3px;">
+              <span class="muted">ARV (sold comps${f.comps_count ? " ×" + f.comps_count : ""})</span> <strong>${K(f.arv)}</strong>
+              <span class="muted"> · Rehab ~</span> ${K(f.rehab)}</div>
+            <div style="font-weight:800; color:${col}; margin-top:2px;">▲ ${K(f.profit)} profit · ${Math.round(f.margin_pct)}% margin${f.roi ? ` · ${Math.round(f.roi)}% ROI` : ""}</div>`;
+        }
         const addBtn = f.deal_id
           ? `<button class="btn radar-open" data-deal="${escape(f.deal_id)}" style="font-size:12px;">Open deal →</button>`
           : `<button class="btn primary radar-add" data-id="${escape(f.id)}" style="font-size:12px;">➕ Add to board</button>`;
@@ -3487,7 +3497,7 @@
           </div>
           <div class="muted" style="font-size:12px;">${via}</div>
           <div style="margin:8px 0 2px; font-size:13px;"><span class="muted">Price</span> <strong>${K(f.price)}</strong>${specs ? ` · ${escape(specs)}` : ""}</div>
-          <div class="muted" style="font-size:12px;">New listing — add it to analyze ARV, profit & risk.</div>
+          ${flipMath}
           <div style="display:flex; gap:8px; margin-top:10px;">${addBtn}${zBtn}${delBtn}</div>
         </div>`;
       }).join("")}</div>`;
