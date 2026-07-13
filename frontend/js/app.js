@@ -3046,7 +3046,11 @@
       if (!res.ok) { st.innerHTML = `<span style="color:var(--red)">${escape(res.error || "Search failed")}</span>`; return; }
       _searchListings = res.listings || [];
       _searchAreaLabel = res.area_label || "";
-      st.textContent = `✓ ${_searchListings.length} listing(s)${res.area_label ? " — " + res.area_label : ""}`;
+      const extras = [];
+      if (res.removed_sold) extras.push(`${res.removed_sold} sold/off-market removed`);
+      if (res.unverified) extras.push(`${res.unverified} not verifiable ⚠`);
+      st.textContent = `✓ ${_searchListings.length} listing(s)${res.area_label ? " — " + res.area_label : ""}`
+        + (extras.length ? ` (${extras.join(" · ")})` : "");
       $("#search-controls").style.display = _searchListings.length ? "flex" : "none";
       renderSearchResults();
     } catch (e) { st.innerHTML = `<span style="color:var(--red)">${escape(e.message)}</span>`; }
@@ -3082,10 +3086,13 @@
         profitTag = `<div style="margin-top:4px; font-weight:700; color:${col};">▲ $${Math.round(fin.profit / 1000)}K profit${fin.margin != null ? ` · ${Math.round(fin.margin)}%` : ""}</div>`;
       }
       const arvLine = fin.arv != null ? `<span class="muted">ARV ~$${Math.round(fin.arv / 1000)}K · Rehab ~$${Math.round((fin.rehab || 0) / 1000)}K</span>` : "";
+      const vTag = l.verified
+        ? '<span class="pill green" style="height:fit-content;" title="Confirmed for sale on its Zillow page">Zillow ✓</span>'
+        : '<span class="pill" style="height:fit-content; background:rgba(232,169,59,0.18); color:#e8a93b;" title="Could not confirm on Zillow — may be sold or inaccurate">⚠ unverified</span>';
       return `<div class="card search-result">
         <div style="display:flex; justify-content:space-between; gap:6px;">
           <div style="font-weight:600;">${escape(l.address || "?")}</div>
-          ${isNew ? '<span class="pill green" style="height:fit-content;">NEW</span>' : ""}
+          <span style="display:flex; gap:4px;">${isNew ? '<span class="pill green" style="height:fit-content;">NEW</span>' : ""}${vTag}</span>
         </div>
         <div class="muted" style="font-size:12px;">${escape([l.city, l.state, l.zip].filter(Boolean).join(" "))}</div>
         <div style="margin:7px 0 2px; font-size:13px;"><span class="money">${price}</span> · ${l.beds || "?"}bd / ${l.baths || "?"}ba${l.sqft ? ` · ${l.sqft} sf` : ""}</div>

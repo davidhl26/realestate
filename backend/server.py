@@ -1304,7 +1304,59 @@ def search_listings(payload: dict = Body(...)):
     for k in ("price_max", "price_min", "beds_min", "baths_min", "sqft_min", "property_type"):
         if payload.get(k):
             params[k] = payload[k]
-    return ai_research.find_listings_in_area(params, max_listings=max_listings)
+    res = ai_research.find_listings_in_area(params, max_listings=max_listings)
+    if res.get("ok"):
+        res = _verify_search_listings(res)
+    return res
+
+
+def _verify_search_listings(res: dict, max_checks: int = 20) -> dict:
+    """Live-verify interactive search results on their Zillow pages — same
+    source-of-truth rule as the Radar: the AI only discovers. Listings whose
+    page says sold/pending/off-market are REMOVED; verified ones get the
+    page's real price/beds/sqft/days-on-market; the rest are kept but flagged
+    verified=false so the UI can warn. Checks run in parallel (5 workers)."""
+    from concurrent.futures import ThreadPoolExecutor
+    listings = res.get("listings") or []
+    to_check = []
+    for l in listings:
+        if "/homedetails/" in (l.get("url") or "") and len(to_check) < max_checks:
+            to_check.append(l)
+        else:
+            l["verified"] = False
+
+    def _check(l):
+        # Huge max_dom: the browse list keeps older actives — we only enforce
+        # ACTIVE status here; real days_on_market is filled in for sorting.
+        return l, *_radar_verify(l.get("url"), max_dom=10**6)
+
+    dropped_ids, removed = set(), 0
+    try:
+        with ThreadPoolExecutor(max_workers=5) as ex:
+            for l, verdict, zdata in ex.map(_check, to_check):
+                if verdict == "sold":
+                    dropped_ids.add(id(l))
+                    removed += 1
+                    continue
+                if verdict == "ok" and zdata:
+                    l["verified"] = True
+                    for src, dst in (("price", "price"), ("bedrooms", "beds"),
+                                     ("bathrooms", "baths"), ("sqft", "sqft"),
+                                     ("year_built", "year_built"),
+                                     ("days_on_market", "days_on_market")):
+                        v = zdata.get(src)
+                        if v is not None and v != "":
+                            l[dst] = v
+                else:
+                    l["verified"] = False
+    except Exception:
+        log.exception("search verify pass failed — returning unverified results")
+    res["listings"] = [l for l in listings if id(l) not in dropped_ids]
+    res["removed_sold"] = removed
+    res["unverified"] = sum(1 for l in res["listings"] if not l.get("verified"))
+    log.info("search verify: %d checked, %d sold/off-market removed, %d unverified",
+             len(to_check), removed, res["unverified"])
+    return res
 
 
 _STREET_WORD_RE = re.compile(
