@@ -21,8 +21,11 @@ RUN pip install --no-cache-dir --upgrade pip && \
     # PyWebView isn't needed on the server (no GUI), strip it out
     pip uninstall -y pywebview || true
 
-# Install Playwright's Chromium browser
-RUN playwright install chromium
+# Install Playwright's Chromium browser, plus patchright's (Scrapling's
+# stealth engine — same 1.61 revision, but the explicit install makes the
+# stealth fallback deterministic instead of relying on a shared cache).
+RUN playwright install chromium && \
+    patchright install chromium
 
 # App code (uvicorn entry point is backend.server:app — no top-level server.py needed)
 COPY backend ./backend

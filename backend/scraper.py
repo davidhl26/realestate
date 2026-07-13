@@ -16,6 +16,8 @@ Known limitations:
 """
 
 import json
+import logging
+import os
 import re
 from pathlib import Path
 from typing import Optional
@@ -23,6 +25,51 @@ from urllib.parse import urlparse
 
 import httpx
 from bs4 import BeautifulSoup
+
+_slog = logging.getLogger("flip-board.scraper")
+
+
+# ---- Scrapling stealth fallback (optional dependency) ----------------------
+# Zillow/Redfin block plain datacenter requests; ScraperAPI (paid credits) is
+# the primary bypass. When it has no key, errors out, or returns a captcha
+# page, we retry ONCE with Scrapling's stealth Chromium (free, ~5-15s). The
+# import is guarded so environments without scrapling installed (e.g. the
+# local Python 3.9 venv) skip it silently and keep the old behavior.
+_SCRAPLING_TIMEOUT_MS = 60000
+
+
+def _scrapling_available() -> bool:
+    if os.environ.get("SCRAPLING_DISABLED") == "1":
+        return False
+    try:
+        import scrapling  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
+def _fetch_via_scrapling(url: str) -> Optional[str]:
+    """Fetch a page with Scrapling's stealth browser. Returns HTML or None —
+    never raises (this is a best-effort fallback)."""
+    try:
+        from scrapling.fetchers import StealthyFetcher
+        page = StealthyFetcher.fetch(
+            url,
+            headless=True,
+            block_ads=True,
+            disable_resources=True,   # fonts/images/css skipped — we only parse markup
+            timeout=_SCRAPLING_TIMEOUT_MS,
+        )
+        if getattr(page, "status", None) == 200:
+            html = str(page.html_content)
+            # A real listing page is large; tiny bodies are block/interstitial pages.
+            if html and len(html) > 5000 and "Press & Hold" not in html:
+                _slog.info("Scrapling stealth fetch OK for %s (%d bytes)", url, len(html))
+                return html
+        _slog.info("Scrapling fetch unusable for %s (status=%s)", url, getattr(page, "status", "?"))
+    except Exception as e:
+        _slog.warning("Scrapling fetch failed for %s: %s", url, e)
+    return None
 
 
 # Per-domain auth cookie store (filesystem JSON).
@@ -1474,6 +1521,17 @@ def scrape(url: str) -> dict:
             fetch_error = f"HTTP {e.response.status_code} from {site}"
         except httpx.RequestError as e:
             fetch_error = f"Request failed: {e}"
+
+        # Stealth fallback: proxy keyless/blocked, or the page came back as a
+        # captcha challenge → one retry with Scrapling's stealth browser
+        # before giving up to manual entry.
+        if use_proxy and _scrapling_available():
+            got_captcha = bool(html) and ("Press & Hold" in html or "captcha" in html.lower()[:5000])
+            if fetch_error or html is None or got_captcha:
+                s_html = _fetch_via_scrapling(url)
+                if s_html:
+                    html = s_html
+                    fetch_error = None
 
         if fetch_error:
             # Zillow/Redfin blocked us (403/PerimeterX). Salvage the address

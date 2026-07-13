@@ -1342,12 +1342,15 @@ def _verify_search_listings(res: dict, max_checks: int = 20) -> dict:
                     continue
                 if verdict == "ok" and zdata:
                     l["verified"] = True
-                    for src, dst in (("price", "price"), ("bedrooms", "beds"),
-                                     ("bathrooms", "baths"), ("sqft", "sqft"),
-                                     ("year_built", "year_built"),
-                                     ("days_on_market", "days_on_market")):
-                        v = zdata.get(src)
-                        if v is not None and v != "":
+                    for srcs, dst in ((("listing_price", "price", "asking_price"), "price"),
+                                      (("beds", "bedrooms"), "beds"),
+                                      (("baths", "bathrooms"), "baths"),
+                                      (("sqft",), "sqft"),
+                                      (("year_built",), "year_built"),
+                                      (("days_on_market",), "days_on_market")):
+                        v = next((zdata[k] for k in srcs
+                                  if zdata.get(k) not in (None, "")), None)
+                        if v is not None:
                             l[dst] = v
                 else:
                     l["verified"] = False
@@ -1874,14 +1877,19 @@ def _radar_process(watch: dict, new_listings: list, should_stop=None) -> dict:
                 continue
             c["verified"] += 1
             # Zillow's live data is the source of truth — overwrite AI guesses.
+            # scrape() returns NORMALIZED keys (listing_price/beds/baths); the
+            # raw-parse keys are accepted too as a fallback.
             if zdata:
-                for src, dst in (("price", "price"), ("bedrooms", "beds"),
-                                 ("bathrooms", "baths"), ("sqft", "sqft"),
-                                 ("year_built", "year_built"),
-                                 ("city", "city"), ("state", "state"),
-                                 ("zip", "zip")):
-                    v = zdata.get(src)
-                    if v is not None and v != "":
+                for srcs, dst in ((("listing_price", "price", "asking_price"), "price"),
+                                  (("beds", "bedrooms"), "beds"),
+                                  (("baths", "bathrooms"), "baths"),
+                                  (("sqft",), "sqft"),
+                                  (("year_built",), "year_built"),
+                                  (("city",), "city"), (("state",), "state"),
+                                  (("zip",), "zip")):
+                    v = next((zdata[k] for k in srcs
+                              if zdata.get(k) not in (None, "")), None)
+                    if v is not None:
                         l[dst] = v
                 zdom = zdata.get("days_on_market")
                 try:
