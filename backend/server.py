@@ -454,11 +454,13 @@ def create_deal(deal: dict = Body(...)):
     # (e.g. quick-insert from Search, then refine).
     if not deal.get("address"):
         raise HTTPException(400, "address is required")
-    # Address dedup: same house number + street name (+zip) as an existing deal
-    # → refuse unless the caller explicitly forces (Add-form dialog).
+    # Dedup: same Zillow listing (zpid in source_url) or same house number +
+    # street name (+zip) as an existing deal → refuse unless the caller
+    # explicitly forces (Add-form dialog).
     force_dup = bool(deal.pop("force_duplicate", False))
     if not force_dup and not deal.get("id"):
-        dup = db.find_duplicate(deal["address"])
+        dup = (_find_deal_by_zpid(_zpid_from_url(deal.get("source_url")))
+               or db.find_duplicate(deal["address"]))
         if dup:
             raise HTTPException(409, f"Possible duplicate: \"{dup.get('address')}\" "
                                      f"is already on the board (id: {dup['id']}).")
@@ -1575,12 +1577,31 @@ _RADAR_FRESH_MAX_DOM = 1
 _RADAR_VERIFY_MAX = 12    # live-verify at most N candidates per watch run
 
 
-def _radar_verify(url: str):
+def _zpid_from_url(url: str):
+    m = re.search(r"/(\d+)_zpid", url or "")
+    return m.group(1) if m else None
+
+
+def _find_deal_by_zpid(zpid):
+    """A deal created from the same Zillow listing (zpid embedded in its
+    source_url) — catches duplicates that address-format drift lets through
+    ("123 Main St" vs "123 Main Street, Cleveland, OH")."""
+    if not zpid:
+        return None
+    needle = f"/{zpid}_zpid"
+    for d in db.list_deals():
+        if needle in (d.get("source_url") or ""):
+            return d
+    return None
+
+
+def _radar_verify(url: str, max_dom: int = None):
     """Live-check a Radar candidate on Zillow before it reaches the user.
 
     The AI search is good at DISCOVERING listings but unreliable on status and
-    age — so Zillow's own homedetails page is the source of truth. Returns
-    (verdict, data):
+    age — so Zillow's own homedetails page is the source of truth. `max_dom`
+    is the zone's freshness window in days on market (default: last 24h).
+    Returns (verdict, data):
       "ok"         — confirmed FOR_SALE, and daysOnZillow within the window
       "sold"       — page says it's pending/sold/off-market (not buyable)
       "stale"      — active but older than the freshness window
@@ -1589,6 +1610,8 @@ def _radar_verify(url: str):
     On "ok", data carries Zillow's real price/beds/baths/sqft/photos so the
     find shows exact numbers instead of AI estimates.
     """
+    if max_dom is None:
+        max_dom = _RADAR_FRESH_MAX_DOM
     if "/homedetails/" not in (url or ""):
         return "unverified", None
     try:
@@ -1608,7 +1631,7 @@ def _radar_verify(url: str):
         dom_val = int(dom) if dom is not None else None
     except (TypeError, ValueError):
         dom_val = None
-    if dom_val is not None and dom_val > _RADAR_FRESH_MAX_DOM:
+    if dom_val is not None and dom_val > max_dom:
         return "stale", data
     return "ok", data
 
@@ -1684,6 +1707,10 @@ def _radar_process(watch: dict, new_listings: list) -> dict:
     if not cfg.get("enabled"):
         return c
     label = watch.get("label") or watch.get("location") or "Watch"
+    try:
+        fresh_max = max(1, min(int(watch.get("max_dom") or _RADAR_FRESH_MAX_DOM), 30))
+    except (TypeError, ValueError):
+        fresh_max = _RADAR_FRESH_MAX_DOM
 
     def _num(v):
         try:
@@ -1701,9 +1728,9 @@ def _radar_process(watch: dict, new_listings: list) -> dict:
             if status and not any(k in status for k in ("for_sale", "for sale", "active", "new")):
                 c["sold"] += 1
                 continue
-            # Freshness gate: only keep homes listed in the last ~24h — the real
-            # Zillow days_on_market must be present and 0 or 1. Unknown age is
-            # dropped (we can't confirm it's fresh, so it may be days old).
+            # Freshness gate: only keep homes inside the zone's window (max_dom
+            # days on market, default 24h). Unknown age is dropped (we can't
+            # confirm it's fresh, so it may be much older).
             dom = l.get("days_on_market")
             try:
                 dom_val = int(dom) if dom is not None else None
@@ -1712,7 +1739,7 @@ def _radar_process(watch: dict, new_listings: list) -> dict:
             if dom_val is None:
                 c["unknown_age"] += 1
                 continue
-            if dom_val > _RADAR_FRESH_MAX_DOM:
+            if dom_val > fresh_max:
                 c["stale"] += 1
                 continue
             c["fresh"] += 1
@@ -1734,7 +1761,7 @@ def _radar_process(watch: dict, new_listings: list) -> dict:
                 c["unverified"] += 1
                 continue
             verify_budget -= 1
-            verdict, zdata = _radar_verify(url)
+            verdict, zdata = _radar_verify(url, fresh_max)
             if verdict == "sold":
                 c["sold"] += 1
                 continue
@@ -1781,12 +1808,12 @@ def _radar_process(watch: dict, new_listings: list) -> dict:
             interesting, info = _radar_evaluate(l, cfg)
             price = _num(l.get("price"))
             deal_id = None
-            dup = db.find_duplicate(addr)
+            dup = _find_deal_by_zpid(zpid) or db.find_duplicate(addr)
             if dup:
                 deal_id = dup["id"]
             elif cfg.get("auto_add"):
                 note = (" · ".join(info["reasons"]) if info
-                        else "New listing (last 24h) — analyzing…")
+                        else "Fresh listing — analyzing…")
                 tag = "✓ interesting" if (interesting and info) else "fresh"
                 deal = {
                     "address": full or addr, "city": l.get("city", ""),
@@ -1846,7 +1873,7 @@ def _run_watch(watch_id: str) -> dict:
         return {"ok": False, "error": "watch not found"}
     params = {"search_term": w.get("location", "")}
     for k in ("price_max", "price_min", "beds_min", "baths_min", "sqft_min",
-              "property_type"):
+              "property_type", "max_dom"):
         if w.get(k):
             params[k] = w[k]
     res = ai_research.find_listings_in_area(params, max_listings=w.get("max_listings") or 15)

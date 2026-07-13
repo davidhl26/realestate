@@ -411,7 +411,7 @@ Method:
 3. Capture whatever price / beds / baths / sqft / days-on-market the result shows.
 
 RULES:
-- FRESHNESS (critical): Only include homes listed in the LAST 24 HOURS — "just listed today or yesterday" on Zillow, i.e. days_on_market of 0 or 1. Use Zillow's "just listed" / newest sort (days on Zillow = 1 day). EXCLUDE anything on the market longer. ALWAYS fill days_on_market with the REAL integer (0 or 1). If you cannot confirm the home was listed within the last 24 hours, DO NOT include it.
+- FRESHNESS (critical): Only include homes whose days_on_market is within the freshness window stated in the request (default: last 24 hours, i.e. days_on_market 0 or 1). Use Zillow's "just listed" / newest sort. EXCLUDE anything on the market longer than the window. ALWAYS fill days_on_market with the REAL integer. If you cannot confirm the home was listed within the window, DO NOT include it.
 - ACTIVE ONLY (critical): Only include homes that are CURRENTLY FOR SALE and active. EXCLUDE anything sold, pending, contingent, under contract, coming-soon, off-market, foreclosure-auction, or delisted. Zillow "recently sold" / Redfin sold pages are FORBIDDEN sources — never return a sold home. Set "listing_status" to the home's current market status ("for_sale" only for active listings).
 - Return the MOST RECENTLY LISTED properties first (newest on market). The caller wants the freshest ACTIVE listings, then scrapes each individual listing page (for photos and full data).
 - Strongly prefer providing a real listing URL for every property — that is what lets the system open and scrape the listing. Only set "url": null when you genuinely could not find the URL after searching for that address.
@@ -430,7 +430,7 @@ CRITICAL: End your response with a SINGLE JSON code block in exactly this schema
 {
   "area_label": "<human name of the area, e.g. 'Cleveland, OH — East Side & inner-ring suburbs'>",
   "listings": [
-    {"url": "<full zillow/redfin listing url, or null>", "address": "<full street address>", "city": "<city>", "state": "<2-letter>", "zip": "<zip>", "price": <integer or null>, "beds": <integer or null>, "baths": <number or null>, "sqft": <integer or null>, "year_built": <integer or null>, "last_renovated": <integer year or null>, "arv_estimate": <integer or null>, "rehab_estimate": <integer or null>, "days_on_market": <integer 0 or 1>, "listing_status": "for_sale"}
+    {"url": "<full zillow/redfin listing url, or null>", "address": "<full street address>", "city": "<city>", "state": "<2-letter>", "zip": "<zip>", "price": <integer or null>, "beds": <integer or null>, "baths": <number or null>, "sqft": <integer or null>, "year_built": <integer or null>, "last_renovated": <integer year or null>, "arv_estimate": <integer or null>, "rehab_estimate": <integer or null>, "days_on_market": <integer>, "listing_status": "for_sale"}
   ],
   "notes": "<1-2 sentences: how many found, coverage caveats>"
 }
@@ -521,10 +521,17 @@ def _build_listing_search_prompt(params: dict, max_listings: int = 60) -> str:
         lines.append(f"- EXCLUDE these property types: {', '.join(p['excluded_type_labels'])} "
                      "(i.e. single-family houses only).")
     lines.append("")
-    lines.append(f"Return ONLY homes listed in the LAST 24 HOURS (days_on_market 0 or 1 — just "
-                 f"listed today or yesterday), up to {max_listings}, newest first, EACH with its "
-                 "exact Zillow listing URL (search '<address> zillow' to get the URL when a result "
-                 "only shows the address) and its real days_on_market, in the JSON schema specified.")
+    try:
+        max_dom = max(1, int(p.get("max_dom") or 1))
+    except (TypeError, ValueError):
+        max_dom = 1
+    window = ("the LAST 24 HOURS (days_on_market 0 or 1 — just listed today or yesterday)"
+              if max_dom <= 1 else
+              f"the LAST {max_dom} DAYS (days_on_market 0 to {max_dom})")
+    lines.append(f"Return ONLY homes listed in {window}, up to {max_listings}, newest first, "
+                 "EACH with its exact Zillow listing URL (search '<address> zillow' to get the "
+                 "URL when a result only shows the address) and its real days_on_market, in the "
+                 "JSON schema specified.")
     return "\n".join(lines)
 
 

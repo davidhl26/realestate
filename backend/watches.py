@@ -81,6 +81,8 @@ class WatchesDB:
             "baths_min": criteria.get("baths_min"),
             "sqft_min": criteria.get("sqft_min"),
             "property_type": criteria.get("property_type"),
+            # Freshness window: only listings ≤ N days on market (1 = last 24h)
+            "max_dom": max(1, min(int(criteria.get("max_dom") or 1), 30)),
             "max_listings": min(int(criteria.get("max_listings") or 15), 30),
             # Auto-run cadence in minutes (60 = hourly). 0 = manual only —
             # the DEFAULT: scans cost AI + proxy credits, so they only run
@@ -121,7 +123,7 @@ class WatchesDB:
     # and event history are preserved).
     EDITABLE_FIELDS = ("label", "price_max", "price_min", "beds_min",
                        "baths_min", "sqft_min", "property_type",
-                       "max_listings", "interval_min")
+                       "max_listings", "interval_min", "max_dom")
 
     def update(self, watch_id: str, criteria: dict):
         """Update a watch's label / scan filters in place. Only keys present
@@ -137,6 +139,8 @@ class WatchesDB:
             v = criteria[k]
             if k == "max_listings":
                 v = min(int(v), 30) if v else 15
+            elif k == "max_dom":
+                v = max(1, min(int(v or 1), 30))
             elif k == "interval_min":
                 v = int(v or 0)
             elif k == "label":
@@ -233,6 +237,7 @@ class WatchesDB:
             "price_max": w.get("price_max"), "price_min": w.get("price_min"),
             "beds_min": w.get("beds_min"), "baths_min": w.get("baths_min"),
             "sqft_min": w.get("sqft_min"), "property_type": w.get("property_type"),
+            "max_dom": w.get("max_dom", 1),
             "max_listings": w.get("max_listings"),
             "interval_min": w.get("interval_min", 60),
             "created_at": w.get("created_at"), "last_run": w.get("last_run"),

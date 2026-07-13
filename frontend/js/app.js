@@ -3434,7 +3434,7 @@
     finds = finds.slice().sort((a, b) => (b.interesting ? 1 : 0) - (a.interesting ? 1 : 0));
     const nInt = finds.filter(f => f.interesting).length;
     if (st && !paused) st.textContent = finds.length
-      ? `${finds.length} listing(s) from the last 24h, live-verified on Zillow — ${nInt} pass all your criteria.`
+      ? `${finds.length} fresh listing(s), live-verified on Zillow — ${nInt} pass all your criteria.`
       : "";
     if (!finds.length) {
       feed.innerHTML = `<div class="card"><p class="muted" style="margin:0;">No finds yet. <strong>Add a zone above</strong> (e.g. “Cleveland, OH”), then hit <strong>⚡ Scan now</strong> — it lists the homes posted in the last 24 hours and flags the ones that pass your criteria.</p></div>`;
@@ -3476,7 +3476,7 @@
           ${thumb}
           <div style="display:flex; justify-content:space-between; gap:8px; align-items:flex-start;">
             <div style="font-weight:700;">${escape(f.address || "?")}</div>
-            <span class="pill" style="height:fit-content; background:rgba(127,127,127,0.14);">🆕 last 24h</span>
+            <span class="pill" style="height:fit-content; background:rgba(127,127,127,0.14);">🆕 ${f.days_on_market != null && f.days_on_market > 1 ? escape(f.days_on_market + " d on market") : "last 24h"}</span>
           </div>
           <div class="muted" style="font-size:12px;">${via}</div>
           <div style="margin:8px 0 2px; font-size:13px;"><span class="muted">Price</span> <strong>${K(f.price)}</strong>${specs ? ` · ${escape(specs)}` : ""}</div>
@@ -3496,13 +3496,19 @@
           const r = await API.createDeal({
             address: f.address, city: f.city || "", state: f.state || "",
             purchase_price: f.price || 0, source: "radar", source_url: f.url || "",
-            status: "evaluating", force_duplicate: true,
+            status: "evaluating",
             notes: `[Radar — ${f.watch_label || "watch"}]\n${f.url || ""}`,
           });
           const deal = r.deal || r;
           toast("Added to board — analyzing…", "success");
           openDeal(deal.id);
-        } catch (e) { toast(e.message, "error"); b.disabled = false; b.textContent = "➕ Add to board"; }
+        } catch (e) {
+          // Duplicate guard (409) — open the existing deal instead of adding twice
+          const m = /already on the board \(id: ([\w-]+)\)/.exec(e.message || "");
+          if (m) { toast("Already on the board — opening the existing deal", "warn"); openDeal(m[1]); }
+          else toast(e.message, "error");
+          b.disabled = false; b.textContent = "➕ Add to board";
+        }
       }));
     }
     // Mark all seen (clears the badge) once viewed.
@@ -3536,7 +3542,7 @@
       const running = s && s.running;
       const timedOut = Date.now() - t0 > 8 * 60 * 1000;   // safety cap 8 min
       if (running && !timedOut) {
-        if (st && s) st.innerHTML = `<span class="spinner"></span> Scanning… ${s.done}/${s.total} zone(s) · ${s.found || 0} listings found · ${s.fresh || 0} in last 24h · ${s.surfaced || 0} shown`;
+        if (st && s) st.innerHTML = `<span class="spinner"></span> Scanning… ${s.done}/${s.total} zone(s) · ${s.found || 0} listings found · ${s.fresh || 0} fresh · ${s.surfaced || 0} shown`;
         setTimeout(poll, 5000);
       } else {
         _radarScanning = false;
@@ -3544,7 +3550,7 @@
         const surfaced = s ? (s.surfaced || 0) : 0, added = s ? (s.added || 0) : 0, found = s ? (s.found || 0) : 0;
         const exclParts = [];
         if (s && s.sold) exclParts.push(`${s.sold} sold/off-market`);
-        if (s && s.old) exclParts.push(`${s.old} older than 24h`);
+        if (s && s.old) exclParts.push(`${s.old} older than your window`);
         if (s && s.unverified) exclParts.push(`${s.unverified} unverifiable on Zillow`);
         const exclTxt = exclParts.length ? ` (excluded: ${exclParts.join(" + ")})` : "";
         await refreshRadarView();   // refresh FIRST — it overwrites #radar-status
@@ -3552,9 +3558,9 @@
           if (s && s.error && !surfaced) {
             st.innerHTML = `<span style="color:var(--red)">Scan issue: ${escape(s.error)}</span>`;
           } else if (surfaced) {
-            st.textContent = `✓ Scan done — ${surfaced} Zillow-verified listing(s) from the last 24h${added ? `, ${added} added to your board` : ""}${exclTxt}.`;
+            st.textContent = `✓ Scan done — ${surfaced} fresh Zillow-verified listing(s)${added ? `, ${added} added to your board` : ""}${exclTxt}.`;
           } else if (found) {
-            st.textContent = `✓ Scan done — ${found} found, but none could be verified as active and posted in the last 24h${exclTxt}. Try again later or widen the zone.`;
+            st.textContent = `✓ Scan done — ${found} found, but none could be verified as active and inside your freshness window${exclTxt}. Try again later or widen the window (✏️ Filters).`;
           } else {
             st.textContent = "✓ Scan done — no new listings found in your zone(s) right now.";
           }
@@ -3584,12 +3590,16 @@
     const TYPES = ["", "Single Family Residence", "Multi-family / Duplex", "Townhouse", "Condo"];
     const typeLabel = t => ({ "": "Any", "Single Family Residence": "House", "Multi-family / Duplex": "Multi / Duplex" }[t] || t);
     box.innerHTML = zones.map(z => {
-      const filters = [z.price_min ? "≥ $" + Number(z.price_min).toLocaleString("en-US") : "",
+      const maxDom = Number(z.max_dom) || 1;
+      const filters = ["🕐 " + (maxDom > 1 ? "newest ≤ " + maxDom + " d" : "last 24h"),
+                       z.price_min ? "≥ $" + Number(z.price_min).toLocaleString("en-US") : "",
                        z.price_max ? "≤ $" + Number(z.price_max).toLocaleString("en-US") : "",
                        z.beds_min ? z.beds_min + "+ bd" : "",
                        z.baths_min ? z.baths_min + "+ ba" : "",
                        z.sqft_min ? "≥ " + Number(z.sqft_min).toLocaleString("en-US") + " sf" : "",
                        z.property_type || ""].filter(Boolean).join(" · ");
+      const domOpts = [[1, "Last 24h"], [2, "≤ 2 days"], [3, "≤ 3 days"], [7, "≤ 7 days"], [14, "≤ 14 days"], [30, "≤ 30 days"]]
+        .map(([v, l]) => `<option value="${v}"${maxDom === v ? " selected" : ""}>${l}</option>`).join("");
       const opts = TYPES.map(t => `<option value="${escape(t)}"${(z.property_type || "") === t ? " selected" : ""}>${escape(typeLabel(t))}</option>`).join("");
       return `<div style="display:flex; align-items:center; gap:10px; font-size:13px; flex-wrap:wrap; padding:6px 0; border-top:1px solid var(--border);">
         <span style="font-weight:600;">📍 ${escape(z.label || z.location || "?")}</span>
@@ -3606,6 +3616,7 @@
         <label style="width:75px; font-size:11px;">Beds min <input class="rz-bedsmin" type="number" value="${z.beds_min || ""}" placeholder="—"></label>
         <label style="width:75px; font-size:11px;">Baths min <input class="rz-bathsmin" type="number" step="0.5" value="${z.baths_min || ""}" placeholder="—"></label>
         <label style="width:85px; font-size:11px;">Sqft min <input class="rz-sqftmin" type="number" value="${z.sqft_min || ""}" placeholder="—"></label>
+        <label style="width:100px; font-size:11px;" title="How new a listing must be (days on market)">Newest <select class="rz-maxdom">${domOpts}</select></label>
         <label style="width:130px; font-size:11px;">Type <select class="rz-type">${opts}</select></label>
         <label style="width:100px; font-size:11px;">Max listings <input class="rz-maxlist" type="number" min="5" max="30" value="${z.max_listings || 15}"></label>
         <button class="btn primary rz-save" data-id="${escape(z.id)}" style="font-size:12px;">💾 Save</button>
@@ -3632,6 +3643,7 @@
         sqft_min: num(".rz-sqftmin"),
         property_type: form.querySelector(".rz-type")?.value || null,
         max_listings: num(".rz-maxlist") || 15,
+        max_dom: num(".rz-maxdom") || 1,
       };
       b.disabled = true;
       try {
@@ -3654,6 +3666,7 @@
     if (num("#radar-zone-bedsmin")) p.beds_min = num("#radar-zone-bedsmin");
     if (num("#radar-zone-bathsmin")) p.baths_min = num("#radar-zone-bathsmin");
     if (num("#radar-zone-sqftmin")) p.sqft_min = num("#radar-zone-sqftmin");
+    p.max_dom = Number($("#radar-zone-maxdom")?.value) || 1;
     if ($("#radar-zone-type")?.value) p.property_type = $("#radar-zone-type").value;
     const btn = $("#radar-zone-add"); btn.disabled = true;
     try {
