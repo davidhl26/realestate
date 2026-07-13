@@ -78,6 +78,8 @@ class WatchesDB:
             "price_max": criteria.get("price_max"),
             "price_min": criteria.get("price_min"),
             "beds_min": criteria.get("beds_min"),
+            "baths_min": criteria.get("baths_min"),
+            "sqft_min": criteria.get("sqft_min"),
             "property_type": criteria.get("property_type"),
             "max_listings": min(int(criteria.get("max_listings") or 15), 30),
             # Auto-run cadence in minutes (60 = hourly). 0 = manual only —
@@ -114,6 +116,35 @@ class WatchesDB:
         data["watches"][idx] = watch
         data["updated"] = _now()
         self._write(data)
+
+    # Filter/config fields the user may edit after creation (tracked listings
+    # and event history are preserved).
+    EDITABLE_FIELDS = ("label", "price_max", "price_min", "beds_min",
+                       "baths_min", "sqft_min", "property_type",
+                       "max_listings", "interval_min")
+
+    def update(self, watch_id: str, criteria: dict):
+        """Update a watch's label / scan filters in place. Only keys present
+        in `criteria` are touched (pass null to clear a filter). Returns the
+        updated watch, or None if not found."""
+        data = self._read()
+        w = next((x for x in data["watches"] if x.get("id") == watch_id), None)
+        if not w:
+            return None
+        for k in self.EDITABLE_FIELDS:
+            if k not in criteria:
+                continue
+            v = criteria[k]
+            if k == "max_listings":
+                v = min(int(v), 30) if v else 15
+            elif k == "interval_min":
+                v = int(v or 0)
+            elif k == "label":
+                v = (v or w.get("location") or "Watch").strip()
+            w[k] = v
+        data["updated"] = _now()
+        self._write(data)
+        return w
 
     # ---- Diff engine ----
     def apply_run(self, watch_id: str, fresh_listings: list) -> dict:
@@ -200,7 +231,8 @@ class WatchesDB:
         return {
             "id": w["id"], "label": w.get("label"), "location": w.get("location"),
             "price_max": w.get("price_max"), "price_min": w.get("price_min"),
-            "beds_min": w.get("beds_min"), "property_type": w.get("property_type"),
+            "beds_min": w.get("beds_min"), "baths_min": w.get("baths_min"),
+            "sqft_min": w.get("sqft_min"), "property_type": w.get("property_type"),
             "max_listings": w.get("max_listings"),
             "interval_min": w.get("interval_min", 60),
             "created_at": w.get("created_at"), "last_run": w.get("last_run"),

@@ -1845,7 +1845,8 @@ def _run_watch(watch_id: str) -> dict:
     if not w:
         return {"ok": False, "error": "watch not found"}
     params = {"search_term": w.get("location", "")}
-    for k in ("price_max", "price_min", "beds_min", "property_type"):
+    for k in ("price_max", "price_min", "beds_min", "baths_min", "sqft_min",
+              "property_type"):
         if w.get(k):
             params[k] = w[k]
     res = ai_research.find_listings_in_area(params, max_listings=w.get("max_listings") or 15)
@@ -1895,15 +1896,11 @@ def watches_run(watch_id: str):
 
 @app.patch("/api/watches/{watch_id}")
 def watches_patch(watch_id: str, payload: dict = Body(...)):
-    """Update a watch's settings (interval_min, filters, label)."""
-    w = watches_db.get(watch_id)
+    """Update a watch's settings (label, scan filters, cadence) in place —
+    tracked listings and event history are preserved."""
+    w = watches_db.update(watch_id, payload or {})
     if not w:
         raise HTTPException(404, "Watch not found")
-    for k in ("interval_min", "label", "price_max", "price_min", "beds_min",
-              "property_type", "max_listings"):
-        if k in payload:
-            w[k] = payload[k]
-    watches_db.save(w)
     return watches_db.summary(w)
 
 

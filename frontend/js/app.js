@@ -3581,20 +3581,64 @@
       if (mins < 60) return `scanned ${mins} min ago`;
       const h = Math.round(mins / 60); return h < 24 ? `scanned ${h} h ago` : `scanned ${Math.round(h / 24)} d ago`;
     };
+    const TYPES = ["", "Single Family Residence", "Multi-family / Duplex", "Townhouse", "Condo"];
+    const typeLabel = t => ({ "": "Any", "Single Family Residence": "House", "Multi-family / Duplex": "Multi / Duplex" }[t] || t);
     box.innerHTML = zones.map(z => {
-      const filters = [z.price_max ? "≤ $" + Number(z.price_max).toLocaleString("en-US") : "",
+      const filters = [z.price_min ? "≥ $" + Number(z.price_min).toLocaleString("en-US") : "",
+                       z.price_max ? "≤ $" + Number(z.price_max).toLocaleString("en-US") : "",
                        z.beds_min ? z.beds_min + "+ bd" : "",
+                       z.baths_min ? z.baths_min + "+ ba" : "",
+                       z.sqft_min ? "≥ " + Number(z.sqft_min).toLocaleString("en-US") + " sf" : "",
                        z.property_type || ""].filter(Boolean).join(" · ");
+      const opts = TYPES.map(t => `<option value="${escape(t)}"${(z.property_type || "") === t ? " selected" : ""}>${escape(typeLabel(t))}</option>`).join("");
       return `<div style="display:flex; align-items:center; gap:10px; font-size:13px; flex-wrap:wrap; padding:6px 0; border-top:1px solid var(--border);">
         <span style="font-weight:600;">📍 ${escape(z.label || z.location || "?")}</span>
         ${filters ? `<span class="muted" style="font-size:12px;">${escape(filters)}</span>` : ""}
         <span class="muted" style="font-size:12px;">· ${fmtAgo(z.last_run)}${z.tracked ? " · " + z.tracked + " tracked" : ""}</span>
-        <button class="btn ghost rz-del" data-id="${escape(z.id)}" title="Remove zone" style="margin-left:auto; font-size:11px;">🗑</button>
+        <span style="margin-left:auto; display:flex; gap:4px;">
+          <button class="btn ghost rz-edit" data-id="${escape(z.id)}" title="Edit scan filters" style="font-size:11px;">✏️ Filters</button>
+          <button class="btn ghost rz-del" data-id="${escape(z.id)}" title="Remove zone" style="font-size:11px;">🗑</button>
+        </span>
+      </div>
+      <div class="rz-form" data-id="${escape(z.id)}" style="display:none; gap:8px; align-items:flex-end; flex-wrap:wrap; padding:8px 10px; margin:0 0 6px; background:rgba(127,127,127,0.06); border-radius:8px;">
+        <label style="width:105px; font-size:11px;">Price min ($) <input class="rz-pricemin" type="number" value="${z.price_min || ""}" placeholder="—"></label>
+        <label style="width:105px; font-size:11px;">Price max ($) <input class="rz-pricemax" type="number" value="${z.price_max || ""}" placeholder="—"></label>
+        <label style="width:75px; font-size:11px;">Beds min <input class="rz-bedsmin" type="number" value="${z.beds_min || ""}" placeholder="—"></label>
+        <label style="width:75px; font-size:11px;">Baths min <input class="rz-bathsmin" type="number" step="0.5" value="${z.baths_min || ""}" placeholder="—"></label>
+        <label style="width:85px; font-size:11px;">Sqft min <input class="rz-sqftmin" type="number" value="${z.sqft_min || ""}" placeholder="—"></label>
+        <label style="width:130px; font-size:11px;">Type <select class="rz-type">${opts}</select></label>
+        <label style="width:100px; font-size:11px;">Max listings <input class="rz-maxlist" type="number" min="5" max="30" value="${z.max_listings || 15}"></label>
+        <button class="btn primary rz-save" data-id="${escape(z.id)}" style="font-size:12px;">💾 Save</button>
+        <button class="btn ghost rz-cancel" style="font-size:12px;">Cancel</button>
       </div>`;
     }).join("");
     box.querySelectorAll(".rz-del").forEach(b => b.addEventListener("click", async () => {
       if (!confirm("Remove this zone from the Radar?")) return;
       try { await API.watchDelete(b.dataset.id); renderRadarZones(); } catch (e) { toast(e.message, "error"); }
+    }));
+    box.querySelectorAll(".rz-edit").forEach(b => b.addEventListener("click", () => {
+      const form = box.querySelector(`.rz-form[data-id="${b.dataset.id}"]`);
+      if (form) form.style.display = form.style.display === "none" ? "flex" : "none";
+    }));
+    box.querySelectorAll(".rz-cancel").forEach(b => b.addEventListener("click", () => {
+      b.closest(".rz-form").style.display = "none";
+    }));
+    box.querySelectorAll(".rz-save").forEach(b => b.addEventListener("click", async () => {
+      const form = b.closest(".rz-form");
+      const num = sel => { const v = Number(form.querySelector(sel)?.value); return v > 0 ? v : null; };
+      const payload = {
+        price_min: num(".rz-pricemin"), price_max: num(".rz-pricemax"),
+        beds_min: num(".rz-bedsmin"), baths_min: num(".rz-bathsmin"),
+        sqft_min: num(".rz-sqftmin"),
+        property_type: form.querySelector(".rz-type")?.value || null,
+        max_listings: num(".rz-maxlist") || 15,
+      };
+      b.disabled = true;
+      try {
+        await API.watchPatch(b.dataset.id, payload);
+        toast("✓ Scan filters updated — they apply on the next scan", "success");
+        await renderRadarZones();
+      } catch (e) { toast(e.message, "error"); b.disabled = false; }
     }));
   }
   window._renderRadarZones = renderRadarZones;
@@ -3603,15 +3647,21 @@
     const loc = ($("#radar-zone-location")?.value || "").trim();
     if (!loc) { toast("Enter a city, ZIP or state", "warn"); return; }
     const num = id => { const v = Number($(id)?.value); return v > 0 ? v : null; };
-    const p = { location: loc, interval_min: 60, max_listings: 15 };
+    // interval_min omitted on purpose → backend default 0 = manual-only scans
+    const p = { location: loc, max_listings: 15 };
+    if (num("#radar-zone-pricemin")) p.price_min = num("#radar-zone-pricemin");
     if (num("#radar-zone-pricemax")) p.price_max = num("#radar-zone-pricemax");
     if (num("#radar-zone-bedsmin")) p.beds_min = num("#radar-zone-bedsmin");
+    if (num("#radar-zone-bathsmin")) p.baths_min = num("#radar-zone-bathsmin");
+    if (num("#radar-zone-sqftmin")) p.sqft_min = num("#radar-zone-sqftmin");
     if ($("#radar-zone-type")?.value) p.property_type = $("#radar-zone-type").value;
     const btn = $("#radar-zone-add"); btn.disabled = true;
     try {
       await API.watchCreate(p);
       $("#radar-zone-location").value = "";
-      $("#radar-zone-pricemax").value = ""; $("#radar-zone-bedsmin").value = "";
+      $("#radar-zone-pricemin").value = ""; $("#radar-zone-pricemax").value = "";
+      $("#radar-zone-bedsmin").value = ""; $("#radar-zone-bathsmin").value = "";
+      $("#radar-zone-sqftmin").value = "";
       toast(`📍 Zone added — scanning ${escape(loc)}…`, "success");
       await renderRadarZones();
       startRadarScan();   // kick a real-time scan right away so finds appear

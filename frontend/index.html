@@ -166,12 +166,15 @@
           <span class="muted" style="font-size:12px;">Zones are scanned only when you hit <strong>⚡ Scan now</strong> — add at least one to get finds.</span>
         </div>
         <div style="display:flex; gap:8px; align-items:flex-end; flex-wrap:wrap;">
-          <label style="flex:1; min-width:200px;">City / ZIP / State
+          <label style="flex:1; min-width:180px;">City / ZIP / State
             <input id="radar-zone-location" type="text" placeholder="e.g. Cleveland, OH  ·  44105  ·  Ohio" style="width:100%;">
           </label>
-          <label style="width:120px;">Price max ($) <input id="radar-zone-pricemax" type="number" placeholder="—"></label>
-          <label style="width:90px;">Beds min <input id="radar-zone-bedsmin" type="number" placeholder="—"></label>
-          <label style="width:150px;">Type
+          <label style="width:105px;">Price min ($) <input id="radar-zone-pricemin" type="number" placeholder="—"></label>
+          <label style="width:105px;">Price max ($) <input id="radar-zone-pricemax" type="number" placeholder="—"></label>
+          <label style="width:78px;">Beds min <input id="radar-zone-bedsmin" type="number" placeholder="—"></label>
+          <label style="width:78px;">Baths min <input id="radar-zone-bathsmin" type="number" step="0.5" placeholder="—"></label>
+          <label style="width:90px;">Sqft min <input id="radar-zone-sqftmin" type="number" placeholder="—"></label>
+          <label style="width:140px;">Type
             <select id="radar-zone-type">
               <option value="">Any</option>
               <option value="Single Family Residence">House</option>
