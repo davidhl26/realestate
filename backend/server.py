@@ -1784,7 +1784,7 @@ def _radar_process(watch: dict, new_listings: list) -> dict:
     cfg = _radar_config()
     c = {"found": len(new_listings or []), "fresh": 0, "surfaced": 0,
          "interesting": 0, "added": 0, "stale": 0, "sold": 0, "unknown_age": 0,
-         "verified": 0, "unverified": 0}
+         "verified": 0, "unverified": 0, "off_filter": 0}
     if not cfg.get("enabled"):
         return c
     label = watch.get("label") or watch.get("location") or "Watch"
@@ -1885,6 +1885,26 @@ def _radar_process(watch: dict, new_listings: list) -> dict:
                 except (TypeError, ValueError):
                     pass
 
+            # Re-apply the zone's filters against Zillow's REAL numbers — the
+            # AI's price guess can sit under the cap while the page says more.
+            real_price = _num(l.get("price"))
+            if real_price and watch.get("price_max") and real_price > float(watch["price_max"]) * 1.03:
+                c["off_filter"] += 1
+                continue
+            if real_price and watch.get("price_min") and real_price < float(watch["price_min"]) * 0.97:
+                c["off_filter"] += 1
+                continue
+
+            def _under(field, wkey):
+                try:
+                    return bool(watch.get(wkey)) and l.get(field) is not None \
+                        and float(l[field]) < float(watch[wkey])
+                except (TypeError, ValueError):
+                    return False
+            if _under("beds", "beds_min") or _under("baths", "baths_min") or _under("sqft", "sqft_min"):
+                c["off_filter"] += 1
+                continue
+
             # Full address (no repeated parts) + a Zillow URL.
             parts = [addr]
             city = (l.get("city") or "").strip()
@@ -1951,10 +1971,10 @@ def _radar_process(watch: dict, new_listings: list) -> dict:
         except Exception:
             log.exception("radar: failed to process a listing")
     log.info("radar %s: found=%d fresh=%d verified=%d surfaced=%d interesting=%d "
-             "added=%d stale=%d sold=%d unknown_age=%d unverified=%d",
+             "added=%d stale=%d sold=%d unknown_age=%d unverified=%d off_filter=%d",
              label, c["found"], c["fresh"], c["verified"], c["surfaced"],
              c["interesting"], c["added"], c["stale"], c["sold"],
-             c["unknown_age"], c["unverified"])
+             c["unknown_age"], c["unverified"], c["off_filter"])
     return c
 
 
@@ -2046,7 +2066,7 @@ def radar_delete(find_id: str):
 # scheduler). Runs in the background; the UI polls scan-status + refreshes.
 _radar_scan = {"running": False, "added": 0, "done": 0, "total": 0,
                "found": 0, "fresh": 0, "surfaced": 0, "sold": 0, "old": 0,
-               "unverified": 0, "error": ""}
+               "unverified": 0, "off_filter": 0, "error": ""}
 
 
 @app.post("/api/radar/scan")
@@ -2065,7 +2085,7 @@ def radar_scan():
     def _job():
         _radar_scan.update(running=True, added=0, done=0, total=len(watches),
                            found=0, fresh=0, surfaced=0, sold=0, old=0,
-                           unverified=0, error="")
+                           unverified=0, off_filter=0, error="")
         try:
             for w in watches:
                 try:
@@ -2080,6 +2100,7 @@ def radar_scan():
                     _radar_scan["sold"] += int(rc.get("sold") or 0)
                     _radar_scan["old"] += int(rc.get("stale") or 0) + int(rc.get("unknown_age") or 0)
                     _radar_scan["unverified"] += int(rc.get("unverified") or 0)
+                    _radar_scan["off_filter"] += int(rc.get("off_filter") or 0)
                 except Exception as e:
                     log.exception("radar scan: watch %s failed", w.get("id"))
                     _radar_scan["error"] = str(e)

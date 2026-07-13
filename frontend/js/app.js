@@ -3559,6 +3559,7 @@
         if (s && s.sold) exclParts.push(`${s.sold} sold/off-market`);
         if (s && s.old) exclParts.push(`${s.old} older than your window`);
         if (s && s.unverified) exclParts.push(`${s.unverified} unverifiable on Zillow`);
+        if (s && s.off_filter) exclParts.push(`${s.off_filter} outside your filters (real price/specs)`);
         const exclTxt = exclParts.length ? ` (excluded: ${exclParts.join(" + ")})` : "";
         await refreshRadarView();   // refresh FIRST — it overwrites #radar-status
         if (st) {
