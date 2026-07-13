@@ -1631,6 +1631,24 @@ https://app.ispeedtolead.com/deal-speed/property/...
         <div id="ai-status" class="status-line"></div>
 
         <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--divider);">
+          <label style="display:block; font-weight:600; margin-bottom:4px;">🏠 Zillow Data API key
+            <span style="font-weight:400; color:var(--muted); font-size:12px;">— fast listing verification (RapidAPI)</span>
+          </label>
+          <p class="muted" style="font-size:12px; margin:0 0 8px;">
+            Verifies Radar &amp; Search finds via a structured Zillow data API in
+            <strong>~0.5s</strong> (vs 5-15s scraping) — status, days on market, real price, photo.
+            Free plan: 250 requests/month. Subscribe to
+            <a href="https://rapidapi.com/azabdurapidapi/api/unofficial-zillow-api2/pricing" target="_blank" style="color:var(--accent); font-weight:600;">Unofficial-Zillow-API</a>
+            and paste your <em>X-RapidAPI-Key</em>. Scraping stays as automatic fallback.
+          </p>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <input type="password" id="zapi-key-input" placeholder="X-RapidAPI-Key…" style="flex:1;">
+            <button type="button" id="zapi-key-save" class="btn primary">Save</button>
+          </div>
+          <div id="zapi-status" class="status-line"></div>
+        </div>
+
+        <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--divider);">
           <label style="display:block; font-weight:600; margin-bottom:4px;">📸 ScraperAPI key
             <span style="font-weight:400; color:var(--muted); font-size:12px;">— for automatic Zillow photos</span>
           </label>

@@ -4971,6 +4971,18 @@
           : "Without a key: Zillow blocks scraping, only the address is retrieved (+ Street View if a Maps key is set).";
         ps.className = cfg.proxy_configured ? "status-line success" : "status-line";
       }
+      // Zillow Data API (RapidAPI) status — fast verification
+      const zk = $("#zapi-key-input");
+      const zs = $("#zapi-status");
+      if (zk) zk.placeholder = cfg.zillow_api_configured
+        ? "Configured — re-enter to update"
+        : "X-RapidAPI-Key…";
+      if (zs) {
+        zs.textContent = cfg.zillow_api_configured
+          ? "✓ Fast verification enabled — Radar & Search check listings via the Zillow data API (~0.5s), scraping as fallback."
+          : "Without a key: verification uses scraping only (slower, uses ScraperAPI credits).";
+        zs.className = cfg.zillow_api_configured ? "status-line success" : "status-line";
+      }
       // Maps key status
       const mk = $("#maps-key-input");
       const ms = $("#maps-status");
@@ -4992,6 +5004,16 @@
       await API.saveAiConfig({ scraper_api_key: key });
       toast("ScraperAPI key saved — automatic Zillow photos enabled", "success");
       $("#proxy-key-input").value = "";
+      refreshAiConfig();
+    } catch (err) { toast(err.message, "error"); }
+  });
+  $("#zapi-key-save")?.addEventListener("click", async () => {
+    const key = ($("#zapi-key-input")?.value || "").trim();
+    if (!key) { toast("Paste your X-RapidAPI-Key", "warn"); return; }
+    try {
+      await API.saveAiConfig({ zillow_rapidapi_key: key });
+      toast("Zillow Data API key saved — fast verification enabled", "success");
+      $("#zapi-key-input").value = "";
       refreshAiConfig();
     } catch (err) { toast(err.message, "error"); }
   });

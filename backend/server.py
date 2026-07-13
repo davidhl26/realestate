@@ -29,7 +29,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 
-from . import analyzer, scraper, pdf_gen
+from . import analyzer, scraper, pdf_gen, zillow_api
 from .db import DealsDB
 
 log = logging.getLogger("flip-board.server")
@@ -1698,6 +1698,26 @@ def _radar_verify(url: str, max_dom: int = None):
         max_dom = _RADAR_FRESH_MAX_DOM
     if "/homedetails/" not in (url or ""):
         return "unverified", None
+
+    # PRIMARY: structured Zillow API (RapidAPI) — ~0.5s, no captcha, clean
+    # fields. Any failure (no key, quota, error) falls through to scraping.
+    zpid = _zpid_from_url(url)
+    if zpid and zillow_api.is_configured():
+        d = zillow_api.property_details(zpid)
+        if d and d.get("home_status"):
+            if d["home_status"] != "FOR_SALE":
+                return "sold", d
+            dom = d.get("days_on_market")
+            try:
+                dom_val = int(dom) if dom is not None else None
+            except (TypeError, ValueError):
+                dom_val = None
+            if dom_val is not None and dom_val > max_dom:
+                return "stale", d
+            # One extra call for the photo — verified finds only (a handful/scan)
+            d["image"] = zillow_api.first_image(zpid)
+            return "ok", d
+
     try:
         data = scraper.scrape(url)
     except Exception:
@@ -3134,6 +3154,7 @@ def ai_config_get():
         "maps_key_preview": MASK if maps_key else "",
         "proxy_configured": bool(proxy_key),
         "proxy_key_preview": MASK if proxy_key else "",
+        "zillow_api_configured": zillow_api.is_configured(),
     }
 
 
@@ -3148,6 +3169,8 @@ def ai_config_set(payload: dict = Body(...)):
         cfg["google_maps_key"] = (payload["google_maps_key"] or "").strip()
     if "scraper_api_key" in payload:
         cfg["scraper_api_key"] = (payload["scraper_api_key"] or "").strip()
+    if "zillow_rapidapi_key" in payload:
+        cfg["zillow_rapidapi_key"] = (payload["zillow_rapidapi_key"] or "").strip()
     if "auto_research" in payload:
         cfg["auto_research"] = bool(payload["auto_research"])
     if "target_margin_pct" in payload:
