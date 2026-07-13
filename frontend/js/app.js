@@ -3537,7 +3537,8 @@
     catch (e) { toast(e.message, "error"); return; }
     if (!res.ok) { toast(res.error || "Scan failed", "warn"); return; }
     _radarScanning = true;
-    if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Scanning…'; }
+    // The button stays clickable and becomes the STOP control while scanning.
+    if (btn) { btn.disabled = false; btn.innerHTML = "⏹ Stop scan"; btn.title = "Stop after the current step — remaining zones are skipped"; }
     const total = res.total || 1;
     if (st) st.innerHTML = `<span class="spinner"></span> Scanning ${total} zone(s) in real time — new deals will appear as they're found…`;
     const t0 = Date.now();
@@ -3549,11 +3550,13 @@
       const running = s && s.running;
       const timedOut = Date.now() - t0 > 8 * 60 * 1000;   // safety cap 8 min
       if (running && !timedOut) {
-        if (st && s) st.innerHTML = `<span class="spinner"></span> Scanning… ${s.done}/${s.total} zone(s) · ${s.found || 0} listings found · ${s.fresh || 0} fresh · ${s.surfaced || 0} shown`;
+        if (st && s) st.innerHTML = s.cancel
+          ? '<span class="spinner"></span> Stopping after the current step…'
+          : `<span class="spinner"></span> Scanning… ${s.done}/${s.total} zone(s) · ${s.found || 0} listings found · ${s.fresh || 0} fresh · ${s.surfaced || 0} shown`;
         setTimeout(poll, 5000);
       } else {
         _radarScanning = false;
-        if (btn) { btn.disabled = false; btn.innerHTML = "⚡ Scan now"; }
+        if (btn) { btn.disabled = false; btn.innerHTML = "⚡ Scan now"; btn.title = "Scan your zones now"; }
         const surfaced = s ? (s.surfaced || 0) : 0, added = s ? (s.added || 0) : 0, found = s ? (s.found || 0) : 0;
         const exclParts = [];
         if (s && s.sold) exclParts.push(`${s.sold} sold/off-market`);
@@ -3563,7 +3566,11 @@
         const exclTxt = exclParts.length ? ` (excluded: ${exclParts.join(" + ")})` : "";
         await refreshRadarView();   // refresh FIRST — it overwrites #radar-status
         if (st) {
-          if (s && s.error && !surfaced) {
+          if (s && s.cancelled) {
+            st.textContent = `⏹ Scan stopped — ${s.done || 0}/${s.total || 0} zone(s) scanned`
+              + (s.skipped ? `, ${s.skipped} skipped` : "")
+              + (surfaced ? `, ${surfaced} listing(s) shown` : "") + ".";
+          } else if (s && s.error && !surfaced) {
             st.innerHTML = `<span style="color:var(--red)">Scan issue: ${escape(s.error)}</span>`;
           } else if (surfaced) {
             st.textContent = `✓ Scan done — ${surfaced} fresh Zillow-verified listing(s)${added ? `, ${added} added to your board` : ""}${exclTxt}.`;
@@ -3578,7 +3585,16 @@
     };
     setTimeout(poll, 4000);
   }
-  $("#radar-scan-btn")?.addEventListener("click", startRadarScan);
+  async function stopRadarScan() {
+    const btn = $("#radar-scan-btn"), st = $("#radar-status");
+    if (btn) { btn.disabled = true; btn.innerHTML = "⏹ Stopping…"; }
+    if (st) st.innerHTML = '<span class="spinner"></span> Stopping after the current step…';
+    try { await API.radarScanStop(); }
+    catch (e) { toast(e.message, "error"); if (btn) { btn.disabled = false; btn.innerHTML = "⏹ Stop scan"; } }
+  }
+  $("#radar-scan-btn")?.addEventListener("click", () => {
+    if (_radarScanning) stopRadarScan(); else startRadarScan();
+  });
 
   // ----- Watched zones (each zone = a Zillow watch the Radar scans) -----
   async function renderRadarZones() {

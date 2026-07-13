@@ -52,6 +52,7 @@ const API = (() => {
     radarSeen: () => req("/api/radar/seen", { method: "POST", body: "{}" }),
     radarDelete: (id) => req("/api/radar/" + encodeURIComponent(id), { method: "DELETE" }),
     radarScan: () => req("/api/radar/scan", { method: "POST", body: "{}" }),
+    radarScanStop: () => req("/api/radar/scan/stop", { method: "POST", body: "{}" }),
     radarScanStatus: () => req("/api/radar/scan-status"),
     compareDeals: (dealIds, includeVerdict, focus) => req("/api/board/compare",
       { method: "POST", body: JSON.stringify({

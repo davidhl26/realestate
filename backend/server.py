@@ -1773,13 +1773,14 @@ def _radar_evaluate(listing: dict, cfg: dict):
     return all(checks.values()), info
 
 
-def _radar_process(watch: dict, new_listings: list) -> dict:
+def _radar_process(watch: dict, new_listings: list, should_stop=None) -> dict:
     """For each newly-seen listing, surface the ones listed in the last ~24h as
     Radar finds (deduped by zpid/address). Each candidate is LIVE-VERIFIED on
     its Zillow page (status FOR_SALE + daysOnZillow ≤ 1) before it reaches the
     user — the AI only discovers; Zillow is the source of truth. Ones that pass
     all criteria are flagged interesting; with auto_add on, every verified find
-    is added to the board. Returns a count breakdown."""
+    is added to the board. `should_stop` (callable) aborts between listings
+    when the user cancels the scan. Returns a count breakdown."""
     from urllib.parse import quote
     cfg = _radar_config()
     c = {"found": len(new_listings or []), "fresh": 0, "surfaced": 0,
@@ -1803,8 +1804,9 @@ def _radar_process(watch: dict, new_listings: list) -> dict:
             return int(l.get("days_on_market")) <= fresh_max
         except (TypeError, ValueError):
             return False
-    _recover_missing_urls([l for l in (new_listings or []) if _ai_fresh(l)],
-                          hint=watch.get("location", ""))
+    if not (should_stop and should_stop()):
+        _recover_missing_urls([l for l in (new_listings or []) if _ai_fresh(l)],
+                              hint=watch.get("location", ""))
 
     def _num(v):
         try:
@@ -1814,6 +1816,9 @@ def _radar_process(watch: dict, new_listings: list) -> dict:
 
     verify_budget = _RADAR_VERIFY_MAX
     for l in new_listings or []:
+        if should_stop and should_stop():
+            log.info("radar %s: scan cancelled — remaining listings skipped", label)
+            break
         try:
             # Active-only gate: drop anything not currently for sale (sold,
             # pending, contingent, under contract, coming soon, off-market,
@@ -1978,9 +1983,11 @@ def _radar_process(watch: dict, new_listings: list) -> dict:
     return c
 
 
-def _run_watch(watch_id: str) -> dict:
+def _run_watch(watch_id: str, should_stop=None) -> dict:
     """Run one watch: AI area search with the watch's criteria, then diff, then
-    let the Radar auto-add the interesting new listings."""
+    let the Radar auto-add the interesting new listings. `should_stop` aborts
+    after the (un-interruptible) AI call — results are then discarded WITHOUT
+    being tracked, so they resurface on the next scan."""
     from . import ai_research
     w = watches_db.get(watch_id)
     if not w:
@@ -1993,11 +2000,15 @@ def _run_watch(watch_id: str) -> dict:
     res = ai_research.find_listings_in_area(params, max_listings=w.get("max_listings") or 15)
     if not res.get("ok"):
         return {"ok": False, "error": res.get("error", "search failed")}
+    if should_stop and should_stop():
+        return {"ok": True, "cancelled": True, "area_label": res.get("area_label", ""),
+                "listings_found": len(res.get("listings") or []),
+                "radar": {}, "radar_added": 0}
     out = watches_db.apply_run(watch_id, res.get("listings") or [])
     out["area_label"] = res.get("area_label", "")
     out["listings_found"] = len(res.get("listings") or [])
     try:
-        rc = _radar_process(w, out.get("new_listings") or [])
+        rc = _radar_process(w, out.get("new_listings") or [], should_stop=should_stop)
         out["radar"] = rc
         out["radar_added"] = rc.get("added", 0)
     except Exception:
@@ -2066,7 +2077,8 @@ def radar_delete(find_id: str):
 # scheduler). Runs in the background; the UI polls scan-status + refreshes.
 _radar_scan = {"running": False, "added": 0, "done": 0, "total": 0,
                "found": 0, "fresh": 0, "surfaced": 0, "sold": 0, "old": 0,
-               "unverified": 0, "off_filter": 0, "error": ""}
+               "unverified": 0, "off_filter": 0, "error": "",
+               "cancel": False, "cancelled": False, "skipped": 0}
 
 
 @app.post("/api/radar/scan")
@@ -2085,11 +2097,16 @@ def radar_scan():
     def _job():
         _radar_scan.update(running=True, added=0, done=0, total=len(watches),
                            found=0, fresh=0, surfaced=0, sold=0, old=0,
-                           unverified=0, off_filter=0, error="")
+                           unverified=0, off_filter=0, error="",
+                           cancel=False, cancelled=False, skipped=0)
+        _stop = lambda: bool(_radar_scan.get("cancel"))
         try:
             for w in watches:
+                if _stop():
+                    _radar_scan["skipped"] += 1
+                    continue
                 try:
-                    res = _run_watch(w["id"])
+                    res = _run_watch(w["id"], should_stop=_stop)
                     if not res.get("ok"):
                         _radar_scan["error"] = res.get("error", "") or _radar_scan["error"]
                     rc = res.get("radar") or {}
@@ -2106,10 +2123,22 @@ def radar_scan():
                     _radar_scan["error"] = str(e)
                 _radar_scan["done"] += 1
         finally:
+            _radar_scan["cancelled"] = bool(_radar_scan.get("cancel"))
             _radar_scan["running"] = False
 
     threading.Thread(target=_job, daemon=True, name="radar-scan").start()
     return {"ok": True, "started": True, "total": len(watches)}
+
+
+@app.post("/api/radar/scan/stop")
+def radar_scan_stop():
+    """Cancel the running scan. The in-flight AI search finishes (it can't be
+    aborted mid-request) but its results are discarded untracked, remaining
+    verifications are skipped and the remaining zones never start."""
+    if not _radar_scan.get("running"):
+        return {"ok": True, "stopped": False, "already_idle": True}
+    _radar_scan["cancel"] = True
+    return {"ok": True, "stopped": True}
 
 
 @app.get("/api/radar/scan-status")
