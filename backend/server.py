@@ -2095,7 +2095,14 @@ def _run_watch(watch_id: str, should_stop=None) -> dict:
     out["listings_found"] = len(listings)
     out["discovery"] = discovery
     try:
-        rc = _radar_process(w, out.get("new_listings") or [], should_stop=should_stop)
+        # Feed the FULL result set to the radar — not just the watch-diff's
+        # first-seen listings. The watch history tracks a listing forever,
+        # even when a past scan rejected it under different filters, so
+        # gating on "new to the watch" silently swallows anything the user's
+        # new filters would now accept. The radar has its own dedup (feed
+        # zpid/address + board) — re-processing already-surfaced listings
+        # is a cheap no-op.
+        rc = _radar_process(w, listings or [], should_stop=should_stop)
         out["radar"] = rc
         out["radar_added"] = rc.get("added", 0)
     except Exception:
@@ -2158,6 +2165,16 @@ def radar_seen():
 @app.delete("/api/radar/{find_id}")
 def radar_delete(find_id: str):
     return {"ok": radar_db.delete(find_id)}
+
+
+@app.post("/api/radar/delete-batch")
+def radar_delete_batch(payload: dict):
+    """Multi-select delete from the Radar feed: {"ids": [...]}."""
+    ids = payload.get("ids") or []
+    if not isinstance(ids, list):
+        raise HTTPException(status_code=400, detail="ids must be a list")
+    removed = radar_db.delete_many(ids)
+    return {"ok": True, "removed": removed, "unseen": radar_db.unseen_count()}
 
 
 # Real-time import: run every watch right now (instead of waiting for the hourly

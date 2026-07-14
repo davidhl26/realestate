@@ -3447,19 +3447,27 @@
       feed.innerHTML = `<div class="card"><p class="muted" style="margin:0;">No finds yet. <strong>Add a zone above</strong> (e.g. “Cleveland, OH”), then hit <strong>⚡ Scan now</strong> — it lists the homes posted in the last 24 hours and flags the ones that pass your criteria.</p></div>`;
     } else {
       const K = v => (v == null ? "—" : "$" + Math.round(Number(v) / 1000) + "K");
-      feed.innerHTML = `<div class="deals-grid">${finds.map(f => {
+      const selBar = `<div id="radar-selbar" class="card" style="display:none; align-items:center; gap:10px; padding:10px 14px; margin-bottom:12px;">
+        <strong style="font-size:13px;"><span id="radar-selcount">0</span> selected</strong>
+        <button class="btn ghost" id="radar-sel-all" style="font-size:12px;">Select all</button>
+        <button class="btn ghost" id="radar-sel-none" style="font-size:12px;">Clear</button>
+        <button class="btn" id="radar-sel-del" style="font-size:12px; margin-left:auto; color:var(--red); border-color:var(--red);">🗑 Delete selected</button>
+      </div>`;
+      feed.innerHTML = selBar + `<div class="deals-grid">${finds.map(f => {
         const via = escape([f.city, f.state].filter(Boolean).join(", ")) + " · via " + escape(f.watch_label || "watch")
           + (f.verified ? ' · <span style="color:var(--green)">Zillow ✓</span>' : "");
         const thumb = f.image ? `<img src="${escape(f.image)}" alt="" style="width:100%; height:130px; object-fit:cover; border-radius:8px; margin-bottom:8px;">` : "";
         const zBtn = f.url ? `<a class="btn ghost" href="${escape(f.url)}" target="_blank" rel="noopener" style="font-size:12px;">Zillow ↗</a>` : "";
         const delBtn = `<button class="btn ghost radar-del" data-id="${escape(f.id)}" title="Dismiss" style="margin-left:auto; font-size:12px;">🗑</button>`;
+        const selBox = `<label style="position:absolute; top:10px; left:10px; z-index:2; display:flex; padding:4px; border-radius:7px; background:rgba(20,22,26,0.55); cursor:pointer;" title="Select">
+          <input type="checkbox" class="radar-sel" data-id="${escape(f.id)}" style="width:16px; height:16px; accent-color:var(--green); cursor:pointer; margin:0;"></label>`;
         if (f.interesting) {
           const marginCol = f.margin_pct >= 20 ? "var(--green)" : f.margin_pct >= 12 ? "#e8a93b" : "var(--red)";
           const reasons = (f.reasons || []).map(r => `<span class="radar-reason">${escape(r)}</span>`).join("");
           const dealBtn = f.deal_id ? `<button class="btn primary radar-open" data-deal="${escape(f.deal_id)}" style="font-size:12px;">Open deal →</button>` : "";
-          return `<div class="card radar-card${f.seen ? "" : " radar-new"}">
-            ${thumb}
-            <div style="display:flex; justify-content:space-between; gap:8px; align-items:flex-start;">
+          return `<div class="card radar-card${f.seen ? "" : " radar-new"}" style="position:relative;">
+            ${selBox}${thumb}
+            <div style="display:flex; justify-content:space-between; gap:8px; align-items:flex-start;${f.image ? "" : " padding-left:28px;"}">
               <div style="font-weight:700;">${escape(f.address || "?")}</div>
               <span class="pill green" style="height:fit-content;">✓ INTERESTING</span>
             </div>
@@ -3489,9 +3497,9 @@
         const addBtn = f.deal_id
           ? `<button class="btn radar-open" data-deal="${escape(f.deal_id)}" style="font-size:12px;">Open deal →</button>`
           : `<button class="btn primary radar-add" data-id="${escape(f.id)}" style="font-size:12px;">➕ Add to board</button>`;
-        return `<div class="card radar-card${f.seen ? "" : " radar-new"}" style="opacity:.94;">
-          ${thumb}
-          <div style="display:flex; justify-content:space-between; gap:8px; align-items:flex-start;">
+        return `<div class="card radar-card${f.seen ? "" : " radar-new"}" style="opacity:.94; position:relative;">
+          ${selBox}${thumb}
+          <div style="display:flex; justify-content:space-between; gap:8px; align-items:flex-start;${f.image ? "" : " padding-left:28px;"}">
             <div style="font-weight:700;">${escape(f.address || "?")}</div>
             <span class="pill" style="height:fit-content; background:rgba(127,127,127,0.14);">🆕 ${f.days_on_market != null && f.days_on_market > 1 ? escape(f.days_on_market + " d on market") : "last 24h"}</span>
           </div>
@@ -3506,6 +3514,32 @@
         try { await API.radarDelete(b.dataset.id); refreshRadarView(); refreshRadarBadge(); }
         catch (e) { toast(e.message, "error"); }
       }));
+      // Multi-select: checkboxes + bulk delete bar.
+      {
+        const bar = feed.querySelector("#radar-selbar");
+        const boxes = [...feed.querySelectorAll(".radar-sel")];
+        const checked = () => boxes.filter(b => b.checked);
+        const updateBar = () => {
+          const n = checked().length;
+          bar.style.display = n ? "flex" : "none";
+          bar.querySelector("#radar-selcount").textContent = n;
+        };
+        boxes.forEach(b => b.addEventListener("change", updateBar));
+        bar.querySelector("#radar-sel-all").addEventListener("click", () => { boxes.forEach(b => { b.checked = true; }); updateBar(); });
+        bar.querySelector("#radar-sel-none").addEventListener("click", () => { boxes.forEach(b => { b.checked = false; }); updateBar(); });
+        bar.querySelector("#radar-sel-del").addEventListener("click", async () => {
+          const ids = checked().map(b => b.dataset.id);
+          if (!ids.length) return;
+          if (!confirm(`Delete ${ids.length} find(s) from the Radar feed? They won't resurface on future scans.`)) return;
+          const btn = bar.querySelector("#radar-sel-del");
+          btn.disabled = true; btn.textContent = "…";
+          try {
+            const r = await API.radarDeleteBatch(ids);
+            toast(`${r.removed} find(s) deleted`, "success");
+            refreshRadarView(); refreshRadarBadge();
+          } catch (e) { toast(e.message, "error"); btn.disabled = false; btn.textContent = "🗑 Delete selected"; }
+        });
+      }
       feed.querySelectorAll(".radar-add").forEach(b => b.addEventListener("click", async () => {
         const f = finds.find(x => x.id === b.dataset.id); if (!f) return;
         b.disabled = true; b.textContent = "…";

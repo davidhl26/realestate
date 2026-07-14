@@ -51,6 +51,7 @@ const API = (() => {
     radarList: () => req("/api/radar"),
     radarSeen: () => req("/api/radar/seen", { method: "POST", body: "{}" }),
     radarDelete: (id) => req("/api/radar/" + encodeURIComponent(id), { method: "DELETE" }),
+    radarDeleteBatch: (ids) => req("/api/radar/delete-batch", { method: "POST", body: JSON.stringify({ ids }) }),
     radarScan: () => req("/api/radar/scan", { method: "POST", body: "{}" }),
     radarScanStop: () => req("/api/radar/scan/stop", { method: "POST", body: "{}" }),
     radarScanStatus: () => req("/api/radar/scan-status"),

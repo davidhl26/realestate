@@ -28,9 +28,11 @@ class RadarDB:
 
     def _read(self) -> dict:
         try:
-            return json.loads(self.path.read_text())
+            data = json.loads(self.path.read_text())
+            data.setdefault("dismissed", [])
+            return data
         except Exception:
-            return {"finds": []}
+            return {"finds": [], "dismissed": []}
 
     def _write(self, data: dict):
         tmp = self.path.with_suffix(".tmp")
@@ -48,20 +50,25 @@ class RadarDB:
             return sum(1 for f in self._read().get("finds", []) if not f.get("seen"))
 
     def has_address(self, address: str) -> bool:
+        """True if this address is on the radar OR was dismissed by the user
+        (dismissed homes must not resurface on the next scan)."""
         k = _key(address)
         with self._lock:
-            return any(_key(f.get("address")) == k for f in self._read().get("finds", []))
+            data = self._read()
+        return (any(_key(f.get("address")) == k for f in data.get("finds", []))
+                or any(d.get("addr") == k for d in data.get("dismissed", [])))
 
     def has_zpid(self, zpid) -> bool:
-        """True if a find with this Zillow property id is already on the radar.
-        zpid dedup is exact — immune to address-format drift ("123 Main St" vs
-        "123 Main Street, Cleveland, OH")."""
+        """True if a find with this Zillow property id is already on the radar
+        or was dismissed. zpid dedup is exact — immune to address-format drift
+        ("123 Main St" vs "123 Main Street, Cleveland, OH")."""
         z = str(zpid or "").strip()
         if not z:
             return False
         with self._lock:
-            return any(str(f.get("zpid") or "").strip() == z
-                       for f in self._read().get("finds", []))
+            data = self._read()
+        return (any(str(f.get("zpid") or "").strip() == z for f in data.get("finds", []))
+                or any(str(d.get("zpid") or "") == z for d in data.get("dismissed", [])))
 
     def add_find(self, find: dict):
         """Insert a find (deduped by zpid when present, else address). Returns
@@ -75,6 +82,9 @@ class RadarDB:
                     return None
                 if k and _key(f.get("address")) == k:
                     return None
+            for d in data.get("dismissed", []):
+                if (z and str(d.get("zpid") or "") == z) or (k and d.get("addr") == k):
+                    return None   # user dismissed this home — don't resurface it
             find = dict(find)
             find.setdefault("id", "r" + _now().replace(":", "").replace("-", "").replace(".", "")[:20]
                              + "-" + str(len(data["finds"])))
@@ -106,12 +116,43 @@ class RadarDB:
             self._write(data)
         return True
 
+    @staticmethod
+    def _tombstone(data: dict, find: dict):
+        """Remember a deleted find so scans don't resurface it (the scan
+        pipeline re-processes the full search result every run)."""
+        data.setdefault("dismissed", []).append({
+            "zpid": str(find.get("zpid") or "").strip(),
+            "addr": _key(find.get("address")), "ts": _now()})
+        data["dismissed"] = data["dismissed"][-800:]
+
     def delete(self, find_id: str) -> bool:
         with self._lock:
             data = self._read()
-            before = len(data["finds"])
-            data["finds"] = [f for f in data["finds"] if f.get("id") != find_id]
-            if len(data["finds"]) < before:
+            keep, removed = [], []
+            for f in data["finds"]:
+                (removed if f.get("id") == find_id else keep).append(f)
+            if removed:
+                data["finds"] = keep
+                for f in removed:
+                    self._tombstone(data, f)
                 self._write(data)
                 return True
         return False
+
+    def delete_many(self, find_ids) -> int:
+        """Bulk delete (multi-select in the Radar UI). Returns how many were
+        actually removed — unknown ids are ignored, one atomic write."""
+        wanted = {str(i) for i in (find_ids or []) if i}
+        if not wanted:
+            return 0
+        with self._lock:
+            data = self._read()
+            keep, removed = [], []
+            for f in data["finds"]:
+                (removed if str(f.get("id")) in wanted else keep).append(f)
+            if removed:
+                data["finds"] = keep
+                for f in removed:
+                    self._tombstone(data, f)
+                self._write(data)
+            return len(removed)
