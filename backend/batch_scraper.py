@@ -18,6 +18,8 @@ import uuid
 from datetime import datetime
 from typing import Optional
 
+from . import zillow_api
+
 log = logging.getLogger("flip-board.batch")
 
 _JOBS = {}            # job_id -> BatchJob
@@ -86,10 +88,16 @@ def _shape_ai_listing(L: dict) -> dict:
         "sqft": L.get("sqft"),
         "listing_price": price,
         "price": price,
-        "zestimate": None,
-        "description": "Imported from Zillow area search via AI. "
+        "zestimate": L.get("zestimate"),
+        "description": "Imported from Zillow area search. "
                        "Verify the live listing, price, and condition.",
     }
+    # API search results carry the listing photo — use it directly.
+    if L.get("image"):
+        shaped["image"] = L["image"]
+        shaped["image_gallery"] = [L["image"]]
+    if L.get("home_type"):
+        shaped["home_type"] = zillow_api.friendly_type(L["home_type"]) or shaped["home_type"]
     # Source link: the AI URL if it had one, else a Zillow address search so the
     # user can click through to the live listing.
     url = (L.get("url") or "").strip()
@@ -97,16 +105,18 @@ def _shape_ai_listing(L: dict) -> dict:
         from urllib.parse import quote_plus
         url = f"https://www.zillow.com/homes/{quote_plus(full)}_rb/"
     shaped["source_url"] = url
-    # Optional Street View exterior photo (only if a Google Maps key is set).
-    try:
-        from . import ai_research, scraper as _sc
-        mkey = ai_research.get_maps_key()
-        if mkey and full:
-            img = _sc.street_view_image_url(full, mkey)
-            shaped["image"] = img
-            shaped["image_gallery"] = [img]
-    except Exception:
-        pass
+    # Optional Street View exterior photo (only if a Google Maps key is set
+    # and the listing didn't already come with its own photo).
+    if not shaped.get("image"):
+        try:
+            from . import ai_research, scraper as _sc
+            mkey = ai_research.get_maps_key()
+            if mkey and full:
+                img = _sc.street_view_image_url(full, mkey)
+                shaped["image"] = img
+                shaped["image_gallery"] = [img]
+        except Exception:
+            pass
     return shaped
 
 
@@ -149,7 +159,7 @@ def _expand_search_items(job: "BatchJob") -> list:
             continue
 
         it["status"] = "running"
-        it["progress_message"] = f"finding the {max_listings} newest listings (AI web search)…"
+        it["progress_message"] = f"finding the {max_listings} newest listings…"
         it["started_at"] = _now()
         job.updated_at = _now()
 
@@ -157,7 +167,23 @@ def _expand_search_items(job: "BatchJob") -> list:
             params = scraper.parse_zillow_search_url(it["input"])
             if not params:
                 raise ValueError("Could not read the search filters from this URL")
-            res = ai_research.find_listings_in_area(params, max_listings=max_listings)
+            # Zillow's own search API first (real-time, 1 request, verified
+            # data incl. photo + zestimate); AI web search as fallback.
+            res = None
+            loc_term = (params.get("search_term") or "").strip()
+            if loc_term and zillow_api.is_configured():
+                api_ls = zillow_api.search_newest(
+                    location=loc_term, max_dom=params.get("max_dom") or 7,
+                    price_min=params.get("price_min"), price_max=params.get("price_max"),
+                    beds_min=params.get("beds_min"), baths_min=params.get("baths_min"),
+                    sqft_min=params.get("sqft_min"),
+                    property_type=params.get("property_type"), limit=max_listings)
+                if api_ls is not None:
+                    res = {"ok": True, "listings": api_ls, "area_label": loc_term,
+                           "notes": f"{len(api_ls)} newest listings straight from Zillow"}
+            if res is None:
+                it["progress_message"] = f"finding the {max_listings} newest listings (AI web search)…"
+                res = ai_research.find_listings_in_area(params, max_listings=max_listings)
         except Exception as e:
             log.exception("Search expansion failed")
             it["status"] = "failed"
@@ -505,8 +531,20 @@ def _process_one(item: dict, scraper, analyzer, db) -> Optional[str]:
     kind = item["type"]
 
     if kind == "url":
-        item["progress_message"] = "fetching listing page…"
-        data = scraper.scrape(raw)
+        # Zillow homedetails URL → the Data API first (structured JSON,
+        # ~1s, no proxy credits, includes the photo gallery); page scrape
+        # only as fallback or for non-Zillow URLs.
+        data = None
+        zm = re.search(r"/(\d+)_zpid", raw)
+        if zm and zillow_api.is_configured():
+            item["progress_message"] = "fetching from Zillow API…"
+            try:
+                data = zillow_api.scrape_shaped(zm.group(1))
+            except Exception:
+                data = None
+        if not data:
+            item["progress_message"] = "fetching listing page…"
+            data = scraper.scrape(raw)
         if not data or data.get("scrape_error") or not data.get("address"):
             # Scrape blocked/failed — fall back to the AI summary if we have one
             # (so a real listing isn't lost just because the page didn't load).

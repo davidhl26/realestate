@@ -7362,6 +7362,21 @@
       closeLeadModal(); renderLeadsKanban();
     } catch (e) { toast(e.message, "error"); }
   });
+  $("#lead-modal-zillow")?.addEventListener("click", async () => {
+    if (!_leadModalId) return;
+    const btn = $("#lead-modal-zillow");
+    btn.disabled = true; btn.textContent = "🏠 Fetching…";
+    try {
+      const r = await API.leadZillowEnrich(_leadModalId);
+      _patchLeadCache(r.lead);
+      toast(r.filled && r.filled.length
+        ? `Zillow ✓ — filled: ${r.filled.join(", ")}`
+        : "Zillow ✓ — lead already complete", "success");
+      renderLeadsKanban();
+      openLeadModal(_leadModalId);   // re-render the modal with the new data
+    } catch (e) { toast(e.message, "error"); }
+    btn.disabled = false; btn.textContent = "🏠 Zillow data";
+  });
 
   // ---- "+ From a deal" → modal picker to convert a deal into a lead ----
   function openKanbanDealPicker() {

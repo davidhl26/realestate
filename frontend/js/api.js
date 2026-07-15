@@ -188,6 +188,8 @@ const API = (() => {
       "/comments/" + encodeURIComponent(cid), { method: "DELETE" }),
     leadScrape: (url) => req("/api/leads/scrape",
       { method: "POST", body: JSON.stringify({ url }) }),
+    leadZillowEnrich: (id) => req("/api/leads/" + encodeURIComponent(id) + "/zillow-enrich",
+      { method: "POST", body: "{}" }),
     leadAnalyze: (id) => req("/api/leads/" + encodeURIComponent(id) + "/analyze",
       { method: "POST", body: "{}" }),
     leadPromote: (id) => req("/api/leads/" + encodeURIComponent(id) + "/promote-to-deal",

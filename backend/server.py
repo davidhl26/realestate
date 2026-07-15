@@ -3468,11 +3468,113 @@ def leads_get(lead_id: str):
     return l
 
 
+def _lead_full_address(l: dict) -> str:
+    street = (l.get("address") or "").strip()
+    tail = ", ".join(p for p in [
+        (l.get("city") or "").strip(),
+        f"{(l.get('state') or '').strip()} {str(l.get('zip') or '').strip()}".strip()] if p)
+    if tail and tail.lower() not in street.lower():
+        return f"{street}, {tail}" if street else tail
+    return street
+
+
+def _zillow_enrich_lead(l: dict, allow_ai_resolve: bool = True) -> dict:
+    """Fill a lead's property facts, photos and comps ARV from the Zillow
+    Data API — works for OFF-MARKET homes too (property/details answers on
+    any zpid). Only fills fields the lead doesn't already have. The zpid is
+    cached on the lead, so re-enriching never re-pays the URL resolution.
+    Mutates `l`; returns {"ok", "filled", "error"}."""
+    if not zillow_api.is_configured():
+        return {"ok": False, "filled": [], "error": "Zillow API key not configured (Settings → Zillow Data API)"}
+    filled = []
+    zpid = (str(l.get("zpid") or "").strip()
+            or _zpid_from_url(l.get("zillow_url") or "")
+            or _zpid_from_url(l.get("source_url") or ""))
+    if not zpid and allow_ai_resolve:
+        # Leads come from lead sellers, not Zillow — resolve the address to
+        # its homedetails URL once (one batched web-search call).
+        full = _lead_full_address(l)
+        if full:
+            hint = ", ".join(p for p in [l.get("city"), l.get("state")] if p)
+            mapping = ai_research.resolve_listing_urls([full], area_hint=hint)
+            url = next(iter(mapping.values()), "") if mapping else ""
+            z = _zpid_from_url(url)
+            if z:
+                zpid = z
+                l["zillow_url"] = url
+                filled.append("zillow_url")
+    if not zpid:
+        return {"ok": False, "filled": filled,
+                "error": "Could not find this address on Zillow"}
+    l["zpid"] = str(zpid)
+
+    det = zillow_api.property_details(zpid)
+    if det:
+        for key in ("beds", "baths", "sqft", "year_built", "lat", "lng"):
+            if l.get(key) in (None, "", 0) and det.get(key) not in (None, ""):
+                l[key] = det[key]
+                filled.append(key)
+        for key in ("city", "state", "zip"):
+            if not str(l.get(key) or "").strip() and det.get(key):
+                l[key] = det[key]
+                filled.append(key)
+        if not str(l.get("property_type") or "").strip() and det.get("home_type"):
+            l["property_type"] = zillow_api.friendly_type(det["home_type"])
+            filled.append("property_type")
+        if det.get("home_status"):
+            l["zillow_status"] = det["home_status"]
+        if det.get("days_on_market") is not None:
+            l["zillow_dom"] = det["days_on_market"]
+        # A listed price only makes sense as "asking" while it's on the market.
+        if (not l.get("asking_price") and det.get("listing_price")
+                and (det.get("home_status") or "") in ("FOR_SALE", "PENDING", "COMING_SOON")):
+            l["asking_price"] = det["listing_price"]
+            filled.append("asking_price")
+
+    if not (l.get("images") or []):
+        imgs = zillow_api.images(zpid)
+        if imgs:
+            l["images"] = imgs[:12]
+            l.setdefault("image", imgs[0])
+            l.setdefault("image_gallery", imgs[:12])
+            filled.append("images")
+
+    if not l.get("estimated_arv"):
+        ca = zillow_api.comparable_arv(zpid, subject_sqft=l.get("sqft"))
+        if ca:
+            l["estimated_arv"], l["arv_comps_count"] = ca
+            filled.append("estimated_arv")
+
+    l["zillow_enriched_at"] = datetime.utcnow().isoformat() + "Z"
+    return {"ok": True, "filled": filled, "error": None}
+
+
 @app.post("/api/leads")
 def leads_create(lead: dict = Body(...)):
     if not lead.get("address") and not lead.get("source_url"):
         raise HTTPException(400, "Provide at least address or source_url")
+    # Fast auto-enrich when the lead already points at a Zillow page (no AI
+    # call, ~1-2s). Address-only leads use the 🏠 Zillow button instead.
+    try:
+        if _zpid_from_url(lead.get("source_url") or "") or _zpid_from_url(lead.get("zillow_url") or ""):
+            _zillow_enrich_lead(lead, allow_ai_resolve=False)
+    except Exception:
+        log.exception("lead auto-enrich failed (lead still created)")
     return leads_db.upsert_lead(lead)
+
+
+@app.post("/api/leads/{lead_id}/zillow-enrich")
+def leads_zillow_enrich(lead_id: str):
+    """Pull live Zillow data into a lead: property facts, photos, status,
+    and a comps-based ARV (fills only what's missing)."""
+    l = leads_db.get_lead(lead_id)
+    if not l:
+        raise HTTPException(404, "Lead not found")
+    out = _zillow_enrich_lead(l)
+    if not out["ok"]:
+        raise HTTPException(400, out["error"])
+    saved = leads_db.upsert_lead(l)
+    return {"ok": True, "filled": out["filled"], "lead": saved}
 
 
 @app.patch("/api/leads/{lead_id}")

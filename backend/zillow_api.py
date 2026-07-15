@@ -80,12 +80,68 @@ def property_details(zpid) -> Optional[dict]:
 
 def first_image(zpid) -> Optional[str]:
     """First listing photo URL (used on verified Radar finds only)."""
+    imgs = images(zpid)
+    return imgs[0] if imgs else None
+
+
+def images(zpid, limit: int = 24) -> list:
+    """Full photo gallery for a property (ONE request)."""
     d = _get("/property/images", {"zpid": str(zpid)})
+    out = []
     for im in (d or {}).get("images") or []:
         u = (im or {}).get("url")
         if u:
-            return u
-    return None
+            out.append(u)
+        if len(out) >= limit:
+            break
+    return out
+
+
+_FRIENDLY_TYPE = {
+    "SINGLE_FAMILY": "Single Family Residence", "MULTI_FAMILY": "Multi-family",
+    "DUPLEX": "Multi-family / Duplex", "TOWNHOUSE": "Townhouse",
+    "CONDO": "Condo", "APARTMENT": "Condo", "MANUFACTURED": "Manufactured",
+    "LOT": "Land", "HOME_TYPE_UNKNOWN": "",
+}
+
+
+def friendly_type(home_type) -> str:
+    ht = (home_type or "").strip().upper()
+    return _FRIENDLY_TYPE.get(ht, (home_type or "").replace("_", " ").title())
+
+
+def scrape_shaped(zpid, with_photos: bool = True) -> Optional[dict]:
+    """Property data shaped like scraper.scrape() output, straight from the
+    API (1-2 requests, ~1s) — used by the batch importer for Zillow URLs
+    instead of a full page scrape. None on failure → caller falls back."""
+    det = property_details(zpid)
+    if not det:
+        return None
+    street = (det.get("street") or "").strip()
+    tail = ", ".join(p for p in [
+        (det.get("city") or "").strip(),
+        f"{(det.get('state') or '').strip()} {(det.get('zip') or '').strip()}".strip()] if p)
+    full = f"{street}, {tail}" if street and tail else (street or tail)
+    gallery = images(zpid) if with_photos else []
+    return {
+        "source": "zillow-api",
+        "address": full,
+        "street": street,
+        "city": det.get("city") or "",
+        "state": det.get("state") or "",
+        "zip": det.get("zip") or "",
+        "home_type": friendly_type(det.get("home_type")) or "Single Family Residence",
+        "beds": det.get("beds"), "baths": det.get("baths"),
+        "sqft": det.get("sqft"), "year_built": det.get("year_built"),
+        "listing_price": det.get("listing_price"), "price": det.get("listing_price"),
+        "zestimate": None,
+        "days_on_market": det.get("days_on_market"),
+        "listing_status": det.get("home_status"),
+        "lat": det.get("lat"), "lng": det.get("lng"),
+        "image": gallery[0] if gallery else None,
+        "image_gallery": gallery or None,
+        "description": "Imported via the Zillow Data API (live listing data).",
+    }
 
 
 def comparable_arv(zpid, subject_sqft=None):
