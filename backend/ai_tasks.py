@@ -14,7 +14,7 @@ import re
 from typing import Any, Optional
 
 from .ai_research import (
-    get_api_key, get_model, is_configured, _extract_json, _repair_json,
+    get_api_key, get_model, model_for, is_configured, _extract_json, _repair_json,
 )
 
 log = logging.getLogger("flip-board.ai_tasks")
@@ -36,7 +36,7 @@ def _parse_task_json(text: str) -> Optional[dict]:
             return d
     return None
 
-WEB_TOOL = {"type": "web_search_20250305", "name": "web_search", "max_uses": 8}
+WEB_TOOL = {"type": "web_search_20250305", "name": "web_search", "max_uses": 5}
 
 
 def _client():
@@ -86,20 +86,32 @@ def _summary(deal: dict, include_financials: bool = True,
 
 def _run_claude(system: str, user: str, *, use_web: bool = True,
                   max_tokens: int = 3000, vision_images: Optional[list] = None,
+                  max_images: int = 6, tier: str = "standard",
                   pdf_bytes: Optional[bytes] = None) -> dict:
     """Common wrapper. Returns {ok, text, model, usage, web_searches_used} or {ok:False, error}.
+    tier: "smart" (judgment — the user-configured model), "standard"
+    (analytical, the default) or "fast" (mechanical) — see ai_research.model_for.
     pdf_bytes: attach a PDF directly so Claude reads it natively (handles
     scanned / no-text-layer PDFs that pdfplumber can't extract)."""
     if not is_configured():
         return {"ok": False, "error": "No Anthropic API key (Settings → AI)."}
     try:
         client = _client()
-        model = get_model()
+        model = model_for(tier)
 
         content = []
         if vision_images:
-            for url in vision_images[:6]:  # limit
-                content.append({"type": "image", "source": {"type": "url", "url": url}})
+            # Entries are either public http(s) URLs, or {"data": <b64>,
+            # "media_type": ...} dicts for locally-archived photos (the
+            # Anthropic API can't fetch our /deal-photos/... relative paths).
+            for img in vision_images[:max_images]:
+                if isinstance(img, dict) and img.get("data"):
+                    content.append({"type": "image", "source": {
+                        "type": "base64",
+                        "media_type": img.get("media_type") or "image/jpeg",
+                        "data": img["data"]}})
+                elif isinstance(img, str) and img.startswith("http"):
+                    content.append({"type": "image", "source": {"type": "url", "url": img}})
         if pdf_bytes:
             import base64
             content.append({"type": "document", "source": {
@@ -501,6 +513,54 @@ def task_photos(deal: dict) -> dict:
 
 
 # ============================================================================
+# REHAB FROM PHOTOS — itemized $ budget graded off the listing gallery
+# ============================================================================
+
+REHAB_PHOTOS_SYSTEM = """You are a fix-and-flip rehab estimator pricing a renovation from listing photos, for an investor buying in the US Midwest (Ohio: Cleveland / Toledo / Columbus metro).
+
+Study every photo. For each work area you can SEE (kitchen, bathrooms, flooring, interior paint/walls, roof, exterior/siding, windows, HVAC/electrical/plumbing if visible, landscaping/curb appeal), judge its condition and price the work needed to reach a clean rent-ready-to-retail flip standard (not luxury). Use realistic Midwest contractor pricing. Scale costs to the property's square footage when given.
+
+Rules:
+- Only include line items justified by what the photos show (or by the property age for systems you can't see — mark those "not visible, allowance").
+- If photos only show the exterior, say so: price exterior items and add a clearly-labeled interior allowance based on age/era.
+- Be decisive with numbers — round to the nearest $500.
+
+Output JSON only:
+{
+  "condition_grade": "A"|"B"|"C"|"D",     // A = move-in clean, D = gut
+  "complexity": "Cosmetic"|"Mid-level"|"Full gut",
+  "items": [ {"label": "Kitchen — full refresh (cabinets painted, new counters/appliances)", "cost": 12500, "seen": true}, ... ],
+  "total_low": <int>, "total_high": <int>,
+  "confidence": "Low"|"Medium"|"High",    // High only with good interior coverage
+  "photos_coverage": "<one line: what the photos do and don't show>",
+  "concerns": ["water stain on kitchen ceiling", ...],
+  "summary": "<2-3 sentences: overall condition + scope>"
+}"""
+
+
+def task_rehab_photos(deal: dict, images: list) -> dict:
+    """Vision pass over the listing gallery → itemized rehab budget in the
+    exact {label, cost} shape the rehab modal consumes."""
+    if not images:
+        return {"ok": False, "error": "no photos", "error_type": "no_photos"}
+    user = (f"Price the rehab for this property from its {min(len(images), 12)} listing photos:\n\n"
+             f"{_summary(deal, include_anchors=False)}")
+    r = _run_claude(REHAB_PHOTOS_SYSTEM, user, max_tokens=3000, use_web=False,
+                     vision_images=images, max_images=12)
+    if not r.get("ok"):
+        return r
+    parsed = _parse_task_json(r["text"])
+    if not parsed or not isinstance(parsed.get("items"), list):
+        return {"ok": False, "error": "Could not parse the photo estimate.",
+                "raw": r["text"][:1500]}
+    items = [{"label": str(i.get("label") or "").strip(),
+              "cost": int(float(i.get("cost") or 0))}
+             for i in parsed["items"]
+             if isinstance(i, dict) and (i.get("label") or i.get("cost"))]
+    return _wrap(r, {**parsed, "items": items})
+
+
+# ============================================================================
 # TASK 9 — GLOBAL VERDICT
 # ============================================================================
 
@@ -535,7 +595,7 @@ def task_verdict(deal: dict) -> dict:
             insights_summary += f"\n\n[Prior {k} insight]\n{json.dumps(ai[k]['result'], indent=2)[:1500]}"
     user = (f"Deliver a verdict on this deal:\n\n{_summary(deal)}{insights_summary}\n\n"
              "Combine everything and give a single clear recommendation.")
-    r = _run_claude(VERDICT_SYSTEM, user, max_tokens=2500, use_web=False)
+    r = _run_claude(VERDICT_SYSTEM, user, max_tokens=2500, use_web=False, tier="smart")
     if not r.get("ok"):
         return r
     return _wrap(r, _parse_task_json(r["text"]) or {"error": "parse failed", "raw": r["text"][:1500]})
@@ -565,7 +625,7 @@ def task_offer(deal: dict) -> dict:
     if ai.get("verdict") and ai["verdict"].get("result"):
         extras = f"\n\n[Prior verdict]\n{json.dumps(ai['verdict']['result'], indent=2)[:1500]}"
     user = (f"Suggest an offer and negotiation strategy for this deal:\n\n{_summary(deal)}{extras}")
-    r = _run_claude(OFFER_SYSTEM, user, max_tokens=1500, use_web=False)
+    r = _run_claude(OFFER_SYSTEM, user, max_tokens=1500, use_web=False, tier="smart")
     if not r.get("ok"):
         return r
     return _wrap(r, _parse_task_json(r["text"]) or {"error": "parse failed", "raw": r["text"][:1500]})
@@ -666,7 +726,7 @@ Output JSON only:
 
 def task_mls_listing(deal: dict) -> dict:
     user = (f"Write 5 MLS listings for this property (post-rehab):\n\n{_summary(deal)}")
-    r = _run_claude(MLS_SYSTEM, user, max_tokens=3500, use_web=False)
+    r = _run_claude(MLS_SYSTEM, user, max_tokens=3500, use_web=False, tier="fast")
     if not r.get("ok"):
         return r
     return _wrap(r, _parse_task_json(r["text"]) or {"error": "parse failed", "raw": r["text"][:1500]})
@@ -691,7 +751,7 @@ Output JSON only:
 
 def task_offer_letter(deal: dict) -> dict:
     user = (f"Write an offer letter for this property:\n\n{_summary(deal)}")
-    r = _run_claude(LETTER_SYSTEM, user, max_tokens=1500, use_web=False)
+    r = _run_claude(LETTER_SYSTEM, user, max_tokens=1500, use_web=False, tier="fast")
     if not r.get("ok"):
         return r
     return _wrap(r, _parse_task_json(r["text"]) or {"error": "parse failed", "raw": r["text"][:1500]})
@@ -720,7 +780,7 @@ Output JSON only:
 
 def task_marketing(deal: dict) -> dict:
     user = (f"Generate marketing copy for the post-rehab listing of:\n\n{_summary(deal)}")
-    r = _run_claude(MARKETING_SYSTEM, user, max_tokens=2000, use_web=False)
+    r = _run_claude(MARKETING_SYSTEM, user, max_tokens=2000, use_web=False, tier="fast")
     if not r.get("ok"):
         return r
     return _wrap(r, _parse_task_json(r["text"]) or {"error": "parse failed", "raw": r["text"][:1500]})
@@ -930,11 +990,22 @@ TASKS = {
 }
 
 
+# Tasks that delegate to a function which already records its own usage
+# (task_arv → ai_research.research_arv) — recording here again would
+# double-count the same API call in the spend meter.
+_SELF_RECORDING = {"arv"}
+
+
 def run_task(task_name: str, deal: dict) -> dict:
     if task_name not in TASKS:
         return {"ok": False, "error": f"Unknown task: {task_name}"}
     try:
-        return TASKS[task_name]["fn"](deal)
+        out = TASKS[task_name]["fn"](deal)
+        if out.get("ok") and task_name not in _SELF_RECORDING:
+            from . import ai_usage
+            ai_usage.record(f"task:{task_name}", out.get("model") or "",
+                             out.get("usage"), out.get("web_searches_used") or 0)
+        return out
     except Exception as e:
         log.exception("Task %s failed", task_name)
         return {"ok": False, "error": f"{e}"}

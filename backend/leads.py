@@ -358,6 +358,8 @@ def analyze_lead(lead: dict) -> dict:
         if getattr(block, "type", "") == "server_tool_use":
             web += 1
     text = "\n".join(text_parts)
+    from . import ai_usage
+    ai_usage.record("lead-analyze", model, msg.usage, web_searches=web)
     parsed = _extract_json(text)
     if not parsed:
         return {"ok": False, "error": "Could not parse AI response.", "raw": text[:2000]}

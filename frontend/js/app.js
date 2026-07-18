@@ -4139,6 +4139,10 @@
       ? deal.rehab_items.map(i => ({ label: i.label, cost: Number(i.cost) || 0 }))
       : [];
     $("#rehab-ai-status").textContent = "";
+    const npc = $("#rehab-nophotos-choice");
+    if (npc) npc.style.display = "none";
+    const mp = $("#rehab-manual-presets");
+    if (mp) mp.style.display = "none";
     $("#rehab-contingency-on").checked = deal?.rehab_contingency_pct != null ? true : true;
     $("#rehab-contingency-pct").value = deal?.rehab_contingency_pct ?? 15;
     // catalog chips
@@ -4186,16 +4190,68 @@
 
   $("#rehab-ai-btn")?.addEventListener("click", async () => {
     if (!_rehabDealId) return;
+    const dealId = _rehabDealId;   // the modal may switch deals during the call
     const btn = $("#rehab-ai-btn"), st = $("#rehab-ai-status");
     btn.disabled = true; st.textContent = "Analyzing…";
     try {
-      const r = await API.rehabEstimate(_rehabDealId);
+      const r = await API.rehabEstimate(dealId);
+      if (_rehabDealId !== dealId) return;   // stale response — don't touch another deal's editor
       if (!r.ok) { st.textContent = r.error || "Failed"; return; }
       _rehabItems = (r.items || []).map(i => ({ label: i.label, cost: Number(i.cost) || 0 }));
       _renderRehabItems();
       st.textContent = r.summary ? `✓ ${r.summary}` : "✓ AI estimate applied";
     } catch (e) { st.textContent = e.message; }
     finally { btn.disabled = false; }
+  });
+
+  // 📸 Rehab from the listing photo gallery (vision). No photos → offer the
+  // two other paths: the usual market AI estimate, or quick manual entry.
+  $("#rehab-photos-btn")?.addEventListener("click", async () => {
+    if (!_rehabDealId) return;
+    const dealId = _rehabDealId;   // the modal may switch deals during the 20-40s call
+    const btn = $("#rehab-photos-btn"), st = $("#rehab-ai-status");
+    const choice = $("#rehab-nophotos-choice");
+    choice.style.display = "none";
+    btn.disabled = true; st.textContent = "📸 Grading the photos… (~20-40s)";
+    try {
+      const r = await API.rehabFromPhotos(dealId);
+      if (_rehabDealId !== dealId) return;   // stale response — don't touch another deal's editor
+      if (r.no_photos) {
+        st.textContent = "";
+        choice.style.display = "block";
+        return;
+      }
+      _rehabItems = (r.items || []).map(i => ({ label: i.label, cost: Number(i.cost) || 0 }));
+      _renderRehabItems();
+      const range = (r.total_low && r.total_high)
+        ? ` · range ${fmtMoney(r.total_low)}–${fmtMoney(r.total_high)}` : "";
+      st.textContent = `✓ ${r.photos_used} photos · Grade ${r.grade || "?"} · ${r.complexity || ""}${range}`
+        + (r.concerns && r.concerns.length ? ` · ⚠ ${r.concerns[0]}` : "");
+    } catch (e) { st.textContent = e.message; }
+    finally { btn.disabled = false; }
+  });
+  $("#rehab-nophotos-ai")?.addEventListener("click", () => {
+    $("#rehab-nophotos-choice").style.display = "none";
+    $("#rehab-ai-btn")?.click();
+  });
+  $("#rehab-nophotos-manual")?.addEventListener("click", () => {
+    // Quick $/sqft presets scaled to the home, then hand over to the line editor.
+    const deal = (state.deals || []).find(d => d.id === _rehabDealId);
+    const sqft = Number(deal?.sqft) || 0;
+    const presets = sqft
+      ? [["Light (paint/floors/fixtures)", 20], ["Mid (kitchen + baths + cosmetics)", 35], ["Heavy (systems + full interior)", 55]]
+          .map(([l, psf]) => [`${l} — $${psf}/sf × ${sqft.toLocaleString("en-US")} sf`, Math.round(psf * sqft / 500) * 500])
+      : [["Light rehab", 15000], ["Mid rehab", 35000], ["Heavy rehab", 60000]];
+    const box = $("#rehab-manual-presets");
+    box.innerHTML = presets.map(([l, c]) =>
+      `<button class="btn ghost rehab-preset" data-label="${escape(l)}" data-cost="${c}" style="font-size:12px;">${escape(l)} · ${fmtMoney(c)}</button>`).join("");
+    box.style.display = "flex";
+    box.querySelectorAll(".rehab-preset").forEach(b => b.addEventListener("click", () => {
+      _rehabItems = [{ label: b.dataset.label, cost: Number(b.dataset.cost) || 0 }];
+      _renderRehabItems();
+      $("#rehab-nophotos-choice").style.display = "none";
+      $("#rehab-ai-status").textContent = "✓ Preset applied — adjust the line or add items, then Apply.";
+    }));
   });
 
   $("#rehab-apply")?.addEventListener("click", async () => {
@@ -4998,6 +5054,30 @@
           try { await API.saveAiConfig({ radar_min_profit: Number(rp.value) }); toast(`Radar min profit → $${Number(rp.value).toLocaleString("en-US")}`, "success"); }
           catch (e) { toast(e.message, "error"); }
         };
+      }
+      // AI usage meter + monthly budget
+      const bi = $("#ai-budget-input");
+      if (bi) {
+        bi.value = cfg.ai_budget_monthly || "";
+        bi.onchange = async () => {
+          try {
+            await API.saveAiConfig({ ai_budget_monthly: Number(bi.value) || 0 });
+            toast(Number(bi.value) > 0 ? `AI budget → $${bi.value}/month` : "AI budget removed", "success");
+          } catch (e) { toast(e.message, "error"); }
+        };
+      }
+      const ub = $("#ai-usage-box");
+      if (ub) {
+        API.aiUsage().then(u => {
+          if (!u.total_calls) { ub.textContent = "No AI calls recorded yet this month."; return; }
+          const budget = Number(cfg.ai_budget_monthly) || 0;
+          const over = budget > 0 && u.total_cost >= budget;
+          const top = (u.by_task || []).slice(0, 5).map(t =>
+            `<div style="display:flex; justify-content:space-between;"><span>${escape(t.task)}</span><span>${t.calls}× · $${t.cost.toFixed(2)}</span></div>`).join("");
+          ub.innerHTML = `<div style="font-size:15px; font-weight:700; color:${over ? "var(--red)" : "var(--fg)"};">
+              $${u.total_cost.toFixed(2)} <span class="muted" style="font-size:11.5px; font-weight:400;">estimated · ${u.total_calls} calls · ${u.total_web_searches} web searches${budget ? ` · budget $${budget}` : ""}${over ? " · ⚠ auto-analysis paused" : ""}</span>
+            </div><div style="margin-top:6px; max-width:420px;">${top}</div>`;
+        }).catch(() => { ub.textContent = "Usage unavailable."; });
       }
       $("#ai-status").textContent = cfg.configured
         ? `✓ Configured with ${cfg.model || 'claude-opus-4-8'}`

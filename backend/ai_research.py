@@ -57,6 +57,21 @@ def get_model() -> str:
     return read_config().get("model") or "claude-opus-4-8"
 
 
+# Per-task model tiers — most calls don't need the flagship model.
+#   smart    : judgment calls (verdict, offers, lead analysis, chat) — the
+#              user-configured model (Opus by default)
+#   standard : analytical work (ARV, rehab, neighborhood, risks, vision…)
+#   fast     : mechanical tasks (URL lookup, listing text, letters)
+# Overridable in ai-config via model_standard / model_fast.
+_TIER_DEFAULTS = {"standard": "claude-sonnet-5", "fast": "claude-haiku-4-5"}
+
+
+def model_for(tier: str = "smart") -> str:
+    if tier == "smart":
+        return get_model()
+    return read_config().get(f"model_{tier}") or _TIER_DEFAULTS.get(tier) or get_model()
+
+
 def get_maps_key() -> Optional[str]:
     """Google Maps Static / Street View API key (optional). Used to fetch an
     exterior property photo when a listing site (e.g. Zillow) blocks scraping."""
@@ -229,10 +244,12 @@ def estimate_rehab(deal: dict) -> dict:
     multiplier + low/base/high line items) and adapts its output to the
     modal's {items:[{label,cost}], summary} shape — one rehab prompt to
     maintain instead of two."""
-    from . import ai_tasks
+    from . import ai_tasks, ai_usage
     r = ai_tasks.task_rehab(deal)
     if not r.get("ok"):
         return r
+    ai_usage.record("rehab-market", r.get("model") or "",
+                     r.get("usage"), r.get("web_searches_used") or 0)
     res = r.get("result") or {}
     if "error" in res or not isinstance(res.get("line_items"), list):
         return {"ok": False, "error": res.get("error", "Could not parse rehab estimate."),
@@ -289,7 +306,7 @@ def analyze_auction(data: dict) -> dict:
         return {"ok": False, "error": "No Anthropic API key configured. Add one in Settings → AI."}
     import anthropic
     client = anthropic.Anthropic(api_key=api_key)
-    model = get_model()
+    model = model_for("standard")
     parts = [f"Auction property: {data.get('address','')}"]
     for k, lbl in [("beds", "Beds"), ("baths", "Baths"), ("sqft", "Sq ft"), ("year_built", "Year built")]:
         if data.get(k):
@@ -302,7 +319,7 @@ def analyze_auction(data: dict) -> dict:
     try:
         msg = client.messages.create(
             model=model, max_tokens=1800, system=AUCTION_SYSTEM,
-            tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 6}],
+            tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 5}],
             messages=[{"role": "user", "content": "\n".join(parts)}],
         )
     except anthropic.AuthenticationError:
@@ -341,7 +358,7 @@ def research_arv(deal: dict) -> dict:
     import anthropic
 
     client = anthropic.Anthropic(api_key=api_key)
-    model = get_model()
+    model = model_for("standard")
 
     try:
         message = client.messages.create(
@@ -349,7 +366,7 @@ def research_arv(deal: dict) -> dict:
             max_tokens=2500,
             system=SYSTEM_PROMPT,
             tools=[{"type": "web_search_20250305", "name": "web_search",
-                    "max_uses": 8}],
+                    "max_uses": 6}],
             messages=[{"role": "user", "content": _build_user_prompt(deal)}],
         )
     except anthropic.AuthenticationError:
@@ -359,6 +376,9 @@ def research_arv(deal: dict) -> dict:
     except Exception as e:
         log.exception("Research failed")
         return {"ok": False, "error": f"Research failed: {e}"}
+
+    from . import ai_usage
+    ai_usage.record_msg("arv-research", model, message)
 
     # Concatenate text blocks from the final response
     text_parts = []
@@ -547,16 +567,20 @@ def find_listings_in_area(params: dict, max_listings: int = 60) -> dict:
 
     import anthropic
     client = anthropic.Anthropic(api_key=api_key)
-    model = get_model()
+    # Fallback path only — the Zillow API is the primary discovery source, so
+    # this runs rarely; standard tier + fewer searches keep it cheap when it does.
+    model = model_for("standard")
 
     try:
         message = client.messages.create(
             model=model,
             max_tokens=16000,
             system=LISTING_SEARCH_SYSTEM,
-            tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 15}],
+            tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 6}],
             messages=[{"role": "user", "content": _build_listing_search_prompt(params, max_listings)}],
         )
+        from . import ai_usage
+        ai_usage.record_msg("ai-discovery", model, message)
     except anthropic.AuthenticationError:
         return {"ok": False, "error": "Invalid API key — check Settings → AI."}
     except anthropic.APIError as e:
@@ -687,13 +711,15 @@ def resolve_listing_urls(addresses: list, area_hint: str = "") -> dict:
     lines += [f"{i + 1}. {a}" for i, a in enumerate(addresses)]
     try:
         message = client.messages.create(
-            model=get_model(),
+            model=model_for("fast"),   # URL lookup is mechanical — Haiku handles it
             max_tokens=4000,
             system=URL_RESOLVE_SYSTEM,
             tools=[{"type": "web_search_20250305", "name": "web_search",
-                    "max_uses": min(2 * len(addresses), 20)}],
+                    "max_uses": min(len(addresses) + 2, 8)}],
             messages=[{"role": "user", "content": "\n".join(lines)}],
         )
+        from . import ai_usage
+        ai_usage.record_msg("url-resolve", model_for("fast"), message)
     except Exception:
         log.exception("URL resolve call failed")
         return {}
@@ -716,7 +742,7 @@ def find_area_sales(deal: dict, max_sales: int = 30, min_sales: int = 20) -> dic
         return {"ok": False, "error": "No Anthropic API key configured. Add one in Settings → AI."}
     import anthropic
     client = anthropic.Anthropic(api_key=api_key)
-    model = get_model()
+    model = model_for("standard")
     addr = deal.get("address", "")
 
     def _one_pass(exclude):
@@ -733,7 +759,7 @@ def find_area_sales(deal: dict, max_sales: int = 30, min_sales: int = 20) -> dic
         try:
             message = client.messages.create(
                 model=model, max_tokens=8000, system=AREA_SALES_SYSTEM,
-                tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 16}],
+                tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 8}],
                 messages=[{"role": "user", "content": user}],
             )
         except anthropic.AuthenticationError:
@@ -840,11 +866,11 @@ def find_auctions_in_area(params: dict, max_listings: int = 20) -> dict:
         return {"ok": False, "error": "No Anthropic API key configured. Add one in Settings → AI."}
     import anthropic
     client = anthropic.Anthropic(api_key=api_key)
-    model = get_model()
+    model = model_for("standard")
     try:
         message = client.messages.create(
             model=model, max_tokens=16000, system=AUCTION_SEARCH_SYSTEM,
-            tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 15}],
+            tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 8}],
             messages=[{"role": "user", "content": _build_auction_search_prompt(params, max_listings)}],
         )
     except anthropic.AuthenticationError:

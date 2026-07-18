@@ -160,6 +160,8 @@ def chat(deal: dict, message: str, history: Optional[list] = None) -> dict:
         return {"ok": False, "error": f"Chat failed: {e}", "error_type": "other"}
 
     reply = "\n".join(b.text for b in msg.content if hasattr(b, "text"))
+    from . import ai_usage
+    ai_usage.record_msg("chat", model, msg)
     return {
         "ok": True,
         "reply": reply,

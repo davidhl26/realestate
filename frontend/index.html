@@ -1631,6 +1631,16 @@ https://app.ispeedtolead.com/deal-speed/property/...
           </label>
           <p class="muted" style="font-size:12px; margin:6px 0 0;">A find must pass <strong>all</strong> criteria: margin ≥ your target, profit ≥ this amount, the 70% rule, and low risk (grade A/B).</p>
         </div>
+        <div style="margin-top:14px; padding-top:14px; border-top:1px solid var(--divider);">
+          <div style="font-weight:600; margin-bottom:6px;">🧮 AI usage this month</div>
+          <div id="ai-usage-box" class="muted" style="font-size:12.5px;">Loading…</div>
+          <label style="display:flex; align-items:center; gap:10px; font-size:13px; margin-top:10px;">
+            Monthly AI budget $
+            <input type="number" id="ai-budget-input" step="5" min="0" style="width:100px;" placeholder="0">
+            <span class="muted" style="font-size:12px;">— 0 = no limit. When reached, <strong>automatic</strong> analysis pauses (manual actions keep working).</span>
+          </label>
+          <p class="muted" style="font-size:11.5px; margin:6px 0 0;">Model tiers are automatic: judgment tasks (verdict, offers, lead analysis, chat) use your model above; analytical tasks run on Sonnet 5; mechanical tasks (URL lookup, listing text) on Haiku 4.5.</p>
+        </div>
         <div id="ai-status" class="status-line"></div>
 
         <div style="margin-top:16px; padding-top:16px; border-top:1px solid var(--divider);">
@@ -2058,11 +2068,20 @@ https://app.ispeedtolead.com/deal-speed/property/...
       </header>
       <div class="modal-body">
         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:12px;">
-          <button class="btn primary" id="rehab-ai-btn">
+          <button class="btn primary" id="rehab-photos-btn" title="Grade the condition from the listing photo gallery and price the work seen">📸 From photos</button>
+          <button class="btn" id="rehab-ai-btn">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" stroke-linejoin="round"/></svg>
-            Estimate with AI
+            Market AI
           </button>
           <span id="rehab-ai-status" class="muted" style="font-size:12px;"></span>
+        </div>
+        <div id="rehab-nophotos-choice" style="display:none; margin:0 0 12px; padding:10px 12px; border:1px solid var(--divider); border-radius:9px; font-size:12.5px;">
+          <strong>No photos for this property.</strong> Two other ways to estimate:
+          <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
+            <button class="btn" id="rehab-nophotos-ai" style="font-size:12px;">🤖 Market AI estimate (as usual)</button>
+            <button class="btn" id="rehab-nophotos-manual" style="font-size:12px;">✍️ Enter it manually</button>
+          </div>
+          <div id="rehab-manual-presets" style="display:none; gap:6px; margin-top:8px; flex-wrap:wrap;"></div>
         </div>
         <label class="muted" style="display:block; font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px;">Quick add</label>
         <div id="rehab-catalog" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px;"></div>

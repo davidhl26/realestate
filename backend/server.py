@@ -55,6 +55,9 @@ COOKIE_STORE = DATA_DIR / "auth-cookies.json"
 db = DealsDB(DB_PATH)
 scraper.set_cookie_store_path(COOKIE_STORE)
 
+from . import ai_usage
+ai_usage.init(DATA_DIR)
+
 # CRM database
 from .crm import CrmDB
 crm = CrmDB(DATA_DIR / "crm.json")
@@ -227,10 +230,27 @@ def _current_dom(deal: dict):
     return val
 
 
+def _merge_deal_updates(deal_id: str, updates: dict):
+    """Persist a few fields onto a FRESH copy of the deal. The enrich worker
+    runs for minutes; writing back its start-of-thread snapshot would silently
+    revert anything the user (or another endpoint) saved meanwhile."""
+    fresh = db.get_deal(deal_id)
+    if not fresh:
+        return None
+    fresh.update(updates)
+    db.upsert_deal(fresh)
+    return fresh
+
+
 def _auto_enrich_deal(deal_id: str, do_ai: bool = True):
     """Background worker run after create: archive photos locally, then fill
     missing ARV (and rehab) via AI so the price/risk engines never sit on
-    zeros. Progress is tracked on deal.ai_auto ('running'→'done'/'error')."""
+    zeros. Progress is tracked on deal.ai_auto ('running'→'done'/'error').
+
+    Each step persists its result on a freshly-read copy as soon as it's
+    available — the AI calls take minutes, and a single write at the end
+    would clobber concurrent edits (and lose a paid-for ARV if a later
+    step throws)."""
     import threading  # noqa: F401  (documents intent; thread started by caller)
     d = db.get_deal(deal_id)
     if not d:
@@ -243,44 +263,95 @@ def _auto_enrich_deal(deal_id: str, do_ai: bool = True):
         try:
             from . import photo_store
             if photo_store.archive_deal_photos(d, PHOTOS_DIR):
-                db.upsert_deal(d)
+                _merge_deal_updates(deal_id, {
+                    "image": d.get("image"),
+                    "image_gallery": d.get("image_gallery"),
+                    "image_gallery_remote": d.get("image_gallery_remote")})
         except Exception:
             log.exception("photo archive failed for %s", deal_id)
 
-        # 2) ARV via AI when missing.
+        # Optional monthly AI budget (Settings): automatic spending stops when
+        # it's used up — manual, user-initiated actions keep working.
+        if do_ai and ai_usage.auto_budget_exceeded(ai_research.read_config()):
+            log.warning("auto-enrich AI skipped for %s — monthly AI budget reached", deal_id)
+            do_ai = False
+
+        # 2) ARV when missing — Zillow sold comps FIRST (1 API request, ~$0),
+        #    AI web research only when the API has no comps for this home.
+        #    Persisted immediately so a later failure can't lose it.
+        if do_ai and not (d.get("arv_base") or 0):
+            zpid = _zpid_from_url(d.get("source_url") or "")
+            if zpid and zillow_api.is_configured():
+                ca = zillow_api.comparable_arv(zpid, subject_sqft=d.get("sqft"))
+                if ca:
+                    insights = d.get("ai_insights") or {}
+                    insights["arv"] = {"ok": True, "auto": True, "source": "zillow-comps",
+                                        "result": {"arv_base": ca[0], "comps_count": ca[1]}}
+                    d.update(arv_base=ca[0], arv_comps_count=ca[1],
+                             arv_confidence="Medium", ai_insights=insights)
+                    _merge_deal_updates(deal_id, {
+                        "arv_base": ca[0], "arv_comps_count": ca[1],
+                        "arv_confidence": "Medium", "ai_insights": insights})
         if do_ai and not (d.get("arv_base") or 0):
             r = ai_research.research_arv(d)
             if r.get("ok") and r.get("arv_base"):
-                d["arv_base"] = r["arv_base"]
-                if r.get("arv_low"):  d["arv_low"] = r["arv_low"]
-                if r.get("arv_high"): d["arv_high"] = r["arv_high"]
-                d["arv_confidence"] = r.get("confidence", "Low")
                 insights = d.get("ai_insights") or {}
                 insights["arv"] = {"ok": True, "result": r, "auto": True}
-                d["ai_insights"] = insights
+                updates = {"arv_base": r["arv_base"],
+                            "arv_confidence": r.get("confidence", "Low"),
+                            "ai_insights": insights}
+                if r.get("arv_low"):  updates["arv_low"] = r["arv_low"]
+                if r.get("arv_high"): updates["arv_high"] = r["arv_high"]
+                d.update(updates)
+                _merge_deal_updates(deal_id, updates)
 
-        # 3) Rehab via AI when missing (only if we now have an ARV to price against).
+        # 3) Rehab when missing (only with an ARV to price against) — graded
+        #    from the archived listing photos first (vision, no web searches);
+        #    market AI estimate only when there are no photos.
         if do_ai and (d.get("arv_base") or 0) and not (d.get("rehab_base") or 0):
-            rr = ai_research.estimate_rehab(d)
-            if rr.get("ok") and rr.get("items"):
-                total = sum(int(it.get("cost") or 0) for it in rr["items"])
-                d["rehab_base"] = int(round(total * 1.15))
-                d["rehab_items"] = rr["items"]
-                d["rehab_contingency_pct"] = 15
+            from . import ai_tasks
+            photos = _vision_photo_blocks(d.get("image_gallery") or
+                                           ([d["image"]] if d.get("image") else []))
+            updates = None
+            if photos:
+                pv = ai_tasks.task_rehab_photos(d, photos)
+                ai_usage.record("rehab-photos", pv.get("model") or "",
+                                 pv.get("usage"), pv.get("web_searches_used") or 0)
+                res = pv.get("result") if pv.get("ok") else None
+                if res and res.get("items"):
+                    total = sum(int(it.get("cost") or 0) for it in res["items"])
+                    if total > 0:
+                        updates = {"rehab_base": int(round(total * 1.15)),
+                                    "rehab_items": res["items"],
+                                    "rehab_contingency_pct": 15,
+                                    "rehab_vision": {**res, "model": pv.get("model"),
+                                                      "photos_used": min(len(photos), 12),
+                                                      "ran_at": datetime.utcnow().isoformat() + "Z"}}
+            if not updates:
+                rr = ai_research.estimate_rehab(d)
+                if rr.get("ok") and rr.get("items"):
+                    total = sum(int(it.get("cost") or 0) for it in rr["items"])
+                    updates = {"rehab_base": int(round(total * 1.15)),
+                                "rehab_items": rr["items"],
+                                "rehab_contingency_pct": 15}
+            if updates:
+                d.update(updates)
+                _merge_deal_updates(deal_id, updates)
 
-        m = analyzer.compute_metrics(d)
-        score, grade, signal = analyzer.compute_score(d, m)
-        d["score"], d["grade"], d["signal"] = score, grade, signal
-        _apply_risk(d, m)
-        d["ai_auto"] = "done"
-        db.upsert_deal(d)
+        # Final: score the CURRENT stored record (not our working snapshot),
+        # so concurrent edits made during the AI calls are kept and scored.
+        fresh = db.get_deal(deal_id)
+        if fresh:
+            m = analyzer.compute_metrics(fresh)
+            score, grade, signal = analyzer.compute_score(fresh, m)
+            fresh["score"], fresh["grade"], fresh["signal"] = score, grade, signal
+            _apply_risk(fresh, m)
+            fresh["ai_auto"] = "done"
+            db.upsert_deal(fresh)
     except Exception as e:
         log.exception("auto-enrich failed for %s", deal_id)
         try:
-            d = db.get_deal(deal_id)
-            if d:
-                d["ai_auto"] = f"error: {str(e)[:120]}"
-                db.upsert_deal(d)
+            _merge_deal_updates(deal_id, {"ai_auto": f"error: {str(e)[:120]}"})
         except Exception:
             pass
 
@@ -979,6 +1050,91 @@ def deal_rehab_estimate(deal_id: str):
         raise HTTPException(404, "Deal not found")
     from . import ai_research
     return ai_research.estimate_rehab(d)
+
+
+def _vision_photo_blocks(urls) -> list:
+    """Turn a deal's gallery into entries _run_claude can send: public
+    http(s) URLs pass through; locally-archived /deal-photos/... paths are
+    read from disk and base64-encoded (the Anthropic API can't fetch them)."""
+    import base64
+    out = []
+    for u in urls or []:
+        if not isinstance(u, str) or not u:
+            continue
+        if u.startswith("http"):
+            out.append(u)
+        elif u.startswith("/deal-photos/"):
+            try:
+                p = (PHOTOS_DIR / u[len("/deal-photos/"):]).resolve()
+                if PHOTOS_DIR.resolve() in p.parents and p.is_file():
+                    out.append({"data": base64.standard_b64encode(p.read_bytes()).decode("ascii"),
+                                "media_type": "image/jpeg"})
+            except Exception:
+                continue
+    return out
+
+
+@app.post("/api/deals/{deal_id}/rehab-from-photos")
+def deal_rehab_from_photos(deal_id: str):
+    """Itemized rehab budget graded off the listing photo gallery (vision).
+
+    Photos: the deal's gallery (locally-archived files sent as base64,
+    remote URLs as-is) → the kept remote originals → a fresh Zillow API
+    fetch via the zpid. When none exist, returns {ok, no_photos: true} so
+    the UI offers the two fallbacks (market AI estimate / manual entry)."""
+    from . import ai_tasks
+    d = db.get_deal(deal_id)
+    if not d:
+        raise HTTPException(404, "Deal not found")
+
+    gallery = list(d.get("image_gallery") or ([d["image"]] if d.get("image") else []))
+    photos = _vision_photo_blocks(gallery)
+    if not photos:
+        photos = _vision_photo_blocks(d.get("image_gallery_remote"))
+    if not photos and zillow_api.is_configured():
+        zpid = _zpid_from_url(d.get("source_url") or "")
+        if zpid:
+            fetched = zillow_api.images(zpid)
+            if fetched:
+                photos = list(fetched)
+                # Persist on a FRESH copy — the deal may have changed since read.
+                fresh = db.get_deal(deal_id) or d
+                fresh["image_gallery"] = fetched
+                fresh.setdefault("image", fetched[0])
+                db.upsert_deal(fresh)
+    if not photos:
+        return {"ok": True, "no_photos": True}
+
+    out = ai_tasks.task_rehab_photos(d, photos)
+    if out.get("ok"):
+        ai_usage.record("rehab-photos", out.get("model") or "",
+                         out.get("usage"), out.get("web_searches_used") or 0)
+    if not out.get("ok"):
+        et = out.get("error_type")
+        if et == "billing":
+            raise HTTPException(402, out.get("error", ""))
+        if et == "auth":
+            raise HTTPException(401, out.get("error", ""))
+        raise HTTPException(500, out.get("error", "Photo estimate failed"))
+
+    res = out["result"]
+    # Re-fetch before persisting: the vision call takes 20-40s and the
+    # auto-enrich thread / user edits may have written the deal meanwhile —
+    # writing the stale snapshot back would silently revert them.
+    fresh = db.get_deal(deal_id) or d
+    fresh["rehab_vision"] = {**res, "model": out.get("model"),
+                              "photos_used": min(len(photos), 12),
+                              "ran_at": datetime.utcnow().isoformat() + "Z"}
+    db.upsert_deal(fresh)
+    return {"ok": True, "no_photos": False,
+            "items": res.get("items") or [],
+            "grade": res.get("condition_grade"),
+            "complexity": res.get("complexity"),
+            "total_low": res.get("total_low"), "total_high": res.get("total_high"),
+            "confidence": res.get("confidence"),
+            "concerns": res.get("concerns") or [],
+            "summary": res.get("summary") or "",
+            "photos_used": min(len(photos), 12)}
 
 
 @app.post("/api/deals/{deal_id}/pdf-with-options")
@@ -2074,6 +2230,12 @@ def _run_watch(watch_id: str, should_stop=None) -> dict:
             limit=int(w.get("max_listings") or 15))
     if listings is None:
         discovery = "ai"
+        # The AI web-search fallback is the expensive path — the monthly AI
+        # budget (Settings) gates it, whether the scan came from the hourly
+        # scheduler or a click. The Zillow-API path above stays available.
+        if ai_usage.auto_budget_exceeded(ai_research.read_config()):
+            return {"ok": False, "error": "Monthly AI budget reached — AI discovery "
+                                           "paused (Zillow API unavailable for this scan)"}
         params = {"search_term": w.get("location", "")}
         for k in ("price_max", "price_min", "beds_min", "baths_min", "sqft_min",
                   "property_type", "max_dom"):
@@ -3204,6 +3366,12 @@ def reset_browser_session():
 
 
 # ---- AI configuration + ARV research ----
+@app.get("/api/ai/usage")
+def ai_usage_month():
+    """Current month's AI spend (estimated), per feature — for Settings."""
+    return ai_usage.month_summary()
+
+
 @app.get("/api/ai/config")
 def ai_config_get():
     """Return AI config (API key masked). Honours both the file config and
@@ -3231,6 +3399,9 @@ def ai_config_get():
         "proxy_configured": bool(proxy_key),
         "proxy_key_preview": MASK if proxy_key else "",
         "zillow_api_configured": zillow_api.is_configured(),
+        "ai_budget_monthly": cfg.get("ai_budget_monthly", 0),
+        "model_standard": ai_research.model_for("standard"),
+        "model_fast": ai_research.model_for("fast"),
     }
 
 
@@ -3249,6 +3420,11 @@ def ai_config_set(payload: dict = Body(...)):
         cfg["zillow_rapidapi_key"] = (payload["zillow_rapidapi_key"] or "").strip()
     if "auto_research" in payload:
         cfg["auto_research"] = bool(payload["auto_research"])
+    if "ai_budget_monthly" in payload:
+        try:
+            cfg["ai_budget_monthly"] = max(0, float(payload["ai_budget_monthly"] or 0))
+        except (TypeError, ValueError):
+            pass
     if "target_margin_pct" in payload:
         try:
             cfg["target_margin_pct"] = max(5, min(40, float(payload["target_margin_pct"])))
