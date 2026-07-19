@@ -55,6 +55,12 @@ const API = (() => {
     radarScan: () => req("/api/radar/scan", { method: "POST", body: "{}" }),
     radarScanStop: () => req("/api/radar/scan/stop", { method: "POST", body: "{}" }),
     radarScanStatus: () => req("/api/radar/scan-status"),
+    rehabsList: () => req("/api/rehabs"),
+    rehabCreate: (p) => req("/api/rehabs", { method: "POST", body: JSON.stringify(p) }),
+    rehabGet: (id) => req("/api/rehabs/" + encodeURIComponent(id)),
+    rehabPatch: (id, u) => req("/api/rehabs/" + encodeURIComponent(id),
+      { method: "PATCH", body: JSON.stringify(u) }),
+    rehabDelete: (id) => req("/api/rehabs/" + encodeURIComponent(id), { method: "DELETE" }),
     compareDeals: (dealIds, includeVerdict, focus) => req("/api/board/compare",
       { method: "POST", body: JSON.stringify({
         deal_ids: dealIds || [],

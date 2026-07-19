@@ -73,6 +73,11 @@
         Auctions
         <span class="nav-badge" id="nav-skiptrace-count"></span>
       </a>
+      <a data-view="rehabs" class="nav-link">
+        <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.4 2.4-2.3-2.3 2.7-2.4z" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+        Rehabs
+        <span class="nav-badge" id="nav-rehabs-count"></span>
+      </a>
       <a data-view="crm" class="nav-link">
         <span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75" stroke-linecap="round"/></svg></span>
         Pipeline
@@ -1441,6 +1446,88 @@ https://app.ispeedtolead.com/deal-speed/property/...
     <!-- Leads view removed — pipeline lives in the CRM kanban now -->
 
     <!-- ============ CRM ============ -->
+    <!-- ================= REHAB PROJECTS (chantiers) ================= -->
+    <section id="view-rehabs" class="view">
+      <header class="view-header">
+        <div>
+          <div class="view-eyebrow">OPERATIONS</div>
+          <h1>🔨 Rehabs</h1>
+          <p>Every renovation in one place — work items, real spend vs budget, contractors, and the holding-cost clock. Start one from a deal (its rehab budget seeds the work list) or from scratch.</p>
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn primary" id="rehab-new-btn">➕ New project</button>
+        </div>
+      </header>
+      <div id="rehabs-stats" style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:14px;"></div>
+      <div id="rehabs-grid" class="deals-grid"></div>
+    </section>
+
+    <!-- Rehab project modal -->
+    <div id="rehab-project-modal" class="modal" style="display:none">
+      <div class="modal-backdrop" id="rehab-project-backdrop"></div>
+      <div class="modal-content" style="max-width:760px">
+        <header class="modal-header">
+          <div>
+            <h2 id="rhm-title" style="margin:0;">Project</h2>
+            <div id="rhm-sub" class="muted" style="font-size:12px;"></div>
+          </div>
+          <button class="modal-close" id="rhm-close">×</button>
+        </header>
+        <div class="modal-body">
+          <div style="display:flex; gap:12px; flex-wrap:wrap; margin-bottom:14px;">
+            <label style="font-size:12px;">Status
+              <select id="rhm-status" style="display:block; margin-top:3px;">
+                <option value="planning">📋 Planning</option>
+                <option value="active">🔨 Active</option>
+                <option value="paused">⏸ Paused</option>
+                <option value="done">✅ Done</option>
+              </select>
+            </label>
+            <label style="font-size:12px;">Start
+              <input type="date" id="rhm-start" style="display:block; margin-top:3px;">
+            </label>
+            <label style="font-size:12px;">Target end
+              <input type="date" id="rhm-target" style="display:block; margin-top:3px;">
+            </label>
+            <label style="font-size:12px;">Holding $/month
+              <input type="number" id="rhm-holding" step="50" min="0" style="display:block; margin-top:3px; width:110px;">
+            </label>
+          </div>
+          <div id="rhm-summary" style="display:flex; gap:14px; flex-wrap:wrap; margin-bottom:14px;"></div>
+
+          <div style="font-weight:600; margin-bottom:6px;">🧱 Work items <span class="muted" style="font-weight:400; font-size:12px;">— budget per line; actual fills in from expenses</span></div>
+          <div id="rhm-items"></div>
+          <button class="btn ghost" id="rhm-add-item" style="font-size:12px; margin:6px 0 14px;">+ Add a work item</button>
+
+          <div style="font-weight:600; margin-bottom:6px;">💸 Expenses <span class="muted" style="font-weight:400; font-size:12px;">— the real spend, newest first</span></div>
+          <div id="rhm-expenses"></div>
+          <div style="display:flex; gap:6px; flex-wrap:wrap; margin:6px 0 14px; align-items:center;">
+            <input type="date" id="rhm-exp-date" style="font-size:12px;">
+            <input id="rhm-exp-vendor" placeholder="Vendor" style="font-size:12px; width:130px;">
+            <input type="number" id="rhm-exp-amount" placeholder="$" step="0.01" style="font-size:12px; width:90px;">
+            <select id="rhm-exp-item" style="font-size:12px; max-width:170px;"></select>
+            <input id="rhm-exp-note" placeholder="Note" style="font-size:12px; flex:1; min-width:100px;">
+            <button class="btn" id="rhm-exp-add" style="font-size:12px;">Add</button>
+          </div>
+
+          <div style="font-weight:600; margin-bottom:6px;">👷 Contractors</div>
+          <div id="rhm-contractors"></div>
+          <button class="btn ghost" id="rhm-add-contractor" style="font-size:12px; margin:6px 0 14px;">+ Add a contractor</button>
+
+          <label style="display:block; font-size:12px; font-weight:600;">Notes
+            <textarea id="rhm-notes" rows="3" style="width:100%; margin-top:4px;"></textarea>
+          </label>
+        </div>
+        <footer style="display:flex; justify-content:space-between; gap:10px; padding:14px 20px; border-top:1px solid var(--divider);">
+          <button class="btn danger" id="rhm-delete">Delete project</button>
+          <div style="display:flex; gap:8px;">
+            <a class="btn" id="rhm-open-deal" style="display:none;">Open deal →</a>
+            <button class="btn primary" id="rhm-save">Save</button>
+          </div>
+        </footer>
+      </div>
+    </div>
+
     <section id="view-crm" class="view">
       <header class="page-header">
         <div class="page-header-text">

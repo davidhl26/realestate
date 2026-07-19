@@ -90,6 +90,10 @@ watches_db = WatchesDB(DATA_DIR / "zillow-watches.json")
 from .radar import RadarDB
 radar_db = RadarDB(DATA_DIR / "radar.json")
 
+# Rehab projects (chantiers) — renovation tracking per property
+from .rehabs import RehabsDB
+rehabs_db = RehabsDB(DATA_DIR / "rehabs.json")
+
 # Initialize browser scraper profile dir
 try:
     from . import scraper_browser
@@ -2337,6 +2341,67 @@ def radar_delete_batch(payload: dict):
         raise HTTPException(status_code=400, detail="ids must be a list")
     removed = radar_db.delete_many(ids)
     return {"ok": True, "removed": removed, "unseen": radar_db.unseen_count()}
+
+
+# ============================== REHAB PROJECTS ==============================
+
+@app.get("/api/rehabs")
+def rehabs_list():
+    return {"projects": [rehabs_db.summary(p) for p in rehabs_db.list_projects()]}
+
+
+@app.post("/api/rehabs")
+def rehabs_create(payload: dict = Body(...)):
+    """Create a rehab project. With {"deal_id": ...}, seed it from the deal:
+    address, holding cost, and the rehab budget line items."""
+    deal_id = (payload.get("deal_id") or "").strip()
+    if deal_id:
+        d = db.get_deal(deal_id)
+        if not d:
+            raise HTTPException(404, "Deal not found")
+        existing = next((p for p in rehabs_db.list_projects()
+                          if p.get("deal_id") == deal_id and p.get("status") != "done"), None)
+        if existing:
+            return {"ok": True, "project": rehabs_db.summary(existing), "existing": True}
+        items = [{"label": it.get("label"), "budget": it.get("cost")}
+                 for it in (d.get("rehab_items") or []) if it.get("label")]
+        if not items and (d.get("rehab_base") or 0):
+            items = [{"label": "Full rehab (from deal budget)", "budget": d["rehab_base"]}]
+        payload = {
+            **payload,
+            "deal_id": deal_id,
+            "address": d.get("address") or payload.get("address"),
+            "city": d.get("city") or "", "state": d.get("state") or "",
+            "holding_cost_monthly": d.get("holding_cost_monthly") or 500,
+            "budget_items": payload.get("budget_items") or items,
+            "start_date": payload.get("start_date") or datetime.utcnow().date().isoformat(),
+            "status": payload.get("status") or "active",
+        }
+    p = rehabs_db.create(payload)
+    return {"ok": True, "project": rehabs_db.summary(p), "existing": False}
+
+
+@app.get("/api/rehabs/{project_id}")
+def rehabs_get(project_id: str):
+    p = rehabs_db.get(project_id)
+    if not p:
+        raise HTTPException(404, "Project not found")
+    return rehabs_db.summary(p)
+
+
+@app.patch("/api/rehabs/{project_id}")
+def rehabs_patch(project_id: str, updates: dict = Body(...)):
+    p = rehabs_db.update(project_id, updates)
+    if not p:
+        raise HTTPException(404, "Project not found")
+    return rehabs_db.summary(p)
+
+
+@app.delete("/api/rehabs/{project_id}")
+def rehabs_delete(project_id: str):
+    if rehabs_db.delete(project_id):
+        return {"ok": True}
+    raise HTTPException(404, "Project not found")
 
 
 # Real-time import: run every watch right now (instead of waiting for the hourly

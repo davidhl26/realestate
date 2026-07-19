@@ -213,6 +213,7 @@
     if (name === "watch" && typeof refreshWatchView === "function") setTimeout(refreshWatchView, 50);
     if (name === "search" && typeof window._renderSearchWatches === "function") setTimeout(window._renderSearchWatches, 50);
     if (name === "radar" && typeof refreshRadarView === "function") refreshRadarView();
+    if (name === "rehabs" && typeof refreshRehabsView === "function") refreshRehabsView();
     if (name === "add") {
       // Entering the form defaults to a NEW deal. The edit flow re-binds
       // formDealId to the edited deal AFTER calling showView("add").
@@ -1684,6 +1685,7 @@
           <div style="margin-left:auto; font-size:11px; color:var(--muted); text-align:right;">
             Recommended<br><strong style="color:var(--text); font-size:13px;">${escape(m.recommended_strategy.join(' / '))}</strong>
           </div>
+          <button class="btn" id="start-rehab-btn" style="font-size:12px;" title="Create (or open) the rehab project for this property — the deal's budget lines seed the work list">🔨 Start rehab</button>
         </div>
       </div>
     `;
@@ -1699,6 +1701,8 @@
     // Rehab value → open the work-items estimator
     $$("[data-rehab-open]", hero).forEach(el =>
       el.addEventListener("click", () => openRehabModal(el.dataset.rehabOpen)));
+    // 🔨 Start rehab → create/open the renovation project seeded from this deal
+    $("#start-rehab-btn")?.addEventListener("click", () => window._startRehabFromDeal(d.id));
 
     // === Safety / risk block ===
     renderDetailRisk(data);
@@ -7442,6 +7446,282 @@
       closeLeadModal(); renderLeadsKanban();
     } catch (e) { toast(e.message, "error"); }
   });
+  // ============== REHAB PROJECTS (chantiers) ==============
+  let _rhmProject = null;   // working copy bound to the modal
+  let _rhmDirty = false;    // unsaved edits in the modal
+  const _rhmTouch = () => { _rhmDirty = true; };
+
+  const RH_STATUS_PILL = { planning: ["📋 Planning", "rgba(127,127,127,.15)"],
+                           active: ["🔨 Active", "rgba(34,192,122,.15)"],
+                           paused: ["⏸ Paused", "rgba(232,169,59,.18)"],
+                           done: ["✅ Done", "rgba(59,130,246,.15)"] };
+
+  async function refreshRehabsView() {
+    const grid = $("#rehabs-grid"), stats = $("#rehabs-stats");
+    if (!grid) return;
+    let projects = [];
+    try { projects = (await API.rehabsList()).projects || []; }
+    catch (e) { grid.innerHTML = `<div class="card"><p class="muted">${escape(e.message)}</p></div>`; return; }
+    const active = projects.filter(p => p.status !== "done");
+    const badge = $("#nav-rehabs-count");
+    if (badge) { badge.textContent = active.length || ""; badge.style.display = active.length ? "" : "none"; }
+    const totBudget = active.reduce((s, p) => s + (p.budget_total || 0), 0);
+    const totActual = active.reduce((s, p) => s + (p.actual_total || 0), 0);
+    const totHolding = active.reduce((s, p) => s + (p.holding_accrued || 0), 0);
+    if (stats) stats.innerHTML = active.length ? `
+      <div class="stat-card"><div class="label">Active projects</div><div class="value">${active.length}</div></div>
+      <div class="stat-card"><div class="label">Budget (active)</div><div class="value">${fmtMoney(totBudget)}</div></div>
+      <div class="stat-card"><div class="label">Spent</div><div class="value" style="${totActual > totBudget ? "color:var(--red);" : ""}">${fmtMoney(totActual)}</div></div>
+      <div class="stat-card"><div class="label">Holding accrued</div><div class="value">${fmtMoney(totHolding)}</div></div>` : "";
+    if (!projects.length) {
+      grid.innerHTML = `<div class="card"><p class="muted" style="margin:0;">No rehab projects yet. Open a deal and hit <strong>🔨 Start rehab</strong> — its budget lines become the work list — or click <strong>➕ New project</strong>.</p></div>`;
+      return;
+    }
+    const order = { active: 0, planning: 1, paused: 2, done: 3 };
+    projects.sort((a, b) => (order[a.status] ?? 9) - (order[b.status] ?? 9));
+    grid.innerHTML = projects.map(p => {
+      const [pill, bg] = RH_STATUS_PILL[p.status] || [p.status, ""];
+      const over = (p.actual_total || 0) > (p.budget_total || 0);
+      const pct = Math.min(100, p.progress_pct || 0);
+      const spendPct = p.budget_total > 0 ? Math.min(100, Math.round(100 * p.actual_total / p.budget_total)) : 0;
+      return `<div class="card rehab-card" data-id="${escape(p.id)}" style="cursor:pointer;">
+        <div style="display:flex; justify-content:space-between; gap:8px; align-items:flex-start;">
+          <div style="font-weight:700;">${escape(p.address || "?")}</div>
+          <span class="pill" style="height:fit-content; background:${bg};">${pill}</span>
+        </div>
+        <div class="muted" style="font-size:12px;">${escape([p.city, p.state].filter(Boolean).join(", "))}</div>
+        <div style="margin-top:10px; font-size:12px;" class="muted">Progress · ${p.items_done}/${p.items_total} items · ${pct}%</div>
+        <div style="height:7px; border-radius:4px; background:rgba(127,127,127,.15); overflow:hidden;">
+          <div style="height:100%; width:${pct}%; background:var(--green);"></div></div>
+        <div style="margin-top:8px; font-size:12px;" class="muted">Spend · ${fmtMoney(p.actual_total)} / ${fmtMoney(p.budget_total)}${over ? ` · <span style="color:var(--red); font-weight:700;">${fmtMoney(p.variance)} over</span>` : ""}</div>
+        <div style="height:7px; border-radius:4px; background:rgba(127,127,127,.15); overflow:hidden;">
+          <div style="height:100%; width:${spendPct}%; background:${over ? "var(--red)" : "var(--accent)"};"></div></div>
+        <div style="display:flex; gap:14px; margin-top:9px; font-size:12.5px; flex-wrap:wrap;">
+          ${p.days_elapsed != null ? `<span><span class="muted">Day</span> <strong>${p.days_elapsed}</strong></span>` : ""}
+          ${p.days_remaining != null ? `<span style="color:${p.days_remaining < 0 ? "var(--red)" : "inherit"};"><span class="muted">Target</span> <strong>${p.days_remaining >= 0 ? p.days_remaining + "d left" : Math.abs(p.days_remaining) + "d late"}</strong></span>` : ""}
+          ${p.holding_accrued ? `<span><span class="muted">Holding</span> <strong>${fmtMoney(p.holding_accrued)}</strong></span>` : ""}
+        </div>
+      </div>`;
+    }).join("");
+    grid.querySelectorAll(".rehab-card").forEach(c =>
+      c.addEventListener("click", () => openRehabProject(c.dataset.id)));
+  }
+
+  async function openRehabProject(id) {
+    try { _rhmProject = await API.rehabGet(id); }
+    catch (e) { toast(e.message, "error"); return; }
+    _rhmDirty = false;
+    _renderRehabModal();
+    $("#rehab-project-modal").style.display = "flex";
+  }
+  function closeRehabProjectModal() {
+    if (_rhmDirty && !confirm("You have unsaved changes — close without saving?")) return;
+    $("#rehab-project-modal").style.display = "none";
+    _rhmProject = null;
+    _rhmDirty = false;
+  }
+
+  function _renderRehabModal() {
+    const p = _rhmProject;
+    $("#rhm-title").textContent = p.address || "Project";
+    $("#rhm-sub").textContent = [p.city, p.state].filter(Boolean).join(", ");
+    $("#rhm-status").value = p.status || "planning";
+    $("#rhm-start").value = p.start_date || "";
+    $("#rhm-target").value = p.target_date || "";
+    $("#rhm-holding").value = p.holding_cost_monthly || 0;
+    $("#rhm-notes").value = p.notes || "";
+    const od = $("#rhm-open-deal");
+    if (p.deal_id) {
+      od.style.display = "";
+      od.onclick = e => { e.preventDefault(); closeRehabProjectModal(); openDeal(p.deal_id); };
+    } else { od.style.display = "none"; od.onclick = null; }
+    const over = (p.actual_total || 0) > (p.budget_total || 0);
+    $("#rhm-summary").innerHTML = `
+      <span class="pill">Budget ${fmtMoney(p.budget_total)}</span>
+      <span class="pill" style="${over ? "color:var(--red);" : ""}">Spent ${fmtMoney(p.actual_total)}${over ? ` (+${fmtMoney(p.variance)})` : ""}</span>
+      <span class="pill">Progress ${p.progress_pct || 0}%</span>
+      ${p.holding_accrued ? `<span class="pill">Holding ${fmtMoney(p.holding_accrued)}</span>` : ""}`;
+    _renderRhmItems();
+    _renderRhmExpenses();
+    _renderRhmContractors();
+  }
+
+  function _renderRhmItems() {
+    const p = _rhmProject, box = $("#rhm-items");
+    const actuals = p.actual_by_item || {};
+    box.innerHTML = (p.budget_items || []).length ? p.budget_items.map((it, i) => `
+      <div style="display:flex; gap:6px; align-items:center; margin-bottom:5px;">
+        <select class="rhi-status" data-i="${i}" style="font-size:12px;">
+          <option value="todo" ${it.status === "todo" ? "selected" : ""}>◻︎ To do</option>
+          <option value="doing" ${it.status === "doing" ? "selected" : ""}>🔨 Doing</option>
+          <option value="done" ${it.status === "done" ? "selected" : ""}>✅ Done</option>
+        </select>
+        <input class="rhi-label" data-i="${i}" value="${escape(it.label)}" style="flex:2; font-size:12.5px; ${it.status === "done" ? "text-decoration:line-through; opacity:.7;" : ""}">
+        <input class="rhi-contractor" data-i="${i}" value="${escape(it.contractor || "")}" placeholder="Contractor" style="width:110px; font-size:12px;">
+        <span class="muted" style="font-size:11px;">$</span>
+        <input class="rhi-budget" data-i="${i}" type="number" value="${it.budget || 0}" style="width:90px; font-size:12px;">
+        <span class="muted" style="font-size:11.5px; width:86px; text-align:right;" title="Actual from expenses">${actuals[it.id] ? fmtMoney(actuals[it.id]) : "—"}</span>
+        <button class="btn ghost rhi-del" data-i="${i}" style="padding:3px 8px;">×</button>
+      </div>`).join("")
+      : `<div class="muted" style="font-size:12.5px;">No work items yet.</div>`;
+    box.querySelectorAll(".rhi-status").forEach(s => s.addEventListener("change", e => { p.budget_items[+e.target.dataset.i].status = e.target.value; _rhmTouch(); }));
+    box.querySelectorAll(".rhi-label").forEach(s => s.addEventListener("input", e => { p.budget_items[+e.target.dataset.i].label = e.target.value; _rhmTouch(); }));
+    box.querySelectorAll(".rhi-contractor").forEach(s => s.addEventListener("input", e => { p.budget_items[+e.target.dataset.i].contractor = e.target.value; _rhmTouch(); }));
+    box.querySelectorAll(".rhi-budget").forEach(s => s.addEventListener("input", e => { p.budget_items[+e.target.dataset.i].budget = Number(e.target.value) || 0; _rhmTouch(); }));
+    box.querySelectorAll(".rhi-del").forEach(b => b.addEventListener("click", e => { p.budget_items.splice(+e.target.dataset.i, 1); _rhmTouch(); _renderRhmItems(); }));
+    // expense item selector follows the current items
+    const sel = $("#rhm-exp-item");
+    if (sel) sel.innerHTML = `<option value="">— any item —</option>` +
+      (p.budget_items || []).map(it => `<option value="${escape(it.id)}">${escape(it.label.slice(0, 40))}</option>`).join("");
+  }
+
+  function _renderRhmExpenses() {
+    const p = _rhmProject, box = $("#rhm-expenses");
+    const items = Object.fromEntries((p.budget_items || []).map(it => [it.id, it.label]));
+    const exp = (p.expenses || []).slice().sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+    box.innerHTML = exp.length ? exp.map(e => `
+      <div style="display:flex; gap:8px; align-items:center; font-size:12.5px; margin-bottom:3px;">
+        <span class="muted" style="width:78px;">${escape(e.date || "—")}</span>
+        <span style="flex:1;">${escape(e.vendor || "?")}${e.note ? ` <span class="muted">· ${escape(e.note)}</span>` : ""}${e.item_id && items[e.item_id] ? ` <span class="pill" style="font-size:10px;">${escape(items[e.item_id].slice(0, 24))}</span>` : ""}</span>
+        <strong>${fmtMoney(e.amount)}</strong>
+        <button class="btn ghost rhe-del" data-id="${escape(e.id)}" style="padding:2px 7px;">×</button>
+      </div>`).join("")
+      : `<div class="muted" style="font-size:12.5px;">No expenses logged.</div>`;
+    box.querySelectorAll(".rhe-del").forEach(b => b.addEventListener("click", () => {
+      p.expenses = (p.expenses || []).filter(x => x.id !== b.dataset.id);
+      _rhmTouch();
+      _renderRhmExpenses();
+    }));
+  }
+
+  function _renderRhmContractors() {
+    const p = _rhmProject, box = $("#rhm-contractors");
+    box.innerHTML = (p.contractors || []).length ? p.contractors.map((c, i) => `
+      <div style="display:flex; gap:6px; align-items:center; margin-bottom:5px;">
+        <input class="rhc-name" data-i="${i}" value="${escape(c.name)}" placeholder="Name" style="flex:1; font-size:12.5px;">
+        <input class="rhc-trade" data-i="${i}" value="${escape(c.trade || "")}" placeholder="Trade" style="width:120px; font-size:12px;">
+        <input class="rhc-phone" data-i="${i}" value="${escape(c.phone || "")}" placeholder="Phone" style="width:120px; font-size:12px;">
+        <button class="btn ghost rhc-del" data-i="${i}" style="padding:3px 8px;">×</button>
+      </div>`).join("")
+      : `<div class="muted" style="font-size:12.5px;">No contractors yet.</div>`;
+    box.querySelectorAll(".rhc-name").forEach(s => s.addEventListener("input", e => { p.contractors[+e.target.dataset.i].name = e.target.value; _rhmTouch(); }));
+    box.querySelectorAll(".rhc-trade").forEach(s => s.addEventListener("input", e => { p.contractors[+e.target.dataset.i].trade = e.target.value; _rhmTouch(); }));
+    box.querySelectorAll(".rhc-phone").forEach(s => s.addEventListener("input", e => { p.contractors[+e.target.dataset.i].phone = e.target.value; _rhmTouch(); }));
+    box.querySelectorAll(".rhc-del").forEach(b => b.addEventListener("click", e => { p.contractors.splice(+e.target.dataset.i, 1); _rhmTouch(); _renderRhmContractors(); }));
+  }
+
+  ["rhm-status", "rhm-start", "rhm-target", "rhm-holding", "rhm-notes"].forEach(id =>
+    $("#" + id)?.addEventListener("input", _rhmTouch));
+  $("#rhm-close")?.addEventListener("click", closeRehabProjectModal);
+  $("#rehab-project-backdrop")?.addEventListener("click", closeRehabProjectModal);
+  $("#rhm-add-item")?.addEventListener("click", () => {
+    if (!_rhmProject) return;
+    (_rhmProject.budget_items = _rhmProject.budget_items || []).push(
+      { id: "n" + Date.now(), label: "New work item", budget: 0, status: "todo", contractor: "" });
+    _rhmTouch();
+    _renderRhmItems();
+  });
+  $("#rhm-add-contractor")?.addEventListener("click", () => {
+    if (!_rhmProject) return;
+    (_rhmProject.contractors = _rhmProject.contractors || []).push(
+      { id: "n" + Date.now(), name: "", trade: "", phone: "", notes: "" });
+    _rhmTouch();
+    _renderRhmContractors();
+  });
+  $("#rhm-exp-add")?.addEventListener("click", () => {
+    if (!_rhmProject) return;
+    const amount = Number($("#rhm-exp-amount").value) || 0;
+    const vendor = $("#rhm-exp-vendor").value.trim();
+    if (!amount && !vendor) { toast("Enter at least a vendor or an amount", "error"); return; }
+    (_rhmProject.expenses = _rhmProject.expenses || []).push({
+      id: "n" + Date.now(),
+      date: $("#rhm-exp-date").value || new Date().toISOString().slice(0, 10),
+      vendor, amount,
+      item_id: $("#rhm-exp-item").value || null,
+      note: $("#rhm-exp-note").value.trim(),
+    });
+    $("#rhm-exp-vendor").value = ""; $("#rhm-exp-amount").value = ""; $("#rhm-exp-note").value = "";
+    _rhmTouch();
+    _renderRhmExpenses();
+  });
+  $("#rhm-save")?.addEventListener("click", async () => {
+    if (!_rhmProject) return;
+    const p = _rhmProject, id = p.id;
+    // Validate BEFORE the backend sanitizer silently drops rows.
+    p.contractors = (p.contractors || []).filter(c => (c.name || "").trim() || (c.trade || "").trim() || (c.phone || "").trim());
+    if (p.contractors.some(c => !(c.name || "").trim())) {
+      toast("A contractor row is missing its name", "error"); return;
+    }
+    if ((p.budget_items || []).some(it => !(it.label || "").trim() && Number(it.budget) > 0)) {
+      toast("A work item with a budget is missing its label", "error"); return;
+    }
+    p.budget_items = (p.budget_items || []).filter(it => (it.label || "").trim() || Number(it.budget) > 0);
+
+    const btn = $("#rhm-save");
+    btn.disabled = true; btn.textContent = "Saving…";
+    const sent = JSON.stringify([p.budget_items, p.expenses, p.contractors]);
+    try {
+      const updated = await API.rehabPatch(id, {
+        status: $("#rhm-status").value,
+        start_date: $("#rhm-start").value || null,
+        target_date: $("#rhm-target").value || null,
+        holding_cost_monthly: Number($("#rhm-holding").value) || 0,
+        notes: $("#rhm-notes").value,
+        budget_items: p.budget_items || [],
+        expenses: p.expenses || [],
+        contractors: p.contractors || [],
+      });
+      if (_rhmProject && _rhmProject.id === id) {
+        const now = JSON.stringify([_rhmProject.budget_items, _rhmProject.expenses, _rhmProject.contractors]);
+        if (now === sent) {
+          // nothing changed while saving — safe to adopt the server copy
+          _rhmProject = updated; _rhmDirty = false; _renderRehabModal();
+          toast("Project saved", "success");
+        } else {
+          // user kept editing during the round trip — keep their edits, only
+          // refresh the computed numbers, and leave the modal marked dirty
+          Object.assign(_rhmProject, {
+            actual_by_item: updated.actual_by_item, budget_total: updated.budget_total,
+            actual_total: updated.actual_total, variance: updated.variance,
+            progress_pct: updated.progress_pct, holding_accrued: updated.holding_accrued });
+          toast("Saved — you kept editing, hit Save again for the rest", "success");
+        }
+      } else {
+        toast("Project saved", "success");
+      }
+      refreshRehabsView();
+    } catch (e) { toast(e.message, "error"); }
+    finally { btn.disabled = false; btn.textContent = "Save"; }
+  });
+  $("#rhm-delete")?.addEventListener("click", async () => {
+    if (!_rhmProject) return;
+    if (!confirm("Delete this rehab project? Its expense log will be lost.")) return;
+    try {
+      await API.rehabDelete(_rhmProject.id);
+      toast("Project deleted", "success");
+      closeRehabProjectModal(); refreshRehabsView();
+    } catch (e) { toast(e.message, "error"); }
+  });
+  $("#rehab-new-btn")?.addEventListener("click", async () => {
+    const address = prompt("Property address for this rehab project?");
+    if (!address) return;
+    try {
+      const r = await API.rehabCreate({ address, status: "planning" });
+      refreshRehabsView();
+      openRehabProject(r.project.id);
+    } catch (e) { toast(e.message, "error"); }
+  });
+
+  async function startRehabFromDeal(dealId) {
+    try {
+      const r = await API.rehabCreate({ deal_id: dealId });
+      toast(r.existing ? "Opening the existing project" : "Rehab project created from the deal budget", "success");
+      showView("rehabs");
+      setTimeout(() => openRehabProject(r.project.id), 250);
+    } catch (e) { toast(e.message, "error"); }
+  }
+  window._startRehabFromDeal = startRehabFromDeal;
+
   $("#lead-modal-zillow")?.addEventListener("click", async () => {
     if (!_leadModalId) return;
     const btn = $("#lead-modal-zillow");
