@@ -199,6 +199,18 @@ def _extract_json(text: str) -> Optional[dict]:
         if repaired is not None:
             log.info("JSON repaired (was malformed)")
             return repaired
+
+    # Last resort: TRUNCATED JSON. When the response is cut off by max_tokens
+    # mid-object (frequent on Sonnet 5 — adaptive thinking shares the output
+    # budget), the braces never balance so no candidate exists above. Take
+    # everything from the first opening brace and let json-repair close it —
+    # the fields emitted before the cut-off are recovered.
+    i = text.find("{")
+    if i != -1:
+        repaired = _repair_json(text[i:])
+        if repaired is not None:
+            log.info("JSON salvaged from truncated response")
+            return repaired
     return None
 
 
@@ -360,38 +372,49 @@ def research_arv(deal: dict) -> dict:
     client = anthropic.Anthropic(api_key=api_key)
     model = model_for("standard")
 
-    try:
-        message = client.messages.create(
-            model=model,
-            max_tokens=2500,
-            system=SYSTEM_PROMPT,
-            tools=[{"type": "web_search_20250305", "name": "web_search",
-                    "max_uses": 6}],
-            messages=[{"role": "user", "content": _build_user_prompt(deal)}],
-        )
-    except anthropic.AuthenticationError:
-        return {"ok": False, "error": "Invalid API key — check Settings → AI."}
-    except anthropic.APIError as e:
-        return {"ok": False, "error": f"Anthropic API error: {e}"}
-    except Exception as e:
-        log.exception("Research failed")
-        return {"ok": False, "error": f"Research failed: {e}"}
-
     from . import ai_usage
-    ai_usage.record_msg("arv-research", model, message)
+    # max_tokens covers thinking + search turns + the final JSON — on Sonnet 5
+    # adaptive thinking is on by default and shares this budget, so 2500 was
+    # routinely exhausted before the JSON finished (truncated → parse failure).
+    messages = [{"role": "user", "content": _build_user_prompt(deal)}]
+    text_parts, web_searches = [], 0
+    message = None
+    for _round in range(4):   # first call + up to 3 pause_turn continuations
+        try:
+            message = client.messages.create(
+                model=model,
+                max_tokens=6000,
+                system=SYSTEM_PROMPT,
+                tools=[{"type": "web_search_20250305", "name": "web_search",
+                        "max_uses": 6}],
+                messages=messages,
+            )
+        except anthropic.AuthenticationError:
+            return {"ok": False, "error": "Invalid API key — check Settings → AI."}
+        except anthropic.APIError as e:
+            return {"ok": False, "error": f"Anthropic API error: {e}"}
+        except Exception as e:
+            log.exception("Research failed")
+            return {"ok": False, "error": f"Research failed: {e}"}
 
-    # Concatenate text blocks from the final response
-    text_parts = []
-    web_searches = 0
-    for block in message.content:
-        if hasattr(block, "text"):
-            text_parts.append(block.text)
-        if getattr(block, "type", "") == "server_tool_use":
-            web_searches += 1
+        ai_usage.record_msg("arv-research", model, message)
+        for block in message.content:
+            if hasattr(block, "text"):
+                text_parts.append(block.text)
+            if getattr(block, "type", "") == "server_tool_use":
+                web_searches += 1
+        if message.stop_reason != "pause_turn":
+            break
+        # Server-side web-search loop paused mid-turn — re-send with the
+        # assistant turn appended so the API resumes where it left off.
+        messages.append({"role": "assistant", "content": message.content})
+
     text = "\n".join(text_parts)
     data = _extract_json(text)
 
     if not data:
+        log.warning("ARV parse failed (stop_reason=%s): ...%s",
+                     getattr(message, "stop_reason", "?"), text[-400:])
         return {
             "ok": False,
             "error": "Could not parse ARV response from AI.",

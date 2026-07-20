@@ -129,7 +129,18 @@ def _run_claude(system: str, user: str, *, use_web: bool = True,
             kwargs["tools"] = [WEB_TOOL]
 
         import anthropic
-        msg = client.messages.create(**kwargs)
+        # Server web-search turns can pause mid-loop (stop_reason
+        # "pause_turn") — re-send with the assistant turn appended so the
+        # API resumes; otherwise the partial text has no JSON and the task
+        # "fails to parse" even though the model wasn't done.
+        collected = []
+        for _round in range(4):
+            msg = client.messages.create(**kwargs)
+            collected.append(msg)
+            if msg.stop_reason != "pause_turn":
+                break
+            kwargs["messages"] = kwargs["messages"] + [
+                {"role": "assistant", "content": msg.content}]
     except Exception as e:
         log.exception("Claude call failed")
         err_str = str(e)
@@ -155,19 +166,20 @@ def _run_claude(system: str, user: str, *, use_web: bool = True,
         return {"ok": False, "error": f"AI call failed: {e}", "error_type": "other"}
 
     text_parts, web = [], 0
-    for block in msg.content:
-        if hasattr(block, "text"):
-            text_parts.append(block.text)
-        if getattr(block, "type", "") == "server_tool_use":
-            web += 1
+    for m in collected:
+        for block in m.content:
+            if hasattr(block, "text"):
+                text_parts.append(block.text)
+            if getattr(block, "type", "") == "server_tool_use":
+                web += 1
     return {
         "ok": True,
         "text": "\n".join(text_parts),
         "model": model,
         "web_searches_used": web,
         "usage": {
-            "input_tokens": msg.usage.input_tokens,
-            "output_tokens": msg.usage.output_tokens,
+            "input_tokens": sum(m.usage.input_tokens for m in collected),
+            "output_tokens": sum(m.usage.output_tokens for m in collected),
         },
         "stop_reason": msg.stop_reason,
     }
